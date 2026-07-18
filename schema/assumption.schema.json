@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/assumption-0.1.json",
+  "title": "Private Match assurance assumption v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_type", "id", "statement", "scope", "status", "rationale", "owner", "reviewed_at", "next_review_at", "sources"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "record_type": {"const": "assumption"},
+    "id": {"type": "string", "pattern": "^PM-ASSUMPTION-[0-9]{4,}$"},
+    "statement": {"type": "string", "minLength": 1},
+    "scope": {"type": "string", "minLength": 1},
+    "status": {"enum": ["active", "invalidated", "expired"]},
+    "rationale": {"type": "string", "minLength": 1},
+    "owner": {"type": "string", "minLength": 1},
+    "reviewed_at": {"type": "string", "format": "date-time"},
+    "next_review_at": {"type": "string", "format": "date-time"},
+    "sources": {"type": "array", "items": {"type": "string", "format": "uri"}, "uniqueItems": true}
+  }
+}

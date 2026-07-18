@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/evidence-item-0.1.json",
+  "title": "Private Match assurance evidence item v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_type", "id", "type", "status", "subject", "input_digests", "output_digest", "producer", "tool", "started_at", "completed_at", "execution", "configuration", "summary", "private_source_reference", "public_artifacts", "limitations"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "record_type": {"const": "evidence"},
+    "id": {"type": "string", "pattern": "^PM-EVIDENCE-[0-9]{4,}$"},
+    "type": {"enum": ["test", "conformance", "model-check", "proof-check", "security-scan", "provenance", "review", "sbom", "benchmark"]},
+    "status": {"enum": ["pass", "fail", "skip", "unsupported", "timeout", "tool-error"]},
+    "subject": {"$ref": "#/$defs/subject"},
+    "input_digests": {"type": "array", "items": {"$ref": "#/$defs/digest"}, "uniqueItems": true},
+    "output_digest": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+    "producer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "identity"],
+      "properties": {
+        "type": {"enum": ["github-actions", "local-runner", "external-lab", "human-review"]},
+        "identity": {"type": "string", "minLength": 1}
+      }
+    },
+    "tool": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "version", "source"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "source": {"type": "string", "minLength": 1}
+      }
+    },
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "execution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ran", "required", "reason"],
+      "properties": {
+        "ran": {"type": "boolean"},
+        "required": {"type": "boolean"},
+        "reason": {"type": ["string", "null"]}
+      }
+    },
+    "configuration": {"type": "object"},
+    "summary": {"type": "string", "minLength": 1},
+    "private_source_reference": {"type": ["string", "null"]},
+    "public_artifacts": {"type": "array", "items": {"type": "string", "format": "uri-reference"}, "uniqueItems": true},
+    "limitations": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"enum": ["pass", "fail"]}}},
+      "then": {
+        "properties": {
+          "execution": {"properties": {"ran": {"const": true}}},
+          "output_digest": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["skip", "unsupported"]}}},
+      "then": {
+        "properties": {
+          "execution": {
+            "properties": {
+              "ran": {"const": false},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "subject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "identifier", "version", "digest"],
+      "properties": {
+        "type": {"enum": ["protocol", "source-revision", "build-artifact", "deployment-profile", "process"]},
+        "identifier": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

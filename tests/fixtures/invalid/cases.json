@@ -1,0 +1,608 @@
+[
+  {
+    "name": "missing-provenance",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "evidence",
+      "id": "PM-EVIDENCE-0001",
+      "type": "test",
+      "status": "pass",
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-validator",
+        "version": "0.1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "input_digests": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "output_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "tool": {
+        "name": "unittest",
+        "version": "stdlib",
+        "source": "python"
+      },
+      "started_at": "2026-07-18T00:00:00Z",
+      "completed_at": "2026-07-18T00:00:01Z",
+      "execution": {
+        "ran": true,
+        "required": true,
+        "reason": null
+      },
+      "configuration": {},
+      "summary": "Fixture test passed.",
+      "public_artifacts": [],
+      "limitations": [],
+      "lifecycle": "collected",
+      "lifecycle_history": [
+        {
+          "state": "collected",
+          "recorded_at": "2026-07-18T00:00:01Z",
+          "review_digest": null
+        }
+      ],
+      "model_check": null,
+      "private_source_metadata": null
+    },
+    "expected_code": "schema"
+  },
+  {
+    "name": "invalid-status",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "evidence",
+      "id": "PM-EVIDENCE-0001",
+      "type": "test",
+      "status": "green",
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-validator",
+        "version": "0.1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "input_digests": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "output_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "producer": {
+        "type": "local-runner",
+        "identity": "fixture-runner"
+      },
+      "tool": {
+        "name": "unittest",
+        "version": "stdlib",
+        "source": "python"
+      },
+      "started_at": "2026-07-18T00:00:00Z",
+      "completed_at": "2026-07-18T00:00:01Z",
+      "execution": {
+        "ran": true,
+        "required": true,
+        "reason": null
+      },
+      "configuration": {},
+      "summary": "Fixture test passed.",
+      "public_artifacts": [],
+      "limitations": [],
+      "lifecycle": "collected",
+      "lifecycle_history": [
+        {
+          "state": "collected",
+          "recorded_at": "2026-07-18T00:00:01Z",
+          "review_digest": null
+        }
+      ],
+      "model_check": null,
+      "private_source_metadata": null
+    },
+    "expected_code": "schema"
+  },
+  {
+    "name": "missing-subject-version",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "claim",
+      "id": "PM-CLAIM-0001",
+      "statement": "A fixture subject passed its named check.",
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-process",
+        "digest": null
+      },
+      "scope": "Fixture-only schema example.",
+      "status": "draft",
+      "assumptions": [],
+      "evidence": [],
+      "limitations": [],
+      "valid_from": "2026-07-18T00:00:00Z",
+      "valid_until": null,
+      "status_reason": null,
+      "supersedes": null,
+      "owner": "ITDO Inc.",
+      "reviewers": []
+    },
+    "expected_code": "schema"
+  },
+  {
+    "name": "inconsistent-time-range",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "evidence",
+      "id": "PM-EVIDENCE-0001",
+      "type": "test",
+      "status": "pass",
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-validator",
+        "version": "0.1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "input_digests": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "output_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "producer": {
+        "type": "local-runner",
+        "identity": "fixture-runner"
+      },
+      "tool": {
+        "name": "unittest",
+        "version": "stdlib",
+        "source": "python"
+      },
+      "started_at": "2026-07-18T00:00:00Z",
+      "completed_at": "2026-07-17T23:59:59Z",
+      "execution": {
+        "ran": true,
+        "required": true,
+        "reason": null
+      },
+      "configuration": {},
+      "summary": "Fixture test passed.",
+      "public_artifacts": [],
+      "limitations": [],
+      "lifecycle": "collected",
+      "lifecycle_history": [
+        {
+          "state": "collected",
+          "recorded_at": "2026-07-18T00:00:01Z",
+          "review_digest": null
+        }
+      ],
+      "model_check": null,
+      "private_source_metadata": null
+    },
+    "expected_code": "time-order"
+  },
+  {
+    "name": "pass-without-output-digest",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "evidence",
+      "id": "PM-EVIDENCE-0001",
+      "type": "test",
+      "status": "pass",
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-validator",
+        "version": "0.1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "input_digests": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "output_digest": null,
+      "producer": {
+        "type": "local-runner",
+        "identity": "fixture-runner"
+      },
+      "tool": {
+        "name": "unittest",
+        "version": "stdlib",
+        "source": "python"
+      },
+      "started_at": "2026-07-18T00:00:00Z",
+      "completed_at": "2026-07-18T00:00:01Z",
+      "execution": {
+        "ran": true,
+        "required": true,
+        "reason": null
+      },
+      "configuration": {},
+      "summary": "Fixture test passed.",
+      "public_artifacts": [],
+      "limitations": [],
+      "lifecycle": "collected",
+      "lifecycle_history": [
+        {
+          "state": "collected",
+          "recorded_at": "2026-07-18T00:00:01Z",
+          "review_digest": null
+        }
+      ],
+      "model_check": null,
+      "private_source_metadata": null
+    },
+    "expected_code": "schema"
+  },
+  {
+    "name": "skip-represented-as-pass",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "evidence",
+      "id": "PM-EVIDENCE-0001",
+      "type": "test",
+      "status": "pass",
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-validator",
+        "version": "0.1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "input_digests": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "output_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "producer": {
+        "type": "local-runner",
+        "identity": "fixture-runner"
+      },
+      "tool": {
+        "name": "unittest",
+        "version": "stdlib",
+        "source": "python"
+      },
+      "started_at": "2026-07-18T00:00:00Z",
+      "completed_at": "2026-07-18T00:00:01Z",
+      "execution": {
+        "ran": false,
+        "required": false,
+        "reason": "Skipped by condition"
+      },
+      "configuration": {},
+      "summary": "Fixture test passed.",
+      "public_artifacts": [],
+      "limitations": [],
+      "lifecycle": "collected",
+      "lifecycle_history": [
+        {
+          "state": "collected",
+          "recorded_at": "2026-07-18T00:00:01Z",
+          "review_digest": null
+        }
+      ],
+      "model_check": null,
+      "private_source_metadata": null
+    },
+    "expected_code": "schema"
+  },
+  {
+    "name": "expired-without-reason",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "claim",
+      "id": "PM-CLAIM-0001",
+      "statement": "A fixture subject passed its named check.",
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-process",
+        "version": "0.1",
+        "digest": null
+      },
+      "scope": "Fixture-only schema example.",
+      "status": "expired",
+      "assumptions": [],
+      "evidence": [],
+      "limitations": [],
+      "valid_from": "2026-07-18T00:00:00Z",
+      "valid_until": null,
+      "status_reason": null,
+      "supersedes": null,
+      "owner": "ITDO Inc.",
+      "reviewers": []
+    },
+    "expected_code": "schema"
+  },
+  {
+    "name": "withdrawn-without-reason",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "claim",
+      "id": "PM-CLAIM-0001",
+      "statement": "A fixture subject passed its named check.",
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-process",
+        "version": "0.1",
+        "digest": null
+      },
+      "scope": "Fixture-only schema example.",
+      "status": "withdrawn",
+      "assumptions": [],
+      "evidence": [],
+      "limitations": [],
+      "valid_from": "2026-07-18T00:00:00Z",
+      "valid_until": null,
+      "status_reason": null,
+      "supersedes": null,
+      "owner": "ITDO Inc.",
+      "reviewers": []
+    },
+    "expected_code": "schema"
+  },
+  {
+    "name": "model-check-missing-bounds",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "evidence",
+      "id": "PM-EVIDENCE-0090",
+      "type": "model-check",
+      "status": "pass",
+      "lifecycle": "collected",
+      "lifecycle_history": [
+        {
+          "state": "collected",
+          "recorded_at": "2026-07-18T00:00:01Z",
+          "review_digest": null
+        }
+      ],
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-validator",
+        "version": "0.1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "input_digests": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "output_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "producer": {
+        "type": "local-runner",
+        "identity": "fixture-runner"
+      },
+      "tool": {
+        "name": "unittest",
+        "version": "stdlib",
+        "source": "python"
+      },
+      "started_at": "2026-07-18T00:00:00Z",
+      "completed_at": "2026-07-18T00:00:01Z",
+      "execution": {
+        "ran": true,
+        "required": true,
+        "reason": null
+      },
+      "configuration": {},
+      "model_check": {},
+      "summary": "Fixture test passed.",
+      "private_source_metadata": null,
+      "public_artifacts": [],
+      "limitations": []
+    },
+    "expected_code": "schema"
+  },
+  {
+    "name": "conformance-missing-protocol-suite",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "evidence",
+      "id": "PM-EVIDENCE-0091",
+      "type": "conformance",
+      "status": "pass",
+      "lifecycle": "collected",
+      "lifecycle_history": [
+        {
+          "state": "collected",
+          "recorded_at": "2026-07-18T00:00:01Z",
+          "review_digest": null
+        }
+      ],
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-validator",
+        "version": "0.1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "input_digests": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "output_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "producer": {
+        "type": "local-runner",
+        "identity": "fixture-runner"
+      },
+      "tool": {
+        "name": "unittest",
+        "version": "stdlib",
+        "source": "python"
+      },
+      "started_at": "2026-07-18T00:00:00Z",
+      "completed_at": "2026-07-18T00:00:01Z",
+      "execution": {
+        "ran": true,
+        "required": true,
+        "reason": null
+      },
+      "configuration": {},
+      "model_check": null,
+      "summary": "Fixture test passed.",
+      "private_source_metadata": null,
+      "public_artifacts": [],
+      "limitations": []
+    },
+    "expected_code": "schema"
+  },
+  {
+    "name": "invalid-lifecycle-transition",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "evidence",
+      "id": "PM-EVIDENCE-0092",
+      "type": "test",
+      "status": "pass",
+      "lifecycle": "published",
+      "lifecycle_history": [
+        {
+          "state": "collected",
+          "recorded_at": "2026-07-18T00:00:01Z",
+          "review_digest": null
+        },
+        {
+          "state": "published",
+          "recorded_at": "2026-07-18T00:01:00Z",
+          "review_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-validator",
+        "version": "0.1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "input_digests": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "output_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "producer": {
+        "type": "local-runner",
+        "identity": "fixture-runner"
+      },
+      "tool": {
+        "name": "unittest",
+        "version": "stdlib",
+        "source": "python"
+      },
+      "started_at": "2026-07-18T00:00:00Z",
+      "completed_at": "2026-07-18T00:00:01Z",
+      "execution": {
+        "ran": true,
+        "required": true,
+        "reason": null
+      },
+      "configuration": {},
+      "model_check": null,
+      "summary": "Fixture test passed.",
+      "private_source_metadata": null,
+      "public_artifacts": [],
+      "limitations": []
+    },
+    "expected_code": "lifecycle-transition"
+  },
+  {
+    "name": "private-source-locator-field",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "evidence",
+      "id": "PM-EVIDENCE-0093",
+      "type": "test",
+      "status": "pass",
+      "lifecycle": "collected",
+      "lifecycle_history": [
+        {
+          "state": "collected",
+          "recorded_at": "2026-07-18T00:00:01Z",
+          "review_digest": null
+        }
+      ],
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-validator",
+        "version": "0.1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "input_digests": [
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "output_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "producer": {
+        "type": "local-runner",
+        "identity": "fixture-runner"
+      },
+      "tool": {
+        "name": "unittest",
+        "version": "stdlib",
+        "source": "python"
+      },
+      "started_at": "2026-07-18T00:00:00Z",
+      "completed_at": "2026-07-18T00:00:01Z",
+      "execution": {
+        "ran": true,
+        "required": true,
+        "reason": null
+      },
+      "configuration": {},
+      "model_check": null,
+      "summary": "Fixture test passed.",
+      "private_source_metadata": {
+        "revision_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "source_class": "private-product-source",
+        "reproducibility": "privately-reproducible",
+        "publication_review_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "repository_url": "https://example.invalid/private/repository"
+      },
+      "public_artifacts": [],
+      "limitations": []
+    },
+    "expected_code": "schema"
+  },
+  {
+    "name": "published-without-human-approval",
+    "record": {
+      "schema_version": "0.1",
+      "record_type": "evidence-manifest",
+      "id": "PM-MANIFEST-0090",
+      "release": {
+        "identifier": "fixture-release",
+        "version": "0.1",
+        "channel": "fixture"
+      },
+      "subject": {
+        "type": "process",
+        "identifier": "fixture-process",
+        "version": "0.1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "digests": {
+        "source_revision": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "build_artifact": null,
+        "claim_set": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "assumption_set": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "evidence_set": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "evidence_record_digests": [],
+        "evidence_output_digests": [],
+        "limitation_set": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "protocol": {
+        "identifier": "fixture-protocol",
+        "version": "0.1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "conformance": {
+        "identifier": "fixture-suite",
+        "version": "0.1",
+        "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "ae_framework": {
+        "version": "0.0.0-fixture",
+        "commit": "0000000000000000000000000000000000000000",
+        "profile": "fixture",
+        "policy_version": "0.1"
+      },
+      "toolchain": [],
+      "claims": [],
+      "assumptions": [],
+      "evidence": [],
+      "limitations": [],
+      "approvals": [],
+      "publication": {
+        "status": "published",
+        "publicly_reproducible": true,
+        "reason": "Fixture-only bundle.",
+        "signature": null
+      },
+      "generated_at": "2026-07-18T00:00:00Z",
+      "supersedes": null
+    },
+    "expected_code": "publication-approval"
+  }
+]

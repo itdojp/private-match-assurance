@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/correction-withdrawal-notice-0.1.json",
+  "title": "Private Match assurance correction or withdrawal notice v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_type", "id", "notice_type", "affected_report", "affected_claims", "reason", "impact", "replacement", "issued_at", "approver", "public_notice"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "record_type": {"const": "assurance-notice"},
+    "id": {"type": "string", "pattern": "^PM-NOTICE-[0-9]{4,}$"},
+    "notice_type": {"enum": ["correction", "withdrawal"]},
+    "affected_report": {"type": "string", "minLength": 1},
+    "affected_claims": {"type": "array", "items": {"type": "string", "pattern": "^PM-CLAIM-[0-9]{4,}$"}, "uniqueItems": true},
+    "reason": {"type": "string", "minLength": 1},
+    "impact": {"type": "string", "minLength": 1},
+    "replacement": {"type": ["string", "null"]},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "approver": {"type": "string", "minLength": 1},
+    "public_notice": {"type": "string", "minLength": 1}
+  }
+}

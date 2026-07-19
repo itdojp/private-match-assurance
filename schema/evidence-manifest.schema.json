@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/evidence-manifest-0.1.json",
+  "title": "Private Match evidence manifest v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_type", "id", "release", "subject", "digests", "protocol", "conformance", "ae_framework", "toolchain", "claims", "assumptions", "evidence", "limitations", "approvals", "publication", "generated_at", "supersedes"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "record_type": {"const": "evidence-manifest"},
+    "id": {"type": "string", "pattern": "^PM-MANIFEST-[0-9]{4,}$"},
+    "release": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identifier", "version", "channel"],
+      "properties": {
+        "identifier": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "channel": {"enum": ["fixture", "experimental", "pilot", "production"]}
+      }
+    },
+    "subject": {"$ref": "#/$defs/subject"},
+    "digests": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "source_revision", "build_artifact", "claim_set", "assumption_set", "evidence_set",
+        "evidence_record_digests", "evidence_output_digests", "limitation_set"
+      ],
+      "properties": {
+        "source_revision": {"$ref": "#/$defs/digest"},
+        "build_artifact": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+        "claim_set": {"$ref": "#/$defs/digest"},
+        "assumption_set": {"$ref": "#/$defs/digest"},
+        "evidence_set": {"$ref": "#/$defs/digest"},
+        "evidence_record_digests": {
+          "type": "array", "items": {"$ref": "#/$defs/digest"}, "uniqueItems": true
+        },
+        "evidence_output_digests": {
+          "type": "array", "items": {"$ref": "#/$defs/digest"}, "uniqueItems": true
+        },
+        "limitation_set": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "protocol": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identifier", "version", "digest"],
+      "properties": {
+        "identifier": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "conformance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identifier", "version", "digest"],
+      "properties": {
+        "identifier": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "ae_framework": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "commit", "profile", "policy_version"],
+      "properties": {
+        "version": {"type": "string", "minLength": 1},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "profile": {"type": "string", "minLength": 1},
+        "policy_version": {"type": "string", "minLength": 1}
+      }
+    },
+    "toolchain": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "version", "source"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "version": {"type": "string", "minLength": 1},
+          "source": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "claims": {"type": "array", "items": {"type": "string", "pattern": "^PM-CLAIM-[0-9]{4,}$"}, "uniqueItems": true},
+    "assumptions": {"type": "array", "items": {"type": "string", "pattern": "^PM-ASSUMPTION-[0-9]{4,}$"}, "uniqueItems": true},
+    "evidence": {"type": "array", "items": {"type": "string", "pattern": "^PM-EVIDENCE-[0-9]{4,}$"}, "uniqueItems": true},
+    "limitations": {"type": "array", "items": {"type": "string", "pattern": "^PM-LIMITATION-[0-9]{4,}$"}, "uniqueItems": true},
+    "approvals": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["type", "status", "reviewer", "reviewed_at"],
+        "properties": {
+          "type": {"enum": ["provenance", "schema", "security", "privacy", "claims", "ip", "publication"]},
+          "status": {"enum": ["approved", "rejected", "not-required"]},
+          "reviewer": {"type": "string", "minLength": 1},
+          "reviewed_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "publication": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "publicly_reproducible", "reason", "signature"],
+      "properties": {
+        "status": {"enum": ["candidate", "published", "withdrawn"]},
+        "publicly_reproducible": {"type": "boolean"},
+        "reason": {"type": "string", "minLength": 1},
+        "signature": {"type": ["object", "null"]}
+      }
+    },
+    "generated_at": {"type": "string", "format": "date-time"},
+    "supersedes": {"type": ["string", "null"], "pattern": "^PM-MANIFEST-[0-9]{4,}$"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "publication": {
+            "properties": {"status": {"const": "published"}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "approvals": {
+            "contains": {
+              "type": "object",
+              "required": ["type", "status"],
+              "properties": {
+                "type": {"const": "publication"},
+                "status": {"const": "approved"}
+              }
+            },
+            "minContains": 1
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "subject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "identifier", "version", "digest"],
+      "properties": {
+        "type": {"enum": ["protocol", "source-revision", "build-artifact", "deployment-profile", "process"]},
+        "identifier": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

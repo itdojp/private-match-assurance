@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/known-limitation-0.1.json",
+  "title": "Private Match known limitation v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_type", "id", "statement", "affected_claims", "severity", "status", "owner", "identified_at", "reviewed_at", "next_review_at", "mitigation", "references"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "record_type": {"const": "known-limitation"},
+    "id": {"type": "string", "pattern": "^PM-LIMITATION-[0-9]{4,}$"},
+    "statement": {"type": "string", "minLength": 1},
+    "affected_claims": {"type": "array", "items": {"type": "string", "pattern": "^PM-CLAIM-[0-9]{4,}$"}, "uniqueItems": true},
+    "severity": {"enum": ["critical", "high", "medium", "low", "informational"]},
+    "status": {"enum": ["open", "accepted", "mitigated", "superseded"]},
+    "owner": {"type": "string", "minLength": 1},
+    "identified_at": {"type": "string", "format": "date-time"},
+    "reviewed_at": {"type": "string", "format": "date-time"},
+    "next_review_at": {"type": ["string", "null"], "format": "date-time"},
+    "mitigation": {"type": ["string", "null"]},
+    "references": {"type": "array", "items": {"type": "string", "format": "uri-reference"}, "uniqueItems": true}
+  }
+}

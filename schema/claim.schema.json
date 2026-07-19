@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/claim-0.1.json",
+  "title": "Private Match assurance claim v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_type", "id", "statement", "subject", "scope", "status", "assumptions", "evidence", "limitations", "valid_from", "valid_until", "status_reason", "supersedes", "owner", "reviewers"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "record_type": {"const": "claim"},
+    "id": {"type": "string", "pattern": "^PM-CLAIM-[0-9]{4,}$"},
+    "statement": {"type": "string", "minLength": 1},
+    "subject": {"$ref": "#/$defs/subject"},
+    "scope": {"type": "string", "minLength": 1},
+    "status": {"enum": ["draft", "supported", "supported-with-assumptions", "not-supported", "expired", "withdrawn"]},
+    "assumptions": {"type": "array", "items": {"type": "string", "pattern": "^PM-ASSUMPTION-[0-9]{4,}$"}, "uniqueItems": true},
+    "evidence": {"type": "array", "items": {"type": "string", "pattern": "^PM-EVIDENCE-[0-9]{4,}$"}, "uniqueItems": true},
+    "limitations": {"type": "array", "items": {"type": "string", "pattern": "^PM-LIMITATION-[0-9]{4,}$"}, "uniqueItems": true},
+    "valid_from": {"type": "string", "format": "date-time"},
+    "valid_until": {"type": ["string", "null"], "format": "date-time"},
+    "status_reason": {"type": ["string", "null"]},
+    "supersedes": {"type": ["string", "null"], "pattern": "^PM-CLAIM-[0-9]{4,}$"},
+    "owner": {"type": "string", "minLength": 1},
+    "reviewers": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"enum": ["supported", "supported-with-assumptions"]}}},
+      "then": {"properties": {"evidence": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "supported-with-assumptions"}}},
+      "then": {"properties": {"assumptions": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["expired", "withdrawn"]}}},
+      "then": {"properties": {"status_reason": {"type": "string", "minLength": 1}}}
+    }
+  ],
+  "$defs": {
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "identifier", "version", "digest"],
+      "properties": {
+        "type": {"enum": ["protocol", "source-revision", "build-artifact", "deployment-profile", "process"]},
+        "identifier": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

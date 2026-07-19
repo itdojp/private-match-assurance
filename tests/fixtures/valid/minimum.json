@@ -36,6 +36,10 @@
     "id": "PM-EVIDENCE-0001",
     "type": "test",
     "status": "pass",
+    "lifecycle": "collected",
+    "lifecycle_history": [
+      {"state": "collected", "recorded_at": "2026-07-18T00:00:01Z", "review_digest": null}
+    ],
     "subject": {"type": "process", "identifier": "fixture-validator", "version": "0.1", "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
     "input_digests": ["sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
     "output_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -45,8 +49,9 @@
     "completed_at": "2026-07-18T00:00:01Z",
     "execution": {"ran": true, "required": true, "reason": null},
     "configuration": {},
+    "model_check": null,
     "summary": "Fixture test passed.",
-    "private_source_reference": null,
+    "private_source_metadata": null,
     "public_artifacts": [],
     "limitations": []
   },
@@ -91,6 +96,8 @@
       "claim_set": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "assumption_set": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
       "evidence_set": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "evidence_record_digests": [],
+      "evidence_output_digests": [],
       "limitation_set": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
     },
     "protocol": {"identifier": "fixture-protocol", "version": "0.1", "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},

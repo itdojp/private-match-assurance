@@ -115,6 +115,10 @@ empty `values` list. A `finite-set` parameter requires a non-empty `values` list
 and null range fields. State and depth counts are non-negative. Evidence for
 other types uses `model_check: null`.
 
+For `type: conformance`, `configuration` must identify both the protocol and the
+conformance suite, including each identifier and version. An empty or implied
+conformance scope is invalid.
+
 When private material contributed to an Evidence item,
 `private_source_metadata` replaces any public locator and has this structure:
 
@@ -150,6 +154,10 @@ The manifest groups evidence for a release and binds:
 - known limitations
 - release approver
 - publication signature
+
+A manifest that declares `publication.status: published` must include an explicit
+human publication approval with `type: publication` and `status: approved`. Schema
+or CI success does not create that approval.
 
 ## Status semantics
 

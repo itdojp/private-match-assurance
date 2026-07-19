@@ -14,14 +14,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: requirements-dev.txt
-      - name: Install validation dependency
-        run: python -m pip install -r requirements-dev.txt
+          cache-dependency-path: |
+            requirements-build.txt
+            requirements-dev.txt
+      - name: Install integrity-locked build backend
+        run: python -m pip install --require-hashes -r requirements-build.txt
+      - name: Install integrity-locked validation dependencies
+        run: python -m pip install --require-hashes --no-build-isolation -r requirements-dev.txt
       - name: Run schema validator tests
         run: python -m unittest discover -s tests -p 'test_*.py'
       - name: Validate assurance records
@@ -29,9 +35,11 @@ jobs:
           python scripts/validate_assurance.py
           --root .
           --report-dir artifacts
+      - name: Validate REUSE licensing metadata
+        run: reuse lint
       - name: Upload validation report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: assurance-schema-report
           path: artifacts/

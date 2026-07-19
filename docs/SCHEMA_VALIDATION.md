@@ -15,10 +15,11 @@ The lane verifies representation and linkage. It does not determine whether a se
 
 ## Commands
 
-Install the pinned validation dependency:
+Install the hash-locked build backend and validation dependencies:
 
 ```bash
-python -m pip install -r requirements-dev.txt
+python -m pip install --require-hashes -r requirements-build.txt
+python -m pip install --require-hashes --no-build-isolation -r requirements-dev.txt
 ```
 
 Run regression tests:
@@ -74,6 +75,52 @@ The states are not interchangeable.
 - `skip` and `unsupported` require `execution.ran: false` and a reason.
 - `timeout` and `tool-error` remain visible and must not be rewritten as pass.
 
+Evidence lifecycle is a separate field:
+
+```text
+collected
+validated
+sanitized
+published
+superseded
+withdrawn
+```
+
+`lifecycle_history` is a non-empty, append-only transition log. It starts at
+`collected`, ends at the current `lifecycle`, uses ordered timestamps, and records a
+review digest for every transition after collection. Lifecycle changes never rewrite
+the historical check-result `status`. Superseded or withdrawn evidence cannot support
+an active claim.
+
+## Type-specific evidence
+
+Conformance evidence must name both the protocol identifier/version and conformance-suite
+identifier/version in `configuration`.
+
+Model-check evidence must provide typed `model_check` data containing:
+
+- checked properties
+- non-empty integer-range or finite-set state-space parameters
+- constraints and configured depth/state limits
+- generated and distinct state counts
+- explored maximum depth
+- whether exploration completed within the declared bounds
+
+Evidence of every other type uses `model_check: null`.
+
+`private_source_metadata` is either null or a digest-bound allowlisted object. It cannot contain
+repository names or URLs, hostnames, account identifiers, filesystem paths, or other private
+locators.
+
+## Manifest publication and digests
+
+Manifest `evidence_record_digests` identify canonical complete Evidence records.
+`evidence_output_digests` separately identify the output artifacts referenced by those records.
+The validator checks the record-digest count and exact output-digest set for available records.
+
+A manifest with `publication.status: published` requires an explicit approved human
+`publication` review entry. CI cannot create or infer that approval.
+
 ## Claim status
 
 Claim status is one of:
@@ -102,6 +149,11 @@ The validator adds checks that are difficult or undesirable to express only in J
 - assumption and limitation review dates must be ordered
 - IDs must be unique within the validated record set
 - claim, manifest, limitation, and notice references must resolve to records of the correct type
+- invalid lifecycle transitions and unordered lifecycle history fail
+- model-check range, state-count, and depth relationships are bounded
+- active claims cannot rely on superseded or withdrawn Evidence records
+- manifest Evidence-record digest counts and output-digest sets must match references
+- published manifests require explicit human publication approval
 
 ## Fixtures
 
@@ -112,6 +164,7 @@ The validator adds checks that are difficult or undesirable to express only in J
 - one claim
 - one assumption
 - one conformance evidence item
+- one bounded model-check evidence item
 - one known limitation
 - one notice
 - one evidence manifest
@@ -126,6 +179,11 @@ The validator adds checks that are difficult or undesirable to express only in J
 - skipped execution represented as pass
 - expired claim without reason
 - withdrawn claim without reason
+- model-check evidence without typed bounds/results
+- conformance evidence without protocol/suite versions
+- invalid lifecycle transitions
+- unsafe private-source locator fields
+- a published manifest without human publication approval
 
 ## Schema compatibility
 
@@ -150,7 +208,10 @@ CI fails on:
 - time-order violations
 - duplicate IDs
 - unresolved typed references
+- invalid lifecycle, model-check, or evidence-digest semantics
+- missing human approval for a manifest claiming publication
 - missing validation reports
+- incomplete REUSE licensing metadata
 
 No private repository or secret is required for normal pull-request validation.
 

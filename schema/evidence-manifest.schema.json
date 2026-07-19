@@ -21,13 +21,22 @@
     "subject": {"$ref": "#/$defs/subject"},
     "digests": {
       "type": "object", "additionalProperties": false,
-      "required": ["source_revision", "build_artifact", "claim_set", "assumption_set", "evidence_set", "limitation_set"],
+      "required": [
+        "source_revision", "build_artifact", "claim_set", "assumption_set", "evidence_set",
+        "evidence_record_digests", "evidence_output_digests", "limitation_set"
+      ],
       "properties": {
         "source_revision": {"$ref": "#/$defs/digest"},
         "build_artifact": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
         "claim_set": {"$ref": "#/$defs/digest"},
         "assumption_set": {"$ref": "#/$defs/digest"},
         "evidence_set": {"$ref": "#/$defs/digest"},
+        "evidence_record_digests": {
+          "type": "array", "items": {"$ref": "#/$defs/digest"}, "uniqueItems": true
+        },
+        "evidence_output_digests": {
+          "type": "array", "items": {"$ref": "#/$defs/digest"}, "uniqueItems": true
+        },
         "limitation_set": {"$ref": "#/$defs/digest"}
       }
     },
@@ -101,6 +110,32 @@
     "generated_at": {"type": "string", "format": "date-time"},
     "supersedes": {"type": ["string", "null"], "pattern": "^PM-MANIFEST-[0-9]{4,}$"}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "publication": {
+            "properties": {"status": {"const": "published"}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "approvals": {
+            "contains": {
+              "type": "object",
+              "required": ["type", "status"],
+              "properties": {
+                "type": {"const": "publication"},
+                "status": {"const": "approved"}
+              }
+            },
+            "minContains": 1
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "subject": {

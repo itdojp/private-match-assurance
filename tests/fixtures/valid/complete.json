@@ -36,6 +36,12 @@
     "id": "PM-EVIDENCE-0001",
     "type": "conformance",
     "status": "pass",
+    "lifecycle": "sanitized",
+    "lifecycle_history": [
+      {"state": "collected", "recorded_at": "2026-07-18T00:00:01Z", "review_digest": null},
+      {"state": "validated", "recorded_at": "2026-07-18T00:02:00Z", "review_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"},
+      {"state": "sanitized", "recorded_at": "2026-07-18T00:03:00Z", "review_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"}
+    ],
     "subject": {"type": "process", "identifier": "fixture-validator", "version": "0.1", "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
     "input_digests": ["sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
     "output_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -44,11 +50,64 @@
     "started_at": "2026-07-18T00:00:00Z",
     "completed_at": "2026-07-18T00:00:01Z",
     "execution": {"ran": true, "required": true, "reason": null},
-    "configuration": {"suite": "fixture-suite-0.1", "vectors": 3},
+    "configuration": {
+      "protocol": {"identifier": "fixture-protocol", "version": "0.1"},
+      "conformance_suite": {"identifier": "fixture-suite", "version": "0.1"},
+      "vectors": 3
+    },
+    "model_check": null,
     "summary": "All fixture replay vectors were rejected as expected.",
-    "private_source_reference": null,
+    "private_source_metadata": null,
     "public_artifacts": ["reports/fixture-conformance.json"],
     "limitations": ["Synthetic fixture only."]
+  },
+  "model-check-evidence": {
+    "schema_version": "0.1",
+    "record_type": "evidence",
+    "id": "PM-EVIDENCE-0002",
+    "type": "model-check",
+    "status": "pass",
+    "lifecycle": "validated",
+    "lifecycle_history": [
+      {"state": "collected", "recorded_at": "2026-07-18T00:04:00Z", "review_digest": null},
+      {"state": "validated", "recorded_at": "2026-07-18T00:05:00Z", "review_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"}
+    ],
+    "subject": {"type": "protocol", "identifier": "fixture-protocol-model", "version": "0.1", "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"},
+    "input_digests": ["sha256:6666666666666666666666666666666666666666666666666666666666666666"],
+    "output_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "producer": {"type": "local-runner", "identity": "fixture-model-runner"},
+    "tool": {"name": "TLC", "version": "fixture", "source": "fixture-toolchain"},
+    "started_at": "2026-07-18T00:04:00Z",
+    "completed_at": "2026-07-18T00:04:30Z",
+    "execution": {"ran": true, "required": true, "reason": null},
+    "configuration": {"model": "fixture-model"},
+    "model_check": {
+      "properties": ["NoInvalidPublication"],
+      "state_space_bounds": {
+        "parameters": [
+          {"name": "EvidenceCount", "kind": "integer-range", "minimum": 1, "maximum": 3, "values": []},
+          {"name": "Lifecycle", "kind": "finite-set", "minimum": null, "maximum": null, "values": ["collected", "validated", "sanitized"]}
+        ],
+        "constraints": ["EvidenceCount <= 3"],
+        "max_depth": 20,
+        "max_states": 10000
+      },
+      "explored_state_space": {
+        "generated_states": 120,
+        "distinct_states": 80,
+        "maximum_depth": 12,
+        "complete_within_bounds": true
+      }
+    },
+    "summary": "Fixture model completed within the declared bounds.",
+    "private_source_metadata": {
+      "revision_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "source_class": "private-evidence-set",
+      "reproducibility": "not-publicly-reproducible",
+      "publication_review_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+    },
+    "public_artifacts": ["reports/fixture-model-check.json"],
+    "limitations": ["Synthetic bounded model only."]
   },
   "known-limitation": {
     "schema_version": "0.1",
@@ -91,6 +150,14 @@
       "claim_set": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "assumption_set": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
       "evidence_set": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "evidence_record_digests": [
+        "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "evidence_output_digests": [
+        "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+      ],
       "limitation_set": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
     },
     "protocol": {"identifier": "fixture-protocol", "version": "0.1", "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
@@ -99,7 +166,7 @@
     "toolchain": [{"name": "unittest", "version": "stdlib", "source": "python"}],
     "claims": ["PM-CLAIM-0001"],
     "assumptions": ["PM-ASSUMPTION-0001"],
-    "evidence": ["PM-EVIDENCE-0001"],
+    "evidence": ["PM-EVIDENCE-0001", "PM-EVIDENCE-0002"],
     "limitations": ["PM-LIMITATION-0001"],
     "approvals": [
       {"type": "schema", "status": "approved", "reviewer": "reviewer@example.invalid", "reviewed_at": "2026-07-18T00:10:00Z"},

@@ -59,3 +59,21 @@ Never publish:
 ## Maturity
 
 The repository is in bootstrap. No public assurance report for a production Private Match release exists yet.
+
+## License
+
+Repository content uses an explicit dual-license structure:
+
+- Narrative assurance documentation, research text, tables, and diagrams are licensed under
+  [Creative Commons Attribution 4.0 International](LICENSES/CC-BY-4.0.txt).
+- Python code, JSON Schemas, validators, tests, fixtures, conformance vectors, GitHub Actions,
+  and build inputs are licensed under the [Apache License 2.0](LICENSES/Apache-2.0.txt).
+
+[`REUSE.toml`](REUSE.toml) provides the machine-readable SPDX file mapping and takes precedence
+over this summary for individual files. The explicit human approval, alternatives, and
+publication boundary are recorded in
+[ADR-0001](docs/decisions/ADR-0001-PUBLIC-LICENSING.md).
+
+Patent-sensitive and trade-secret candidate material remains private or embargoed until human
+IP and publication approval. These licenses do not authorize publication of private evidence or
+constitute approval of an assurance report.

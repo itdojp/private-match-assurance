@@ -4,18 +4,43 @@
   "title": "Private Match assurance evidence item v0.1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "record_type", "id", "type", "status", "subject", "input_digests", "output_digest", "producer", "tool", "started_at", "completed_at", "execution", "configuration", "summary", "private_source_reference", "public_artifacts", "limitations"],
+  "required": [
+    "schema_version", "record_type", "id", "type", "status", "lifecycle",
+    "lifecycle_history", "subject", "input_digests", "output_digest", "producer",
+    "tool", "started_at", "completed_at", "execution", "configuration",
+    "model_check", "summary", "private_source_metadata", "public_artifacts", "limitations"
+  ],
   "properties": {
     "schema_version": {"const": "0.1"},
     "record_type": {"const": "evidence"},
     "id": {"type": "string", "pattern": "^PM-EVIDENCE-[0-9]{4,}$"},
-    "type": {"enum": ["test", "conformance", "model-check", "proof-check", "security-scan", "provenance", "review", "sbom", "benchmark"]},
-    "status": {"enum": ["pass", "fail", "skip", "unsupported", "timeout", "tool-error"]},
+    "type": {
+      "enum": [
+        "test", "conformance", "model-check", "proof-check", "security-scan",
+        "provenance", "review", "sbom", "benchmark"
+      ]
+    },
+    "status": {
+      "enum": ["pass", "fail", "skip", "unsupported", "timeout", "tool-error"]
+    },
+    "lifecycle": {
+      "enum": ["collected", "validated", "sanitized", "published", "superseded", "withdrawn"]
+    },
+    "lifecycle_history": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/lifecycleEntry"}
+    },
     "subject": {"$ref": "#/$defs/subject"},
-    "input_digests": {"type": "array", "items": {"$ref": "#/$defs/digest"}, "uniqueItems": true},
+    "input_digests": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/digest"},
+      "uniqueItems": true
+    },
     "output_digest": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
     "producer": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "required": ["type", "identity"],
       "properties": {
         "type": {"enum": ["github-actions", "local-runner", "external-lab", "human-review"]},
@@ -23,7 +48,8 @@
       }
     },
     "tool": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "required": ["name", "version", "source"],
       "properties": {
         "name": {"type": "string", "minLength": 1},
@@ -34,7 +60,8 @@
     "started_at": {"type": "string", "format": "date-time"},
     "completed_at": {"type": "string", "format": "date-time"},
     "execution": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "required": ["ran", "required", "reason"],
       "properties": {
         "ran": {"type": "boolean"},
@@ -43,10 +70,23 @@
       }
     },
     "configuration": {"type": "object"},
+    "model_check": {
+      "anyOf": [{"$ref": "#/$defs/modelCheck"}, {"type": "null"}]
+    },
     "summary": {"type": "string", "minLength": 1},
-    "private_source_reference": {"type": ["string", "null"]},
-    "public_artifacts": {"type": "array", "items": {"type": "string", "format": "uri-reference"}, "uniqueItems": true},
-    "limitations": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+    "private_source_metadata": {
+      "anyOf": [{"$ref": "#/$defs/privateSourceMetadata"}, {"type": "null"}]
+    },
+    "public_artifacts": {
+      "type": "array",
+      "items": {"type": "string", "format": "uri-reference"},
+      "uniqueItems": true
+    },
+    "limitations": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    }
   },
   "allOf": [
     {
@@ -70,18 +110,165 @@
           }
         }
       }
+    },
+    {
+      "if": {"properties": {"type": {"const": "model-check"}}},
+      "then": {"properties": {"model_check": {"$ref": "#/$defs/modelCheck"}}},
+      "else": {"properties": {"model_check": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "conformance"}}},
+      "then": {
+        "properties": {
+          "configuration": {
+            "type": "object",
+            "required": ["protocol", "conformance_suite"],
+            "properties": {
+              "protocol": {"$ref": "#/$defs/versionedArtifact"},
+              "conformance_suite": {"$ref": "#/$defs/versionedArtifact"}
+            }
+          }
+        }
+      }
     }
   ],
   "$defs": {
     "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "subject": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "required": ["type", "identifier", "version", "digest"],
       "properties": {
-        "type": {"enum": ["protocol", "source-revision", "build-artifact", "deployment-profile", "process"]},
+        "type": {
+          "enum": ["protocol", "source-revision", "build-artifact", "deployment-profile", "process"]
+        },
         "identifier": {"type": "string", "minLength": 1},
         "version": {"type": "string", "minLength": 1},
         "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "versionedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identifier", "version"],
+      "properties": {
+        "identifier": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      }
+    },
+    "lifecycleEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "recorded_at", "review_digest"],
+      "properties": {
+        "state": {
+          "enum": ["collected", "validated", "sanitized", "published", "superseded", "withdrawn"]
+        },
+        "recorded_at": {"type": "string", "format": "date-time"},
+        "review_digest": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "collected"}}},
+          "then": {"properties": {"review_digest": {"type": "null"}}},
+          "else": {"properties": {"review_digest": {"$ref": "#/$defs/digest"}}}
+        }
+      ]
+    },
+    "stateSpaceParameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "minimum", "maximum", "values"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["integer-range", "finite-set"]},
+        "minimum": {"type": ["integer", "null"]},
+        "maximum": {"type": ["integer", "null"]},
+        "values": {"type": "array", "items": {"type": ["string", "integer", "boolean"]}, "uniqueItems": true}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "integer-range"}}},
+          "then": {
+            "properties": {
+              "minimum": {"type": "integer"},
+              "maximum": {"type": "integer"},
+              "values": {"maxItems": 0}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "finite-set"}}},
+          "then": {
+            "properties": {
+              "minimum": {"type": "null"},
+              "maximum": {"type": "null"},
+              "values": {"minItems": 1}
+            }
+          }
+        }
+      ]
+    },
+    "modelCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["properties", "state_space_bounds", "explored_state_space"],
+      "properties": {
+        "properties": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "state_space_bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["parameters", "constraints", "max_depth", "max_states"],
+          "properties": {
+            "parameters": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"$ref": "#/$defs/stateSpaceParameter"}
+            },
+            "constraints": {
+              "type": "array",
+              "items": {"type": "string", "minLength": 1},
+              "uniqueItems": true
+            },
+            "max_depth": {"type": ["integer", "null"], "minimum": 0},
+            "max_states": {"type": ["integer", "null"], "minimum": 0}
+          }
+        },
+        "explored_state_space": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "generated_states", "distinct_states", "maximum_depth", "complete_within_bounds"
+          ],
+          "properties": {
+            "generated_states": {"type": "integer", "minimum": 0},
+            "distinct_states": {"type": "integer", "minimum": 0},
+            "maximum_depth": {"type": ["integer", "null"], "minimum": 0},
+            "complete_within_bounds": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "privateSourceMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision_digest", "source_class", "reproducibility", "publication_review_digest"
+      ],
+      "properties": {
+        "revision_digest": {"$ref": "#/$defs/digest"},
+        "source_class": {
+          "enum": ["private-product-source", "private-evidence-set", "external-private-source"]
+        },
+        "reproducibility": {
+          "enum": ["privately-reproducible", "not-publicly-reproducible"]
+        },
+        "publication_review_digest": {"$ref": "#/$defs/digest"}
       }
     }
   }

@@ -21,7 +21,9 @@ Every public assurance statement must answer:
 Examples:
 
 - `Build X passed conformance suite Y under configuration Z.`
-- `The TLA+ model for protocol version X was checked with TLC configuration Y; no invariant violation was found within the reported state space.`
+- `The TLA+ model for protocol version X was checked with TLC configuration Y
+  and typed state-space bounds B; no invariant violation was found among N
+  distinct states, with completeness within those bounds reported as C.`
 - `Artifact digest X was produced by workflow Y from source revision Z.`
 - `The reference verifier rejected the published tamper and replay vectors for suite version X.`
 

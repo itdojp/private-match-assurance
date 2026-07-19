@@ -22,6 +22,10 @@ Create schemas for:
 Exit criteria:
 
 - invalid status, missing provenance, or missing subject scope fails validation
+- evidence lifecycle validates independently from check-result status
+- model-check evidence requires typed state-space bounds and explored-state counts
+- private-source metadata rejects repository, hostname, account, and path locators
+- manifests distinguish canonical evidence-record digests from output digests
 - example valid and invalid fixtures exist
 
 ## A2 — Private-to-public evidence export contract

@@ -31,7 +31,8 @@ When raw evidence is needed, reference a digest and approved metadata rather tha
 ## Assurance rules
 
 1. Every claim must name its scope, subject, version, assumptions, and evidence.
-2. Every evidence item must record producer, tool, version, time, input digest, output digest, and status.
+2. Every evidence item must record producer, tool, version, time, input digest,
+   output digest, result status, and lifecycle.
 3. `pass`, `fail`, `skip`, `unsupported`, `timeout`, and `tool-error` are distinct states.
 4. A skipped or unavailable check must not be represented as passed.
 5. Model-checking evidence must publish configuration and state-space bounds.

@@ -6,7 +6,9 @@ ITDO Inc. maintains this repository. Reports are company-published assurance evi
 
 ## Evidence lifecycle
 
-Evidence items use these states:
+Evidence items use these lifecycle states in their `lifecycle` field. Lifecycle
+records the evidence's validation and publication stage; it is distinct from the
+check-result `status` such as `pass`, `fail`, or `skip`.
 
 - `collected` — raw result exists in a private or controlled system
 - `validated` — structure, provenance, and integrity have been checked
@@ -14,6 +16,10 @@ Evidence items use these states:
 - `published` — included in a public signed manifest or report
 - `superseded` — replaced by newer evidence
 - `withdrawn` — invalid, unsafe to publish, or no longer relied upon
+
+A lifecycle transition must not rewrite the recorded check result. For example,
+evidence that originally had `status: pass` and is later withdrawn retains that
+result with `lifecycle: withdrawn`, and active claims must no longer rely on it.
 
 Claims use these states:
 

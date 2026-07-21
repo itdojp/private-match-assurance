@@ -30,11 +30,25 @@ jobs:
         run: python -m pip install --require-hashes --no-build-isolation -r requirements-dev.txt
       - name: Run schema validator tests
         run: python -m unittest discover -s tests -p 'test_*.py'
+      - name: Compile and lint Python
+        run: |
+          python -m compileall -q scripts tests
+          ruff check scripts tests
+          ruff format --check scripts tests
+      - name: Export synthetic public Evidence fixture
+        run: |
+          python scripts/export_public_evidence.py \
+            --input protocol-conformance.json \
+            --output-dir .codex-local/tmp/export
+          cmp \
+            tests/fixtures/export/expected/protocol-conformance.json \
+            .codex-local/tmp/export/public-evidence-export.v0.1.json
       - name: Validate assurance records
         run: >-
           python scripts/validate_assurance.py
           --root .
           --report-dir artifacts
+          --export-bundle .codex-local/tmp/export/public-evidence-export.v0.1.json
       - name: Validate REUSE licensing metadata
         run: reuse lint
       - name: Upload validation report

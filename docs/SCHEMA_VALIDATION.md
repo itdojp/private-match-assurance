@@ -22,6 +22,26 @@ python -m pip install --require-hashes -r requirements-build.txt
 python -m pip install --require-hashes --no-build-isolation -r requirements-dev.txt
 ```
 
+The supported public CI target is CPython 3.12 on GitHub-hosted Ubuntu x86-64.
+`requirements-build.txt` includes the build backend; `requirements-dev.txt`
+contains direct and transitive validation dependencies with hashes. Regenerate
+the development lock from `requirements-dev.in` with the reviewed `uv` release:
+
+```console
+uv pip compile \
+  --python-version 3.12 \
+  --python-platform x86_64-unknown-linux-gnu \
+  --generate-hashes \
+  requirements-dev.in \
+  --output-file requirements-dev.txt
+```
+
+Run the command twice and require byte-identical output before review. A lock
+renewal must recheck dependency versions, licenses, hashes, Python support, and
+RFC 8785 vectors. Other Python versions and platforms are not claimed by this
+lock; create and review a separate platform lock rather than weakening
+`--require-hashes`.
+
 Run regression tests:
 
 ```bash
@@ -225,3 +245,25 @@ This lane does not:
 - inspect private source or raw evidence
 - sign an evidence manifest
 - approve publication
+
+## Public Evidence export validation
+
+The export contracts are strict JSON Schema Draft 2020-12 documents. The
+exporter performs additional status, lifecycle, digest, allowlist, path,
+sensitivity, and review-marker checks before constructing a bundle. A generated
+bundle can be checked together with the existing repository records:
+
+```console
+python scripts/export_public_evidence.py \
+  --input protocol-conformance.json \
+  --output-dir .codex-local/tmp/export
+python scripts/validate_assurance.py \
+  --root . \
+  --report-dir .codex-local/tmp/report \
+  --export-bundle .codex-local/tmp/export/public-evidence-export.v0.1.json
+```
+
+Only committed synthetic fixtures are used by public CI. Generated bundles are
+not uploaded as workflow artifacts. See
+[`EVIDENCE_EXPORT.md`](EVIDENCE_EXPORT.md) for the trust and publication
+boundary.

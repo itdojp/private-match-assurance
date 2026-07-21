@@ -1,0 +1,181 @@
+{
+  "schema_version": "0.1",
+  "profile_id": "private-match-public-evidence-export",
+  "profile_version": "0.1",
+  "profile_digest": "sha256:ebb0f5ff62e47a7fce22934f2d012f99bb834e2e2a0db313c293d29c2269b210",
+  "input_contract": "evidence-export-candidate.v0.1",
+  "output_contract": "public-evidence-export.v0.1",
+  "allowed_candidate_fields": [
+    "artifact_binding",
+    "artifact_status",
+    "conformance_suite_binding",
+    "evidence_record",
+    "export_candidate_id",
+    "export_profile",
+    "protocol_binding",
+    "requested_omissions",
+    "review_markers",
+    "sanitization_event",
+    "schema_version",
+    "sensitivity_markers",
+    "source_binding"
+  ],
+  "allowed_evidence_fields": [
+    "completed_at",
+    "configuration",
+    "execution",
+    "id",
+    "input_digests",
+    "lifecycle",
+    "lifecycle_history",
+    "limitations",
+    "model_check",
+    "output_digest",
+    "private_source_metadata",
+    "producer",
+    "public_artifacts",
+    "record_type",
+    "schema_version",
+    "started_at",
+    "status",
+    "subject",
+    "summary",
+    "tool",
+    "type"
+  ],
+  "allowed_configuration_fields": {
+    "conformance": [
+      "conformance_suite",
+      "protocol",
+      "vectors"
+    ],
+    "model-check": [
+      "configuration_id",
+      "model"
+    ],
+    "provenance": [
+      "provenance_type",
+      "workflow_id"
+    ],
+    "review": [
+      "review_method",
+      "review_scope"
+    ],
+    "test": [
+      "case_count",
+      "test_suite"
+    ]
+  },
+  "allowed_output_fields": [
+    "bundle_digest",
+    "digest_bindings",
+    "evidence_record",
+    "export_candidate_digest",
+    "export_candidate_id",
+    "export_profile",
+    "exporter",
+    "omissions",
+    "publication",
+    "record_type",
+    "review_requirements",
+    "sanitization_report",
+    "schema_version"
+  ],
+  "prohibited_field_names": [
+    "account_id",
+    "address",
+    "authorization",
+    "bearer_token",
+    "client_secret",
+    "credential",
+    "customer_id",
+    "email",
+    "hostname",
+    "password",
+    "patent_candidate",
+    "personal_name",
+    "phone",
+    "private_key",
+    "raw_vulnerability_detail",
+    "secret",
+    "tenant_id",
+    "token",
+    "unpublished_invention"
+  ],
+  "prohibited_value_classes": [
+    "account-identifier",
+    "cloud-metadata-address",
+    "connection-string-credential",
+    "control-or-bidi-character",
+    "customer-or-personal-identifier",
+    "internal-host-or-address",
+    "private-key-or-token",
+    "private-repository-locator",
+    "raw-vulnerability-detail",
+    "unpublished-ip"
+  ],
+  "allowed_omission_rules": [
+    {
+      "path": "$.evidence_record.public_artifacts",
+      "rule_id": "OMIT-PUBLIC-ARTIFACTS",
+      "category": "optional-public-reference",
+      "action": "omitted-by-profile"
+    }
+  ],
+  "status_preservation": {
+    "mode": "exact",
+    "allowed": [
+      "fail",
+      "pass",
+      "skip",
+      "timeout",
+      "tool-error",
+      "unsupported"
+    ]
+  },
+  "lifecycle_rule": {
+    "maximum_output": "sanitized",
+    "allowed_input": [
+      "collected",
+      "sanitized",
+      "validated"
+    ],
+    "output": "sanitized",
+    "publication_forbidden": true
+  },
+  "path_policy": {
+    "explicit_single_file": true,
+    "relative_to_staging_root": true,
+    "recursive_scan": false,
+    "symlinks": false,
+    "maximum_input_bytes": 262144
+  },
+  "identifier_policy": {
+    "private_revision": "digest-only",
+    "customer_or_personal": "reject",
+    "private_locator": "reject"
+  },
+  "vulnerability_ip_policy": {
+    "embargoed": "reject",
+    "patent_candidate": "reject",
+    "raw_vulnerability_detail": "reject",
+    "unpublished_invention": "reject"
+  },
+  "reviewed_protocol_binding": {
+    "protocol_profile": "private-match-core",
+    "protocol_version": "0.1",
+    "merge_commit": "2c314027f61ca0f0edbe2dcc55a8305710efd91d",
+    "source_revision_digest": "sha256:dba1e8d6efc6083c62c2e4b44f6e12eaa4f5c6cb5ff0cd047a9ad3df0306a208",
+    "state_machine_digest": "sha256:42e63b8a1f413e932e46370aae5fa0d972f3ab71d93efe08557472b4c7066fe8",
+    "message_registry_digest": "sha256:2ff1685ca4325a0ff3bd49c7a411cd7f0857add6215c2f285097bdf40dcbc2b6",
+    "conformance_suite_digest": "sha256:19d2218c11c6ac7ba1d2f0884ba9e3c79cbd1264bd3ef682e543bcb9a63ccf0f"
+  },
+  "serialization": {
+    "format": "RFC8785",
+    "encoding": "UTF-8",
+    "implementation": "rfc8785-python",
+    "implementation_version": "0.1.4",
+    "current_time_insertion": false,
+    "random_identifier_generation": false
+  }
+}

@@ -12,6 +12,11 @@ from typing import Any, Iterable
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+try:
+    from canonical_json import CanonicalJSONError, domain_digest, strict_loads
+except ImportError:  # pragma: no cover - package import during unit tests
+    from scripts.canonical_json import CanonicalJSONError, domain_digest, strict_loads
+
 
 @dataclasses.dataclass(frozen=True)
 class Finding:
@@ -29,6 +34,15 @@ SCHEMA_FILES = {
     "known-limitation": "known-limitation.schema.json",
     "assurance-notice": "correction-withdrawal-notice.schema.json",
 }
+EXPORT_SCHEMA_FILES = {
+    "evidence-export-candidate": "evidence-export-candidate.v0.1.schema.json",
+    "evidence-export-profile": "evidence-export-profile.v0.1.schema.json",
+    "public-evidence-export": "public-evidence-export.v0.1.schema.json",
+}
+
+PROFILE_DOMAIN = "private-match-evidence-export-profile/v0.1"
+EXPORTED_EVIDENCE_DOMAIN = "private-match-exported-evidence/v0.1"
+BUNDLE_DOMAIN = "private-match-public-evidence-bundle/v0.1"
 
 EXCLUDED_DIRS = {".git", ".venv", "artifacts", "__pycache__", "node_modules", "tests"}
 RECORD_DIR = "assurance"
@@ -57,7 +71,7 @@ def _relative(path: Path, root: Path) -> str:
 
 
 def load_json(path: Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return strict_loads(path.read_bytes(), max_bytes=1_048_576)
 
 
 def load_schemas(root: Path) -> dict[str, Draft202012Validator]:
@@ -69,6 +83,179 @@ def load_schemas(root: Path) -> dict[str, Draft202012Validator]:
             schema, format_checker=FormatChecker()
         )
     return validators
+
+
+def load_export_schemas(root: Path) -> dict[str, Draft202012Validator]:
+    validators: dict[str, Draft202012Validator] = {}
+    for artifact_type, filename in EXPORT_SCHEMA_FILES.items():
+        schema = load_json(root / "schema" / filename)
+        Draft202012Validator.check_schema(schema)
+        validators[artifact_type] = Draft202012Validator(
+            schema, format_checker=FormatChecker()
+        )
+    return validators
+
+
+def _detached_digest(domain: str, value: dict[str, Any], field: str) -> str:
+    material = dict(value)
+    material.pop(field, None)
+    return domain_digest(domain, material)
+
+
+def validate_export_bundle(
+    bundle: Any,
+    path: str,
+    root: Path,
+    *,
+    profile: dict[str, Any] | None = None,
+) -> list[Finding]:
+    """Validate a public export without treating it as a publication approval."""
+
+    validator = load_export_schemas(root)["public-evidence-export"]
+    findings: list[Finding] = []
+    for error in sorted(
+        validator.iter_errors(bundle), key=lambda item: list(item.absolute_path)
+    ):
+        findings.append(
+            Finding(
+                "error",
+                "export-schema",
+                path,
+                f"{_json_path(error)}: contract violation",
+            )
+        )
+    if not isinstance(bundle, dict):
+        return findings
+
+    evidence = bundle.get("evidence_record")
+    findings.extend(
+        validate_record(evidence, f"{path}:evidence_record", load_schemas(root))
+    )
+    if isinstance(evidence, dict):
+        if evidence.get("lifecycle") != "sanitized":
+            findings.append(
+                Finding(
+                    "error",
+                    "export-lifecycle",
+                    path,
+                    "exported Evidence lifecycle must be sanitized",
+                )
+            )
+        bindings = bundle.get("digest_bindings")
+        if isinstance(bindings, dict):
+            expected = domain_digest(EXPORTED_EVIDENCE_DOMAIN, evidence)
+            if bindings.get("exported_evidence_record_digest") != expected:
+                findings.append(
+                    Finding(
+                        "error",
+                        "export-evidence-digest",
+                        path,
+                        "exported Evidence digest does not match",
+                    )
+                )
+            if bindings.get("evidence_output_digest") != evidence.get("output_digest"):
+                findings.append(
+                    Finding(
+                        "error",
+                        "export-output-digest",
+                        path,
+                        "Evidence output digest binding does not match",
+                    )
+                )
+        report = bundle.get("sanitization_report")
+        if (
+            not isinstance(report, dict)
+            or report.get("input_status") != report.get("output_status")
+            or report.get("output_status") != evidence.get("status")
+            or report.get("output_lifecycle") != evidence.get("lifecycle")
+        ):
+            findings.append(
+                Finding(
+                    "error",
+                    "export-status-preservation",
+                    path,
+                    "sanitization report does not prove exact status/lifecycle preservation",
+                )
+            )
+
+    if bundle.get("bundle_digest") != _detached_digest(
+        BUNDLE_DOMAIN, bundle, "bundle_digest"
+    ):
+        findings.append(
+            Finding(
+                "error", "export-bundle-digest", path, "bundle digest does not match"
+            )
+        )
+
+    publication = bundle.get("publication")
+    if (
+        not isinstance(publication, dict)
+        or publication.get("status") != "candidate"
+        or publication.get("automation_permitted") is not False
+    ):
+        findings.append(
+            Finding(
+                "error",
+                "export-publication-gate",
+                path,
+                "export must remain a non-published candidate",
+            )
+        )
+    requirements = bundle.get("review_requirements")
+    if (
+        not isinstance(requirements, dict)
+        or requirements.get("final_publication_approval") != "required-not-provided"
+    ):
+        findings.append(
+            Finding(
+                "error",
+                "export-publication-approval",
+                path,
+                "human publication approval must remain absent",
+            )
+        )
+    omissions = bundle.get("omissions")
+    if isinstance(omissions, list):
+        permitted = {"path", "rule_id", "category", "action", "human_review_digest"}
+        for index, omission in enumerate(omissions):
+            if not isinstance(omission, dict) or set(omission) != permitted:
+                findings.append(
+                    Finding(
+                        "error",
+                        "export-omission-log",
+                        path,
+                        f"omissions[{index}] contains non-public fields",
+                    )
+                )
+
+    if profile is not None:
+        profile_material = dict(profile)
+        profile_material.pop("profile_digest", None)
+        expected_profile = domain_digest(PROFILE_DOMAIN, profile_material)
+        if profile.get("profile_digest") != expected_profile:
+            findings.append(
+                Finding(
+                    "error",
+                    "export-profile-digest",
+                    path,
+                    "profile digest does not match",
+                )
+            )
+        bindings = bundle.get("digest_bindings")
+        if (
+            isinstance(bindings, dict)
+            and bindings.get("export_profile_digest") != expected_profile
+        ):
+            findings.append(
+                Finding(
+                    "error",
+                    "export-profile-binding",
+                    path,
+                    "bundle profile binding does not match",
+                )
+            )
+
+    return findings
 
 
 def _json_path(error: Any) -> str:
@@ -608,6 +795,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--report-dir", type=Path, default=Path("artifacts"))
+    parser.add_argument(
+        "--export-bundle",
+        type=Path,
+        action="append",
+        default=[],
+        help="also validate a public export bundle within the repository",
+    )
     return parser
 
 
@@ -618,6 +812,52 @@ def main(argv: list[str] | None = None) -> int:
         args.report_dir if args.report_dir.is_absolute() else root / args.report_dir
     )
     findings, records = validate_repository(root)
+    profile: dict[str, Any] | None = None
+    profile_path = root / "profiles" / "public-evidence-export.v0.1.json"
+    if profile_path.exists():
+        try:
+            loaded_profile = load_json(profile_path)
+        except (OSError, CanonicalJSONError):
+            findings.append(
+                Finding(
+                    "error",
+                    "export-profile-parse",
+                    _relative(profile_path, root),
+                    "profile is not strict JSON",
+                )
+            )
+        else:
+            if isinstance(loaded_profile, dict):
+                profile = loaded_profile
+            else:
+                findings.append(
+                    Finding(
+                        "error",
+                        "export-profile-shape",
+                        _relative(profile_path, root),
+                        "profile must be an object",
+                    )
+                )
+    for requested in args.export_bundle:
+        bundle_path = requested if requested.is_absolute() else root / requested
+        try:
+            bundle_path.resolve().relative_to(root)
+            bundle = load_json(bundle_path)
+        except (OSError, ValueError, CanonicalJSONError):
+            findings.append(
+                Finding(
+                    "error",
+                    "export-bundle-parse",
+                    _relative(bundle_path, root),
+                    "bundle is not a strict repository JSON file",
+                )
+            )
+            continue
+        findings.extend(
+            validate_export_bundle(
+                bundle, _relative(bundle_path, root), root, profile=profile
+            )
+        )
     write_reports(report_dir, findings, len(records))
     errors = sum(1 for item in findings if item.severity == "error")
     warnings = sum(1 for item in findings if item.severity == "warning")

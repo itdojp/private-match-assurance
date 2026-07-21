@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-evidence-export-0.1.json",
+  "title": "Private Match public evidence export bundle v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "record_type",
+    "export_profile",
+    "export_candidate_id",
+    "export_candidate_digest",
+    "exporter",
+    "evidence_record",
+    "digest_bindings",
+    "sanitization_report",
+    "omissions",
+    "review_requirements",
+    "publication",
+    "bundle_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "record_type": {"const": "public-evidence-export"},
+    "export_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "digest"],
+      "properties": {
+        "id": {"const": "private-match-public-evidence-export"},
+        "version": {"const": "0.1"},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "export_candidate_id": {"type": "string", "pattern": "^PM-EXPORT-CANDIDATE-[A-Z0-9-]{4,64}$"},
+    "export_candidate_digest": {"$ref": "#/$defs/digest"},
+    "exporter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "version", "source_revision_digest"],
+      "properties": {
+        "identity": {"const": "private-match-assurance/export_public_evidence.py"},
+        "version": {"const": "0.1"},
+        "source_revision_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "evidence_record": {"type": "object"},
+    "digest_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "private_source_revision_digest",
+        "source_evidence_set_digest",
+        "source_evidence_record_digest",
+        "input_candidate_digest",
+        "subject_artifact_digest",
+        "evidence_output_digest",
+        "protocol_source_revision_digest",
+        "protocol_state_machine_digest",
+        "protocol_message_registry_digest",
+        "protocol_conformance_suite_digest",
+        "export_profile_digest",
+        "exporter_source_revision_digest",
+        "exported_evidence_record_digest"
+      ],
+      "properties": {
+        "private_source_revision_digest": {"$ref": "#/$defs/digest"},
+        "source_evidence_set_digest": {"$ref": "#/$defs/digest"},
+        "source_evidence_record_digest": {"$ref": "#/$defs/digest"},
+        "input_candidate_digest": {"$ref": "#/$defs/digest"},
+        "subject_artifact_digest": {"$ref": "#/$defs/digest"},
+        "evidence_output_digest": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+        "protocol_source_revision_digest": {"$ref": "#/$defs/digest"},
+        "protocol_state_machine_digest": {"$ref": "#/$defs/digest"},
+        "protocol_message_registry_digest": {"$ref": "#/$defs/digest"},
+        "protocol_conformance_suite_digest": {"$ref": "#/$defs/digest"},
+        "export_profile_digest": {"$ref": "#/$defs/digest"},
+        "exporter_source_revision_digest": {"$ref": "#/$defs/digest"},
+        "exported_evidence_record_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "sanitization_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "checks_executed",
+        "allowlist_result",
+        "prohibited_field_scan_result",
+        "prohibited_value_scan_result",
+        "status_preservation_result",
+        "input_status",
+        "output_status",
+        "input_lifecycle",
+        "output_lifecycle",
+        "digest_binding_result",
+        "privacy_review_marker",
+        "security_review_marker",
+        "ip_review_marker",
+        "vulnerability_review_marker"
+      ],
+      "properties": {
+        "outcome": {"const": "exported"},
+        "checks_executed": {"type": "array", "minItems": 8, "items": {"type": "string", "pattern": "^[a-z0-9-]+$"}, "uniqueItems": true},
+        "allowlist_result": {"const": "pass"},
+        "prohibited_field_scan_result": {"const": "pass"},
+        "prohibited_value_scan_result": {"const": "pass"},
+        "status_preservation_result": {"const": "pass"},
+        "input_status": {"$ref": "#/$defs/status"},
+        "output_status": {"$ref": "#/$defs/status"},
+        "input_lifecycle": {"enum": ["collected", "validated", "sanitized"]},
+        "output_lifecycle": {"const": "sanitized"},
+        "digest_binding_result": {"const": "pass"},
+        "privacy_review_marker": {"const": "approved"},
+        "security_review_marker": {"const": "approved"},
+        "ip_review_marker": {"enum": ["approved", "not-applicable"]},
+        "vulnerability_review_marker": {"enum": ["approved", "not-applicable"]}
+      }
+    },
+    "omissions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "rule_id", "category", "action", "human_review_digest"],
+        "properties": {
+          "path": {"const": "$.evidence_record.public_artifacts"},
+          "rule_id": {"const": "OMIT-PUBLIC-ARTIFACTS"},
+          "category": {"const": "optional-public-reference"},
+          "action": {"const": "omitted-by-profile"},
+          "human_review_digest": {"$ref": "#/$defs/digest"}
+        }
+      },
+      "uniqueItems": true
+    },
+    "review_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["privacy", "security_boundary", "ip", "vulnerability", "final_publication_approval"],
+      "properties": {
+        "privacy": {"const": "approved"},
+        "security_boundary": {"const": "approved"},
+        "ip": {"enum": ["approved", "not-applicable"]},
+        "vulnerability": {"enum": ["approved", "not-applicable"]},
+        "final_publication_approval": {"const": "required-not-provided"}
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "automation_permitted"],
+      "properties": {
+        "status": {"const": "candidate"},
+        "automation_permitted": {"const": false}
+      }
+    },
+    "bundle_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "status": {"enum": ["pass", "fail", "skip", "unsupported", "timeout", "tool-error"]}
+  }
+}

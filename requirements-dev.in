@@ -1,3 +1,5 @@
 # Direct validation dependencies. Install the build lock first, then requirements-dev.txt.
 jsonschema==4.26.0
 reuse==6.2.0
+rfc8785==0.1.4
+ruff==0.15.15

@@ -11,9 +11,11 @@ path = [
   "requirements-build.txt",
   "requirements-dev.in",
   "requirements-dev.txt",
+  "profiles/*.json",
   "schema/*.json",
   "scripts/*.py",
   "tests/*.py",
+  "tests/fixtures/export/**/*.json",
   "tests/fixtures/invalid/*.json",
   "tests/fixtures/valid/*.json",
 ]

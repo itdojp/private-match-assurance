@@ -47,6 +47,10 @@ Exit criteria:
 - a fixture-backed export can be validated without private repository access
 - unsafe fields are rejected
 
+Draft v0.1 artifacts are defined in
+[`docs/EVIDENCE_EXPORT.md`](docs/EVIDENCE_EXPORT.md). Publication, release
+signing, and private-side production integration remain outside A2.
+
 ## A3 — ae-framework integration profile
 
 Define how `itdojp/ae-framework` is invoked and recorded:

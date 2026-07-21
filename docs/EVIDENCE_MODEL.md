@@ -201,6 +201,12 @@ The private product repository should export a sanitized package containing:
 
 Raw logs and private source remain outside the public package.
 
+The versioned input, output, profile, status/lifecycle preservation, digest,
+omission, and review rules are specified in
+[`EVIDENCE_EXPORT.md`](EVIDENCE_EXPORT.md). Export success means only that a
+synthetic or human-reviewed metadata candidate reached lifecycle `sanitized`;
+it is not publication approval and does not change the Evidence result status.
+
 ## Reproducibility
 
 Publicly reproducible evidence should include inputs, commands, tool versions, and expected results. Evidence dependent on private data or infrastructure must be labeled `privately reproducible` or `not publicly reproducible`, with the reason stated.

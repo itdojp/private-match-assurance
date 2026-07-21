@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import copy
+import importlib.metadata
+import platform
 from pathlib import Path
+import sys
 from typing import Any
 
 try:
@@ -24,6 +27,7 @@ SOURCE_PATHS = (
 )
 SCHEMA_PATHS = (
     "schema/evidence-export-candidate.v0.1.schema.json",
+    "schema/evidence-export-configuration.v0.1.schema.json",
     "schema/evidence-export-fixture-catalog.v0.1.schema.json",
     "schema/evidence-export-profile.v0.1.schema.json",
     "schema/evidence-exporter-implementation.v0.1.schema.json",
@@ -31,6 +35,19 @@ SCHEMA_PATHS = (
 )
 EVIDENCE_SCHEMA_PATH = "schema/evidence-item.schema.json"
 LOCK_PATHS = ("requirements-build.txt", "requirements-dev.txt")
+TEST_TRUST_PATHS = ("tests/fixtures/export/fixture-catalog.v0.1.json",)
+RUNTIME_REQUIREMENTS = {
+    "python_implementation": "CPython",
+    "python_major_minor": "3.12",
+    "canonicalization": "RFC 8785",
+    "canonicalization_package": "rfc8785",
+    "canonicalization_package_version": "0.1.4",
+}
+TESTED_TARGET = {
+    "operating_system": "Ubuntu 24.04",
+    "architecture": "x86_64",
+    "execution_provenance": False,
+}
 
 
 class ImplementationManifestError(ValueError):
@@ -99,12 +116,11 @@ def build_implementation_manifest(
         "schema_files": [_entry(root, path) for path in sorted(SCHEMA_PATHS)],
         "evidence_schema_reference": _entry(root, EVIDENCE_SCHEMA_PATH),
         "dependency_lock_files": [_entry(root, path) for path in sorted(LOCK_PATHS)],
-        "runtime_profile": {
-            "python": "CPython 3.12",
-            "platform": "Ubuntu 24.04 x86_64",
-            "canonicalization": "RFC 8785",
-            "canonicalization_implementation": "rfc8785-python 0.1.4",
-        },
+        "test_trust_artifacts": [
+            _entry(root, path) for path in sorted(TEST_TRUST_PATHS)
+        ],
+        "runtime_requirements": copy.deepcopy(RUNTIME_REQUIREMENTS),
+        "tested_target": copy.deepcopy(TESTED_TARGET),
         "expected_export_profile_digest": expected_profile_digest,
     }
     manifest["implementation_digest"] = implementation_digest(manifest)
@@ -128,12 +144,31 @@ def _entry_map(entries: Any, label: str) -> dict[str, str]:
     return result
 
 
+def current_runtime_facts() -> dict[str, str]:
+    """Return only runtime facts that v0.1 enforces before export."""
+
+    try:
+        package_version = importlib.metadata.version("rfc8785")
+    except importlib.metadata.PackageNotFoundError as error:
+        raise ImplementationManifestError(
+            "canonicalization package is unavailable"
+        ) from error
+    return {
+        "python_implementation": platform.python_implementation(),
+        "python_major_minor": f"{sys.version_info.major}.{sys.version_info.minor}",
+        "canonicalization": "RFC 8785",
+        "canonicalization_package": "rfc8785",
+        "canonicalization_package_version": package_version,
+    }
+
+
 def verify_implementation_manifest(
     manifest: Any,
     root: Path,
     expected_profile_digest: str,
     *,
     verify_files: bool = True,
+    runtime_facts: dict[str, str] | None = None,
 ) -> None:
     """Fail closed unless the manifest and, optionally, repository files match."""
 
@@ -149,6 +184,7 @@ def verify_implementation_manifest(
     source = _entry_map(manifest.get("source_files"), "source_files")
     schemas = _entry_map(manifest.get("schema_files"), "schema_files")
     locks = _entry_map(manifest.get("dependency_lock_files"), "dependency_lock_files")
+    trust = _entry_map(manifest.get("test_trust_artifacts"), "test_trust_artifacts")
     evidence = manifest.get("evidence_schema_reference")
     if not isinstance(evidence, dict) or set(evidence) != {"path", "digest"}:
         raise ImplementationManifestError("evidence schema reference is invalid")
@@ -158,8 +194,27 @@ def verify_implementation_manifest(
         raise ImplementationManifestError("schema file set does not match")
     if set(locks) != set(LOCK_PATHS):
         raise ImplementationManifestError("dependency lock set does not match")
+    if set(trust) != set(TEST_TRUST_PATHS):
+        raise ImplementationManifestError("test trust artifact set does not match")
     if evidence.get("path") != EVIDENCE_SCHEMA_PATH:
         raise ImplementationManifestError("Evidence Schema path does not match")
+    all_paths = [
+        *source,
+        *schemas,
+        *locks,
+        *trust,
+        evidence["path"],
+    ]
+    if len(all_paths) != len(set(all_paths)):
+        raise ImplementationManifestError(
+            "implementation path occurs in more than one manifest set"
+        )
+    if manifest.get("runtime_requirements") != RUNTIME_REQUIREMENTS:
+        raise ImplementationManifestError("runtime requirements do not match")
+    if manifest.get("tested_target") != TESTED_TARGET:
+        raise ImplementationManifestError("tested target does not match")
+    if (runtime_facts or current_runtime_facts()) != RUNTIME_REQUIREMENTS:
+        raise ImplementationManifestError("runtime requirements are not satisfied")
 
     if not verify_files:
         return
@@ -167,6 +222,7 @@ def verify_implementation_manifest(
         **source,
         **schemas,
         **locks,
+        **trust,
         evidence["path"]: evidence["digest"],
     }.items():
         if file_digest(_safe_file(root, path).read_bytes()) != digest:

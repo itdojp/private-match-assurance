@@ -13,6 +13,7 @@
     "export_candidate_digest",
     "review_subject_digest",
     "exporter",
+    "fixture_provenance",
     "evidence_record",
     "digest_bindings",
     "sanitization_report",
@@ -88,6 +89,23 @@
           "$ref": "#/$defs/digest"
         }
       }
+    },
+    "fixture_provenance": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fixture_id", "fixture_catalog_digest"],
+          "properties": {
+            "fixture_id": {
+              "type": "string",
+              "pattern": "^FIXTURE-[A-Z0-9-]{4,64}$"
+            },
+            "fixture_catalog_digest": {"$ref": "#/$defs/digest"}
+          }
+        }
+      ]
     },
     "evidence_record": {
       "type": "object"
@@ -212,7 +230,6 @@
         },
         "input_lifecycle": {
           "enum": [
-            "collected",
             "validated",
             "sanitized"
           ]
@@ -423,6 +440,9 @@
                 "const": "required-not-provided"
               }
             }
+          },
+          "fixture_provenance": {
+            "type": "null"
           }
         }
       }
@@ -453,6 +473,9 @@
                 "const": "not-applicable-test-only"
               }
             }
+          },
+          "fixture_provenance": {
+            "type": "object"
           }
         }
       }

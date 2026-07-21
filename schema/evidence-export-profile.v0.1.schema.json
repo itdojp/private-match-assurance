@@ -13,7 +13,7 @@
     "output_contract",
     "allowed_candidate_fields",
     "allowed_evidence_fields",
-    "allowed_configuration_fields",
+    "configuration_contracts",
     "allowed_output_fields",
     "prohibited_field_names",
     "prohibited_value_classes",
@@ -35,16 +35,41 @@
     "output_contract": {"const": "public-evidence-export.v0.1"},
     "allowed_candidate_fields": {"$ref": "#/$defs/stringSet"},
     "allowed_evidence_fields": {"$ref": "#/$defs/stringSet"},
-    "allowed_configuration_fields": {
+    "configuration_contracts": {
       "type": "object",
       "additionalProperties": false,
       "required": ["conformance", "test", "model-check", "provenance", "review"],
       "properties": {
-        "conformance": {"$ref": "#/$defs/stringSet"},
-        "test": {"$ref": "#/$defs/stringSet"},
-        "model-check": {"$ref": "#/$defs/stringSet"},
-        "provenance": {"$ref": "#/$defs/stringSet"},
-        "review": {"$ref": "#/$defs/stringSet"}
+        "conformance": {
+          "allOf": [
+            {"$ref": "#/$defs/configurationContract"},
+            {"properties": {"id": {"const": "private-match-evidence-export-configuration/conformance"}}}
+          ]
+        },
+        "test": {
+          "allOf": [
+            {"$ref": "#/$defs/configurationContract"},
+            {"properties": {"id": {"const": "private-match-evidence-export-configuration/test"}}}
+          ]
+        },
+        "model-check": {
+          "allOf": [
+            {"$ref": "#/$defs/configurationContract"},
+            {"properties": {"id": {"const": "private-match-evidence-export-configuration/model-check"}}}
+          ]
+        },
+        "provenance": {
+          "allOf": [
+            {"$ref": "#/$defs/configurationContract"},
+            {"properties": {"id": {"const": "private-match-evidence-export-configuration/provenance"}}}
+          ]
+        },
+        "review": {
+          "allOf": [
+            {"$ref": "#/$defs/configurationContract"},
+            {"properties": {"id": {"const": "private-match-evidence-export-configuration/review"}}}
+          ]
+        }
       }
     },
     "allowed_output_fields": {"$ref": "#/$defs/stringSet"},
@@ -89,9 +114,9 @@
         "maximum_output": {"const": "sanitized"},
         "allowed_input": {
           "type": "array",
-          "items": {"enum": ["collected", "validated", "sanitized"]},
-          "minItems": 3,
-          "maxItems": 3,
+          "items": {"enum": ["validated", "sanitized"]},
+          "minItems": 2,
+          "maxItems": 2,
           "uniqueItems": true
         },
         "output": {"const": "sanitized"},
@@ -161,6 +186,19 @@
   },
   "$defs": {
     "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "configurationContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "digest"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^private-match-evidence-export-configuration/(?:test|conformance|model-check|provenance|review)$"
+        },
+        "version": {"const": "0.1"},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
     "stringSet": {
       "type": "array",
       "minItems": 1,

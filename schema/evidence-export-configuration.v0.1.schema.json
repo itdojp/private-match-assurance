@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/evidence-export-configuration-0.1.json",
+  "title": "Private Match exportable Evidence configuration v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["evidence_type", "configuration"],
+  "properties": {
+    "evidence_type": {
+      "enum": ["test", "conformance", "model-check", "provenance", "review"]
+    },
+    "configuration": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"evidence_type": {"const": "test"}}},
+      "then": {"properties": {"configuration": {"$ref": "#/$defs/test"}}}
+    },
+    {
+      "if": {"properties": {"evidence_type": {"const": "conformance"}}},
+      "then": {"properties": {"configuration": {"$ref": "#/$defs/conformance"}}}
+    },
+    {
+      "if": {"properties": {"evidence_type": {"const": "model-check"}}},
+      "then": {"properties": {"configuration": {"$ref": "#/$defs/modelCheck"}}}
+    },
+    {
+      "if": {"properties": {"evidence_type": {"const": "provenance"}}},
+      "then": {"properties": {"configuration": {"$ref": "#/$defs/provenance"}}}
+    },
+    {
+      "if": {"properties": {"evidence_type": {"const": "review"}}},
+      "then": {"properties": {"configuration": {"$ref": "#/$defs/review"}}}
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,127}$"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+    },
+    "versionedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identifier", "version"],
+      "properties": {
+        "identifier": {"$ref": "#/$defs/identifier"},
+        "version": {"$ref": "#/$defs/version"}
+      }
+    },
+    "test": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["test_suite", "case_count"],
+      "properties": {
+        "test_suite": {"$ref": "#/$defs/identifier"},
+        "case_count": {"type": "integer", "minimum": 0, "maximum": 1000000000}
+      }
+    },
+    "conformance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "conformance_suite", "vectors"],
+      "properties": {
+        "protocol": {"$ref": "#/$defs/versionedArtifact"},
+        "conformance_suite": {"$ref": "#/$defs/versionedArtifact"},
+        "vectors": {"type": "integer", "minimum": 0, "maximum": 1000000000}
+      }
+    },
+    "modelCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configuration_id", "model"],
+      "properties": {
+        "configuration_id": {"$ref": "#/$defs/identifier"},
+        "model": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provenance_type", "workflow_id"],
+      "properties": {
+        "provenance_type": {"$ref": "#/$defs/identifier"},
+        "workflow_id": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["review_method", "review_scope"],
+      "properties": {
+        "review_method": {"$ref": "#/$defs/identifier"},
+        "review_scope": {"$ref": "#/$defs/identifier"}
+      }
+    }
+  }
+}

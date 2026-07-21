@@ -128,6 +128,19 @@ Model-check evidence must provide typed `model_check` data containing:
 
 Evidence of every other type uses `model_check: null`.
 
+The public export profile adds a separate closed configuration contract for
+the exportable `test`, `conformance`, `model-check`, `provenance`, and `review`
+types. The profile binds each type to the configuration contract ID, version,
+and Schema digest. Nested unknown fields, wrong scalar types, malformed
+identifier/version objects, and unlisted Evidence types are rejected. This
+does not change the open `configuration` field in the general Evidence Schema
+0.1 or reinterpret existing repository records.
+
+Evidence offered to the public exporter must already be `validated`, or be
+`sanitized` with an exact matching final sanitization event. General Evidence
+may still exist at `collected`, but the exporter returns
+`lifecycle-not-validated` and never synthesizes the missing validation event.
+
 `private_source_metadata` is either null or a digest-bound allowlisted object. It cannot contain
 repository names or URLs, hostnames, account identifiers, filesystem paths, or other private
 locators.
@@ -268,9 +281,12 @@ python scripts/validate_assurance.py \
 
 Default validation treats a bundle as a real `export-candidate`. Synthetic
 validation requires explicit `test-fixture` mode, the exact committed staging
-root, catalogued candidate and expected-bundle digests, and test-only review and
-publication markers. Validation also recomputes the complete review-subject and
-exporter implementation bindings. Only committed synthetic fixtures are used by
-public CI. Generated bundles are not uploaded as workflow artifacts. See
+root, the catalogued candidate digest, the catalog digest bound into the bundle,
+and test-only review and publication markers. The expected bundle remains a
+separate byte-for-byte CI oracle so that the fixture catalog does not create a
+catalog/manifest/bundle digest cycle. Validation also recomputes the complete
+review-subject and exporter implementation bindings. Only committed synthetic
+fixtures are used by public CI. Generated bundles are not uploaded as workflow
+artifacts. See
 [`EVIDENCE_EXPORT.md`](EVIDENCE_EXPORT.md) for the trust and publication
 boundary.

@@ -12,7 +12,9 @@
     "schema_files",
     "evidence_schema_reference",
     "dependency_lock_files",
-    "runtime_profile",
+    "test_trust_artifacts",
+    "runtime_requirements",
+    "tested_target",
     "expected_export_profile_digest",
     "implementation_digest"
   ],
@@ -32,15 +34,27 @@
     "schema_files": {"$ref": "#/$defs/fileSet"},
     "evidence_schema_reference": {"$ref": "#/$defs/file"},
     "dependency_lock_files": {"$ref": "#/$defs/fileSet"},
-    "runtime_profile": {
+    "test_trust_artifacts": {"$ref": "#/$defs/fileSet"},
+    "runtime_requirements": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["python", "platform", "canonicalization", "canonicalization_implementation"],
+      "required": ["python_implementation", "python_major_minor", "canonicalization", "canonicalization_package", "canonicalization_package_version"],
       "properties": {
-        "python": {"const": "CPython 3.12"},
-        "platform": {"const": "Ubuntu 24.04 x86_64"},
+        "python_implementation": {"const": "CPython"},
+        "python_major_minor": {"const": "3.12"},
         "canonicalization": {"const": "RFC 8785"},
-        "canonicalization_implementation": {"const": "rfc8785-python 0.1.4"}
+        "canonicalization_package": {"const": "rfc8785"},
+        "canonicalization_package_version": {"const": "0.1.4"}
+      }
+    },
+    "tested_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operating_system", "architecture", "execution_provenance"],
+      "properties": {
+        "operating_system": {"const": "Ubuntu 24.04"},
+        "architecture": {"const": "x86_64"},
+        "execution_provenance": {"const": false}
       }
     },
     "expected_export_profile_digest": {"$ref": "#/$defs/digest"},

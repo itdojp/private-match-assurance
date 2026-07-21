@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import io
+import shutil
 import socket
 import struct
 import subprocess
@@ -30,7 +31,14 @@ from scripts.export_public_evidence import (
     validate_public_bundle,
 )
 from scripts.exporter_manifest import (
+    EVIDENCE_SCHEMA_PATH,
+    LOCK_PATHS,
     MANIFEST_PATH,
+    RUNTIME_REQUIREMENTS,
+    SCHEMA_PATHS,
+    SOURCE_PATHS,
+    TEST_TRUST_PATHS,
+    TESTED_TARGET,
     ImplementationManifestError,
     build_implementation_manifest,
     canonical_manifest_bytes,
@@ -41,6 +49,7 @@ from scripts.exporter_manifest import (
 from scripts.validate_assurance import (
     load_export_schemas,
     load_schemas,
+    validate_export_configuration,
     validate_export_bundle,
     validate_record,
 )
@@ -133,6 +142,21 @@ class EvidenceExportTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, code)
         return caught.exception
 
+    def copy_manifest_inputs(self) -> Path:
+        root = self.temp_root / "manifest-root"
+        paths = {
+            *SOURCE_PATHS,
+            *SCHEMA_PATHS,
+            *LOCK_PATHS,
+            *TEST_TRUST_PATHS,
+            EVIDENCE_SCHEMA_PATH,
+        }
+        for relative in sorted(paths):
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / relative, destination)
+        return root
+
     def test_valid_fixture_outputs_match_committed_bytes(self) -> None:
         for fixture in sorted(path.name for path in INPUT_ROOT.glob("*.json")):
             with self.subTest(fixture=fixture):
@@ -157,6 +181,7 @@ class EvidenceExportTests(unittest.TestCase):
             set(load_export_schemas(ROOT)),
             {
                 "evidence-export-candidate",
+                "evidence-export-configuration",
                 "evidence-export-fixture-catalog",
                 "evidence-export-profile",
                 "evidence-exporter-implementation",
@@ -224,6 +249,53 @@ class EvidenceExportTests(unittest.TestCase):
         bundle = export_candidate(real_candidate(candidate), self.profile, ROOT)
         self.assertEqual(
             bundle["evidence_record"]["lifecycle_history"], original_history
+        )
+
+    def test_lifecycle_requires_private_side_validation_before_export(self) -> None:
+        validated = real_candidate(load_json(INPUT_ROOT / "safe-pass.json"))
+        validated_bundle = export_candidate(validated, self.profile, ROOT)
+        self.assertEqual(
+            validated_bundle["sanitization_report"]["input_lifecycle"], "validated"
+        )
+        self.assertEqual(validated_bundle["evidence_record"]["lifecycle"], "sanitized")
+
+        collected = real_candidate(load_json(INPUT_ROOT / "safe-pass.json"))
+        collected["evidence_record"]["lifecycle"] = "collected"
+        collected["evidence_record"]["lifecycle_history"] = collected[
+            "evidence_record"
+        ]["lifecycle_history"][:1]
+        collected["source_binding"]["original_lifecycle"] = "collected"
+        rebound(collected)
+        self.assertNotIn("collected", self.profile["lifecycle_rule"]["allowed_input"])
+        candidate_validator = load_export_schemas(ROOT)["evidence-export-candidate"]
+        self.assertTrue(list(candidate_validator.iter_errors(collected)))
+        with self.assertRaises(ExportError) as caught:
+            export_candidate(collected, self.profile, ROOT)
+        self.assertEqual(caught.exception.code, "lifecycle-not-validated")
+
+        staging = self.temp_root / "collected-staging"
+        staging.mkdir()
+        (staging / "collected.json").write_bytes(canonicalize(collected) + b"\n")
+        output = self.temp_root.relative_to(ROOT) / "collected-output"
+        with self.assertRaises(ExportError) as caught:
+            run_export(
+                root=ROOT,
+                staging_root=staging.relative_to(ROOT),
+                input_name=Path("collected.json"),
+                profile_name=Path("profiles/public-evidence-export.v0.1.json"),
+                output_dir=output,
+            )
+        self.assertEqual(caught.exception.code, "lifecycle-not-validated")
+        self.assertFalse((ROOT / output / "public-evidence-export.v0.1.json").exists())
+
+        invalid_bundle = copy.deepcopy(validated_bundle)
+        invalid_bundle["evidence_record"]["lifecycle"] = "collected"
+        invalid_bundle["sanitization_report"]["output_lifecycle"] = "collected"
+        invalid_bundle["bundle_digest"] = bundle_digest(invalid_bundle)
+        self.assertTrue(
+            validate_export_bundle(
+                invalid_bundle, "collected", ROOT, profile=self.profile
+            )
         )
 
     def test_protocol_fixture_uses_reviewed_merged_digests(self) -> None:
@@ -309,12 +381,86 @@ class EvidenceExportTests(unittest.TestCase):
         candidate = load_json(INPUT_ROOT / "safe-pass.json")
         candidate["evidence_record"]["configuration"]["unknown"] = "synthetic"
         rebound(candidate)
-        self.assertRejected(candidate, "configuration-allowlist")
+        self.assertRejected(candidate, "configuration-contract")
+
+    def test_type_specific_configuration_contracts_are_fully_closed(self) -> None:
+        valid_by_type = {
+            "test": "safe-pass.json",
+            "conformance": "protocol-conformance.json",
+            "model-check": "model-check.json",
+            "provenance": "not-publicly-reproducible.json",
+            "review": "approved-omission.json",
+        }
+        for evidence_type, fixture in valid_by_type.items():
+            with self.subTest(valid=evidence_type):
+                candidate = load_json(INPUT_ROOT / fixture)
+                self.assertEqual(
+                    validate_export_configuration(
+                        candidate["evidence_record"],
+                        fixture,
+                        ROOT,
+                        self.profile,
+                    ),
+                    [],
+                )
+
+        mutations = []
+        candidate = load_json(INPUT_ROOT / "safe-pass.json")
+        candidate["evidence_record"]["configuration"]["test_suite"] = {
+            "identifier": "synthetic-export",
+            "unknown": "synthetic",
+        }
+        mutations.append(("test suite object", candidate))
+        candidate = load_json(INPUT_ROOT / "safe-pass.json")
+        candidate["evidence_record"]["configuration"]["case_count"] = "3"
+        mutations.append(("test count string", candidate))
+
+        candidate = load_json(INPUT_ROOT / "protocol-conformance.json")
+        candidate["evidence_record"]["configuration"]["protocol"]["unknown"] = (
+            "synthetic"
+        )
+        mutations.append(("protocol nested unknown", candidate))
+        candidate = load_json(INPUT_ROOT / "protocol-conformance.json")
+        candidate["evidence_record"]["configuration"]["conformance_suite"][
+            "unknown"
+        ] = "synthetic"
+        mutations.append(("suite nested unknown", candidate))
+        candidate = load_json(INPUT_ROOT / "protocol-conformance.json")
+        candidate["evidence_record"]["configuration"]["protocol"]["version"] = {
+            "value": "0.1"
+        }
+        mutations.append(("malformed versioned artifact", candidate))
+
+        for fixture, field in (
+            ("model-check.json", "unknown"),
+            ("not-publicly-reproducible.json", "unknown"),
+            ("approved-omission.json", "unknown"),
+        ):
+            candidate = load_json(INPUT_ROOT / fixture)
+            candidate["evidence_record"]["configuration"][field] = "synthetic"
+            mutations.append((f"{fixture} unknown", candidate))
+
+        for name, candidate in mutations:
+            with self.subTest(invalid=name):
+                rebound(candidate)
+                self.assertRejected(candidate, "configuration-contract")
+
+        unknown_type = load_json(INPUT_ROOT / "safe-pass.json")
+        unknown_type["evidence_record"]["type"] = "benchmark"
+        rebound(unknown_type)
+        self.assertRejected(unknown_type, "configuration-contract")
+
+        binding_mismatch = load_json(INPUT_ROOT / "protocol-conformance.json")
+        binding_mismatch["evidence_record"]["configuration"]["protocol"][
+            "identifier"
+        ] = "other-protocol"
+        rebound(binding_mismatch)
+        self.assertRejected(binding_mismatch, "configuration-binding")
 
         candidate = load_json(INPUT_ROOT / "safe-pass.json")
         candidate["evidence_record"]["configuration"]["customer_id"] = "synthetic"
         rebound(candidate)
-        self.assertRejected(candidate, "configuration-allowlist")
+        self.assertRejected(candidate, "configuration-contract")
 
     def test_status_rewrites_and_lifecycle_rewrites_fail(self) -> None:
         candidate = load_json(INPUT_ROOT / "status-skip.json")
@@ -323,7 +469,7 @@ class EvidenceExportTests(unittest.TestCase):
 
         candidate = load_json(INPUT_ROOT / "safe-pass.json")
         candidate["source_binding"]["original_lifecycle"] = "collected"
-        self.assertRejected(candidate, "lifecycle-preservation")
+        self.assertRejected(candidate, "lifecycle-not-validated")
 
         candidate = load_json(INPUT_ROOT / "safe-pass.json")
         candidate["evidence_record"]["lifecycle_history"] = list(
@@ -537,6 +683,15 @@ class EvidenceExportTests(unittest.TestCase):
         with self.assertRaises(ExportError):
             validate_public_bundle(synthetic_bundle, ROOT, self.profile)
 
+        stale_catalog = copy.deepcopy(synthetic_bundle)
+        stale_catalog["fixture_provenance"]["fixture_catalog_digest"] = (
+            "sha256:" + "f" * 64
+        )
+        stale_catalog["bundle_digest"] = bundle_digest(stale_catalog)
+        with self.assertRaises(ExportError) as caught:
+            validate_fixture_bundle(stale_catalog, ROOT, self.profile)
+        self.assertEqual(caught.exception.code, "fixture-provenance")
+
         uncatalogued = copy.deepcopy(synthetic)
         uncatalogued["export_candidate_id"] = "PM-EXPORT-CANDIDATE-UNLISTED"
         bind_reviews(uncatalogued)
@@ -594,10 +749,16 @@ class EvidenceExportTests(unittest.TestCase):
         with self.assertRaises(ExportError):
             validate_public_bundle(demoted, ROOT, self.profile, mode=TEST_FIXTURE_MODE)
 
-    def test_fixture_catalog_pins_candidates_and_expected_bundles(self) -> None:
+    def test_fixture_catalog_pins_candidates_and_bundle_provenance(self) -> None:
         catalog = load_json(ROOT / "tests/fixtures/export/fixture-catalog.v0.1.json")
         self.assertEqual(catalog["artifact_status"], "test-only")
         self.assertEqual(len(catalog["fixtures"]), 10)
+        manifest = load_json(ROOT / MANIFEST_PATH)
+        catalog_digest = next(
+            item["digest"]
+            for item in manifest["test_trust_artifacts"]
+            if item["path"] == TEST_TRUST_PATHS[0]
+        )
         for entry in catalog["fixtures"]:
             with self.subTest(fixture=entry["relative_input_path"]):
                 candidate = load_json(INPUT_ROOT / entry["relative_input_path"])
@@ -606,7 +767,11 @@ class EvidenceExportTests(unittest.TestCase):
                     entry["candidate_digest"], _candidate_digest(candidate)
                 )
                 self.assertEqual(
-                    entry["expected_bundle_digest"], bundle["bundle_digest"]
+                    bundle["fixture_provenance"],
+                    {
+                        "fixture_id": entry["fixture_id"],
+                        "fixture_catalog_digest": catalog_digest,
+                    },
                 )
 
     def test_review_subject_covers_every_reviewable_candidate_field(self) -> None:
@@ -798,14 +963,21 @@ class EvidenceExportTests(unittest.TestCase):
             "scripts/canonical_json.py",
             "scripts/validate_assurance.py",
             "schema/evidence-export-candidate.v0.1.schema.json",
+            "schema/evidence-export-configuration.v0.1.schema.json",
             "schema/public-evidence-export.v0.1.schema.json",
             "schema/evidence-item.schema.json",
             "requirements-build.txt",
             "requirements-dev.txt",
+            "tests/fixtures/export/fixture-catalog.v0.1.json",
         }
         listed = {
             item["path"]
-            for field in ("source_files", "schema_files", "dependency_lock_files")
+            for field in (
+                "source_files",
+                "schema_files",
+                "dependency_lock_files",
+                "test_trust_artifacts",
+            )
             for item in manifest[field]
         }
         listed.add(manifest["evidence_schema_reference"]["path"])
@@ -820,6 +992,7 @@ class EvidenceExportTests(unittest.TestCase):
                         "source_files",
                         "schema_files",
                         "dependency_lock_files",
+                        "test_trust_artifacts",
                     )
                     for item in changed[field]
                 ] + [changed["evidence_schema_reference"]]
@@ -833,6 +1006,67 @@ class EvidenceExportTests(unittest.TestCase):
                     verify_implementation_manifest(
                         changed, ROOT, self.profile["profile_digest"]
                     )
+
+    def test_manifest_tracks_all_runtime_loaded_schemas_and_fixture_trust(self) -> None:
+        root = self.copy_manifest_inputs()
+        baseline = build_implementation_manifest(root, self.profile["profile_digest"])
+        for relative in (*SCHEMA_PATHS, EVIDENCE_SCHEMA_PATH, *TEST_TRUST_PATHS):
+            with self.subTest(relative=relative):
+                path = root / relative
+                original = path.read_bytes()
+                path.write_bytes(original + b"\n")
+                changed = build_implementation_manifest(
+                    root, self.profile["profile_digest"]
+                )
+                self.assertNotEqual(
+                    baseline["implementation_digest"],
+                    changed["implementation_digest"],
+                )
+                path.write_bytes(original)
+
+        unrelated = root / "schema/claim.schema.json"
+        unrelated.parent.mkdir(parents=True, exist_ok=True)
+        unrelated.write_bytes((ROOT / "schema/claim.schema.json").read_bytes())
+        before = build_implementation_manifest(root, self.profile["profile_digest"])
+        unrelated.write_bytes(unrelated.read_bytes() + b"\n")
+        after = build_implementation_manifest(root, self.profile["profile_digest"])
+        self.assertEqual(
+            before["implementation_digest"], after["implementation_digest"]
+        )
+
+        candidate = load_json(INPUT_ROOT / "safe-pass.json")
+        with mock.patch(
+            "scripts.validate_assurance.load_schemas",
+            side_effect=AssertionError("non-Evidence Schemas must not be loaded"),
+        ):
+            bundle = export_fixture_candidate(candidate, self.profile, ROOT)
+        self.assertEqual(bundle["evidence_record"]["record_type"], "evidence")
+
+    def test_manifest_enforces_runtime_requirements_and_labels_tested_target(
+        self,
+    ) -> None:
+        manifest = load_json(ROOT / MANIFEST_PATH)
+        self.assertEqual(manifest["runtime_requirements"], RUNTIME_REQUIREMENTS)
+        self.assertEqual(manifest["tested_target"], TESTED_TARGET)
+        self.assertFalse(manifest["tested_target"]["execution_provenance"])
+
+        for field, value in (
+            ("python_implementation", "PyPy"),
+            ("python_major_minor", "3.11"),
+            ("canonicalization_package_version", "0.1.3"),
+        ):
+            facts = dict(RUNTIME_REQUIREMENTS)
+            facts[field] = value
+            with (
+                self.subTest(field=field),
+                self.assertRaises(ImplementationManifestError),
+            ):
+                verify_implementation_manifest(
+                    manifest,
+                    ROOT,
+                    self.profile["profile_digest"],
+                    runtime_facts=facts,
+                )
 
     def test_implementation_manifest_rejects_profile_paths_and_stale_bundle(
         self,
@@ -848,6 +1082,9 @@ class EvidenceExportTests(unittest.TestCase):
         duplicate = copy.deepcopy(manifest)
         duplicate["source_files"].append(copy.deepcopy(duplicate["source_files"][0]))
         invalid_manifests.append(duplicate)
+        missing_trust = copy.deepcopy(manifest)
+        missing_trust["test_trust_artifacts"].clear()
+        invalid_manifests.append(missing_trust)
         escape = copy.deepcopy(manifest)
         escape["source_files"][0]["path"] = "../outside.py"
         invalid_manifests.append(escape)
@@ -857,6 +1094,14 @@ class EvidenceExportTests(unittest.TestCase):
                 verify_implementation_manifest(
                     value, ROOT, self.profile["profile_digest"]
                 )
+
+        stale_trust = copy.deepcopy(manifest)
+        stale_trust["test_trust_artifacts"][0]["digest"] = "sha256:" + "e" * 64
+        stale_trust["implementation_digest"] = implementation_digest(stale_trust)
+        with self.assertRaises(ImplementationManifestError):
+            verify_implementation_manifest(
+                stale_trust, ROOT, self.profile["profile_digest"]
+            )
 
         bundle = export_candidate(
             real_candidate(load_json(INPUT_ROOT / "safe-pass.json")),

@@ -20,7 +20,7 @@ Use a closed candidate envelope, a versioned public bundle, and a separately
 digested export profile. The exporter:
 
 - accepts one repository-local staged metadata file;
-- applies strict schemas and type-specific field allowlists;
+- applies strict schemas and closed type-specific configuration contracts;
 - rejects secrets and private or ambiguous data rather than heuristically
   redacting it;
 - permits only explicitly reviewed omission of optional fields;
@@ -38,13 +38,19 @@ digested export profile. The exporter:
 The existing Evidence Schema 0.1 is unchanged. Export-specific metadata lives
 in the enclosing bundle.
 
+The 2026-07-22 review hardening additionally requires private-side Evidence to
+be `validated` before export, replaces first-level configuration key lists with
+closed type-specific contracts, and binds the synthetic fixture trust catalog
+plus enforced runtime requirements into the implementation manifest.
+
 ## Alternatives considered
 
 ### Strict allowlist versus denylist
 
 A denylist cannot anticipate all private field names and makes an open
 `configuration` object unsafe. A strict candidate schema and per-Evidence-type
-configuration allowlist are selected. Pattern scanning remains supplementary.
+configuration contracts are selected. Each exportable type has a closed,
+digest-bound complete shape. Pattern scanning remains supplementary.
 
 ### Reject versus redact
 
@@ -82,6 +88,14 @@ CI and an exporter cannot make a publication judgment. Output is capped at
 required but not provided. Publication, withdrawal, and supersession remain
 human-governed later processes.
 
+Collected input is not exported. Automatically appending only `sanitized`
+would skip the required `collected -> validated` transition and falsely imply
+that validation occurred. The private-side producer must supply validated
+Evidence; already sanitized Evidence is accepted only when its last event
+exactly matches the reviewed sanitization event. Future collected support would
+need distinct validation and sanitization events, timestamps, and review
+digests.
+
 ### Private revision locator versus digest-only binding
 
 A locator reveals repository or infrastructure identity. The candidate and
@@ -105,8 +119,10 @@ Allowing input `artifact_status` to select synthetic review would make the
 review gate self-authorizing. The caller therefore selects the mode independently.
 Normal mode accepts only `export-candidate` plus `authorized-human` markers.
 Fixture mode accepts only the exact committed staging root and catalogued input,
-candidate digest, expected bundle digest, `test-only` status, and
-`synthetic-reviewer` markers. The public bundle retains that distinction.
+candidate digest, `test-only` status, and `synthetic-reviewer` markers. The
+public bundle retains the fixture ID and catalog digest. Expected bytes are
+compared separately by CI rather than stored in the catalog, avoiding a cycle
+through catalog digest -> implementation digest -> bundle digest.
 
 ### Opaque review digest versus complete review-subject binding
 
@@ -120,15 +136,22 @@ and approval authorship are still reviewed manually.
 
 Digesting only the CLI omits helper code, validators, Schemas, the Evidence
 Schema, and dependency locks that change accepted inputs or output bytes. A
-closed, deterministic manifest binds all of those files plus the runtime
-profile and expected export-profile digest. The profile remains independently
-versioned. The fixture catalog remains separate conformance authority to avoid
-making test expectations part of the production implementation identity.
+closed, deterministic manifest binds all of those files, the configuration
+Schema, fixture authorization catalog, enforced CPython/JCS requirements, and
+expected export-profile digest. The profile remains independently versioned.
+Fixture authorization affects both fixture mode and rejection of synthetic
+review digests in normal mode, so it is a behavior-affecting trust root rather
+than separate metadata.
+
+Ubuntu 24.04 x86-64 is retained only as a tested target, not execution
+provenance. CPython major/minor and the installed `rfc8785` version are checked
+at runtime. Actual runner/platform provenance must be supplied by future
+producer Evidence and is not inferred by the exporter.
 
 ## Consequences
 
 - Future private producers must transform raw evidence into the candidate
-  contract before transfer.
+  contract and complete the `validated` lifecycle transition before transfer.
 - Unknown Evidence types and configuration fields require an explicit profile
   revision.
 - Equal semantic input is reproducible without a runtime Protocol dependency.

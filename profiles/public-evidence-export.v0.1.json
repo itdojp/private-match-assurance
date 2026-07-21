@@ -2,7 +2,7 @@
   "schema_version": "0.1",
   "profile_id": "private-match-public-evidence-export",
   "profile_version": "0.1",
-  "profile_digest": "sha256:f1598c3e3e24e25697ac3d733e69b516ebd13495a147e1db64861ab59ae7a585",
+  "profile_digest": "sha256:aba1d03acbabad81aaa7c96a8daa64c4e38a9514f155c3aad24ce01ae4f4cc0b",
   "input_contract": "evidence-export-candidate.v0.1",
   "output_contract": "public-evidence-export.v0.1",
   "allowed_candidate_fields": [
@@ -44,28 +44,32 @@
     "tool",
     "type"
   ],
-  "allowed_configuration_fields": {
-    "conformance": [
-      "conformance_suite",
-      "protocol",
-      "vectors"
-    ],
-    "model-check": [
-      "configuration_id",
-      "model"
-    ],
-    "provenance": [
-      "provenance_type",
-      "workflow_id"
-    ],
-    "review": [
-      "review_method",
-      "review_scope"
-    ],
-    "test": [
-      "case_count",
-      "test_suite"
-    ]
+  "configuration_contracts": {
+    "conformance": {
+      "id": "private-match-evidence-export-configuration/conformance",
+      "version": "0.1",
+      "digest": "sha256:3f8e0b311ed9c2f7ac4e571fdff1b0cb5c207742c0b932a122dbf17d16d617ce"
+    },
+    "model-check": {
+      "id": "private-match-evidence-export-configuration/model-check",
+      "version": "0.1",
+      "digest": "sha256:3f8e0b311ed9c2f7ac4e571fdff1b0cb5c207742c0b932a122dbf17d16d617ce"
+    },
+    "provenance": {
+      "id": "private-match-evidence-export-configuration/provenance",
+      "version": "0.1",
+      "digest": "sha256:3f8e0b311ed9c2f7ac4e571fdff1b0cb5c207742c0b932a122dbf17d16d617ce"
+    },
+    "review": {
+      "id": "private-match-evidence-export-configuration/review",
+      "version": "0.1",
+      "digest": "sha256:3f8e0b311ed9c2f7ac4e571fdff1b0cb5c207742c0b932a122dbf17d16d617ce"
+    },
+    "test": {
+      "id": "private-match-evidence-export-configuration/test",
+      "version": "0.1",
+      "digest": "sha256:3f8e0b311ed9c2f7ac4e571fdff1b0cb5c207742c0b932a122dbf17d16d617ce"
+    }
   },
   "allowed_output_fields": [
     "artifact_status",
@@ -76,6 +80,7 @@
     "export_candidate_id",
     "export_profile",
     "exporter",
+    "fixture_provenance",
     "omissions",
     "publication",
     "record_type",
@@ -140,7 +145,6 @@
   "lifecycle_rule": {
     "maximum_output": "sanitized",
     "allowed_input": [
-      "collected",
       "sanitized",
       "validated"
     ],

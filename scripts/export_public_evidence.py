@@ -24,6 +24,7 @@ try:
         CanonicalJSONError,
         canonicalize,
         domain_digest,
+        file_digest,
         strict_loads,
     )
     from exporter_manifest import (
@@ -32,12 +33,17 @@ try:
         manifest_file_digest,
         verify_implementation_manifest,
     )
-    from validate_assurance import load_schemas, validate_record
+    from validate_assurance import (
+        load_evidence_schema,
+        validate_export_configuration,
+        validate_record,
+    )
 except ImportError:  # pragma: no cover - package import during unit tests
     from scripts.canonical_json import (
         CanonicalJSONError,
         canonicalize,
         domain_digest,
+        file_digest,
         strict_loads,
     )
     from scripts.exporter_manifest import (
@@ -46,7 +52,11 @@ except ImportError:  # pragma: no cover - package import during unit tests
         manifest_file_digest,
         verify_implementation_manifest,
     )
-    from scripts.validate_assurance import load_schemas, validate_record
+    from scripts.validate_assurance import (
+        load_evidence_schema,
+        validate_export_configuration,
+        validate_record,
+    )
 
 
 VERSION = "0.1"
@@ -77,7 +87,7 @@ EXPECTED_PROFILE_FIELDS = {
     "output_contract",
     "allowed_candidate_fields",
     "allowed_evidence_fields",
-    "allowed_configuration_fields",
+    "configuration_contracts",
     "allowed_output_fields",
     "prohibited_field_names",
     "prohibited_value_classes",
@@ -311,7 +321,7 @@ def _load_closed_json(root: Path, relative: Path, schema_name: str, code: str) -
     return value
 
 
-def _load_fixture_catalog(root: Path) -> dict[str, Any]:
+def _load_fixture_catalog(root: Path) -> tuple[dict[str, Any], str]:
     value = _load_closed_json(
         root,
         FIXTURE_CATALOG_PATH,
@@ -331,7 +341,7 @@ def _load_fixture_catalog(root: Path) -> dict[str, Any]:
             )
         ids.add(entry["fixture_id"])
         paths.add(entry["relative_input_path"])
-    return value
+    return value, file_digest(canonicalize(value) + b"\n")
 
 
 def _load_implementation_manifest(
@@ -533,7 +543,9 @@ def _sensitive_value_class(value: str) -> str | None:
     return None
 
 
-def _validate_allowlist(candidate: dict[str, Any], profile: dict[str, Any]) -> None:
+def _validate_allowlist(
+    candidate: dict[str, Any], profile: dict[str, Any], root: Path
+) -> None:
     if set(candidate) != set(profile["allowed_candidate_fields"]):
         _reject("candidate-allowlist", "$", "candidate fields do not match the profile")
     evidence = candidate.get("evidence_record")
@@ -545,22 +557,32 @@ def _validate_allowlist(candidate: dict[str, Any], profile: dict[str, Any]) -> N
             "$.evidence_record",
             "Evidence fields do not match the profile",
         )
-    evidence_type = evidence.get("type")
-    allowed_by_type = profile.get("allowed_configuration_fields", {})
-    allowed = allowed_by_type.get(evidence_type)
-    configuration = evidence.get("configuration")
-    if not isinstance(allowed, list) or not isinstance(configuration, dict):
+    configuration_findings = validate_export_configuration(
+        evidence, "$.evidence_record.configuration", root, profile
+    )
+    if configuration_findings:
         _reject(
-            "configuration-allowlist",
+            "configuration-contract",
             "$.evidence_record.configuration",
-            "Evidence type is not exportable by this profile",
+            "configuration violates its closed type-specific contract",
         )
-    if not set(configuration).issubset(set(allowed)):
-        _reject(
-            "configuration-allowlist",
-            "$.evidence_record.configuration",
-            "configuration contains an unreviewed field",
-        )
+    if evidence.get("type") == "conformance":
+        configuration = evidence["configuration"]
+        protocol = configuration["protocol"]
+        suite = configuration["conformance_suite"]
+        protocol_binding = candidate["protocol_binding"]
+        suite_binding = candidate["conformance_suite_binding"]
+        if (
+            protocol["identifier"] != protocol_binding["protocol_profile"]
+            or protocol["version"] != protocol_binding["protocol_version"]
+            or suite["identifier"] != suite_binding["identifier"]
+            or suite["version"] != suite_binding["version"]
+        ):
+            _reject(
+                "configuration-binding",
+                "$.evidence_record.configuration",
+                "conformance configuration does not match reviewed bindings",
+            )
     prohibited = set(profile["prohibited_field_names"])
     for path, key, _value in _iter_leaves(evidence, "$.evidence_record"):
         if key.lower() in prohibited:
@@ -783,6 +805,34 @@ def _validate_bindings(candidate: dict[str, Any], profile: dict[str, Any]) -> No
     _validate_protocol_binding(candidate, profile)
 
 
+def _validate_lifecycle_precondition(
+    candidate: dict[str, Any], profile: dict[str, Any]
+) -> None:
+    """Require private-side validation before any export construction."""
+
+    evidence = candidate.get("evidence_record")
+    source = candidate.get("source_binding")
+    if not isinstance(evidence, dict) or not isinstance(source, dict):
+        return
+    lifecycle = evidence.get("lifecycle") if isinstance(evidence, dict) else None
+    original = source.get("original_lifecycle")
+    if lifecycle is None or original is None:
+        return
+    if lifecycle == "collected" or original == "collected":
+        _reject(
+            "lifecycle-not-validated",
+            "$.evidence_record.lifecycle",
+            "private-side Evidence must be validated before export",
+        )
+    allowed = profile.get("lifecycle_rule", {}).get("allowed_input", [])
+    if lifecycle not in allowed or original not in allowed:
+        _reject(
+            "lifecycle-limit",
+            "$.evidence_record.lifecycle",
+            "Evidence lifecycle is not accepted by the export profile",
+        )
+
+
 def _construct_evidence(
     candidate: dict[str, Any], profile: dict[str, Any]
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
@@ -813,7 +863,7 @@ def _construct_evidence(
         )
     lifecycle = evidence["lifecycle"]
     event = candidate["sanitization_event"]
-    if lifecycle in {"collected", "validated"}:
+    if lifecycle == "validated":
         evidence["lifecycle_history"].append(
             {
                 "state": "sanitized",
@@ -834,6 +884,12 @@ def _construct_evidence(
                 "$.sanitization_event",
                 "existing sanitized history must match the reviewed event",
             )
+    elif lifecycle == "collected":
+        _reject(
+            "lifecycle-not-validated",
+            "$.evidence_record.lifecycle",
+            "private-side Evidence must be validated before export",
+        )
     else:
         _reject(
             "lifecycle-limit",
@@ -850,7 +906,11 @@ def _construct_evidence(
 
 
 def _validate_evidence(evidence: dict[str, Any], root: Path, path: str) -> None:
-    findings = validate_record(evidence, path, load_schemas(root))
+    findings = validate_record(
+        evidence,
+        path,
+        {"evidence": load_evidence_schema(root)},
+    )
     if findings:
         first = findings[0]
         _reject(f"evidence-{first.code}", path, "Evidence record validation failed")
@@ -863,6 +923,8 @@ def _construct_bundle(
     omissions: list[dict[str, str]],
     implementation_manifest: dict[str, Any],
     implementation_manifest_digest: str,
+    fixture_entry: dict[str, Any] | None,
+    fixture_catalog_digest: str,
 ) -> dict[str, Any]:
     candidate_digest = _candidate_digest(candidate)
     evidence_digest = domain_digest(EXPORTED_EVIDENCE_DOMAIN, evidence)
@@ -873,6 +935,12 @@ def _construct_bundle(
     reviews = candidate["review_markers"]
     artifact_status = candidate["artifact_status"]
     test_only = artifact_status == "test-only"
+    if test_only and fixture_entry is None:
+        _reject(
+            "fixture-catalog",
+            "$.fixture_provenance",
+            "test-only export lacks an authorized fixture entry",
+        )
     review_provenance = [
         {
             "scope": REVIEW_SCOPES[name],
@@ -901,6 +969,14 @@ def _construct_bundle(
             "implementation_manifest_digest": implementation_manifest_digest,
             "implementation_digest": implementation_manifest["implementation_digest"],
         },
+        "fixture_provenance": (
+            {
+                "fixture_id": fixture_entry["fixture_id"],
+                "fixture_catalog_digest": fixture_catalog_digest,
+            }
+            if fixture_entry is not None
+            else None
+        ),
         "evidence_record": evidence,
         "digest_bindings": {
             "private_source_revision_digest": source["private_source_revision_digest"],
@@ -1034,6 +1110,25 @@ def validate_public_bundle(
             "$.exporter",
             "bundle does not bind the current complete exporter implementation",
         )
+    fixture_provenance = bundle["fixture_provenance"]
+    trust_digests = {
+        item["path"]: item["digest"] for item in implementation["test_trust_artifacts"]
+    }
+    if mode == TEST_FIXTURE_MODE:
+        if not isinstance(fixture_provenance, dict) or fixture_provenance.get(
+            "fixture_catalog_digest"
+        ) != trust_digests.get(FIXTURE_CATALOG_PATH.as_posix()):
+            _reject(
+                "fixture-provenance",
+                "$.fixture_provenance",
+                "test-only bundle does not bind the authorized fixture catalog",
+            )
+    elif fixture_provenance is not None:
+        _reject(
+            "fixture-provenance",
+            "$.fixture_provenance",
+            "candidate bundle must not claim synthetic fixture provenance",
+        )
     if bundle["review_subject_digest"] not in {
         item.get("reviewed_subject_digest")
         for item in bundle["review_provenance"]
@@ -1111,6 +1206,14 @@ def validate_public_bundle(
             "bundle Evidence status or lifecycle is invalid",
         )
     _validate_evidence(evidence, root, "$.evidence_record")
+    if validate_export_configuration(
+        evidence, "$.evidence_record.configuration", root, profile
+    ):
+        _reject(
+            "configuration-contract",
+            "$.evidence_record.configuration",
+            "bundle configuration violates its closed type-specific contract",
+        )
     _scan_sensitive_values({"evidence_record": evidence})
 
 
@@ -1124,10 +1227,11 @@ def export_candidate(
 ) -> dict[str, Any]:
     if not isinstance(candidate, dict):
         _reject("candidate-shape", "$", "candidate root must be an object")
+    _validate_lifecycle_precondition(candidate, profile)
     candidate_schema = _load_schema(root, "evidence-export-candidate.v0.1.schema.json")
     _validate_schema(candidate, candidate_schema, code="candidate-schema")
-    catalog = _load_fixture_catalog(root)
-    _validate_allowlist(candidate, profile)
+    catalog, fixture_catalog_digest = _load_fixture_catalog(root)
+    _validate_allowlist(candidate, profile, root)
     _validate_evidence(candidate["evidence_record"], root, "$.evidence_record")
     _validate_bindings(candidate, profile)
     _scan_sensitive_values(candidate)
@@ -1145,16 +1249,10 @@ def export_candidate(
         omissions,
         implementation,
         implementation_manifest_digest,
+        fixture_entry,
+        fixture_catalog_digest,
     )
     validate_public_bundle(bundle, root, profile, mode=mode)
-    if fixture_entry is not None and (
-        fixture_entry["expected_bundle_digest"] != bundle["bundle_digest"]
-    ):
-        _reject(
-            "fixture-catalog",
-            "$.bundle_digest",
-            "test bundle does not match the catalogued expected digest",
-        )
     return bundle
 
 

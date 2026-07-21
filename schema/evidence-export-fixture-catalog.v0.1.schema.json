@@ -14,12 +14,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["fixture_id", "relative_input_path", "candidate_digest", "expected_bundle_digest", "artifact_status", "synthetic_review_digests"],
+        "required": ["fixture_id", "relative_input_path", "candidate_digest", "artifact_status", "synthetic_review_digests"],
         "properties": {
           "fixture_id": {"type": "string", "pattern": "^FIXTURE-[A-Z0-9-]{4,64}$"},
           "relative_input_path": {"type": "string", "pattern": "^[A-Za-z0-9._-]+\\.json$"},
           "candidate_digest": {"$ref": "#/$defs/digest"},
-          "expected_bundle_digest": {"$ref": "#/$defs/digest"},
           "artifact_status": {"const": "test-only"},
           "synthetic_review_digests": {
             "type": "array",

@@ -13,7 +13,12 @@ from typing import Any, Iterable
 from jsonschema import Draft202012Validator, FormatChecker
 
 try:
-    from canonical_json import CanonicalJSONError, domain_digest, strict_loads
+    from canonical_json import (
+        CanonicalJSONError,
+        domain_digest,
+        file_digest,
+        strict_loads,
+    )
     from exporter_manifest import (
         MANIFEST_PATH,
         ImplementationManifestError,
@@ -21,7 +26,12 @@ try:
         verify_implementation_manifest,
     )
 except ImportError:  # pragma: no cover - package import during unit tests
-    from scripts.canonical_json import CanonicalJSONError, domain_digest, strict_loads
+    from scripts.canonical_json import (
+        CanonicalJSONError,
+        domain_digest,
+        file_digest,
+        strict_loads,
+    )
     from scripts.exporter_manifest import (
         MANIFEST_PATH,
         ImplementationManifestError,
@@ -48,6 +58,7 @@ SCHEMA_FILES = {
 }
 EXPORT_SCHEMA_FILES = {
     "evidence-export-candidate": "evidence-export-candidate.v0.1.schema.json",
+    "evidence-export-configuration": "evidence-export-configuration.v0.1.schema.json",
     "evidence-export-fixture-catalog": "evidence-export-fixture-catalog.v0.1.schema.json",
     "evidence-export-profile": "evidence-export-profile.v0.1.schema.json",
     "evidence-exporter-implementation": "evidence-exporter-implementation.v0.1.schema.json",
@@ -60,6 +71,15 @@ BUNDLE_DOMAIN = "private-match-public-evidence-bundle/v0.1"
 EXPORT_CANDIDATE_MODE = "export-candidate"
 TEST_FIXTURE_MODE = "test-fixture"
 REVIEW_SCOPES = {"privacy", "security-boundary", "ip", "vulnerability"}
+EXPORTABLE_EVIDENCE_TYPES = {
+    "test",
+    "conformance",
+    "model-check",
+    "provenance",
+    "review",
+}
+CONFIGURATION_SCHEMA_FILE = "evidence-export-configuration.v0.1.schema.json"
+FIXTURE_CATALOG_PATH = "tests/fixtures/export/fixture-catalog.v0.1.json"
 
 EXCLUDED_DIRS = {".git", ".venv", "artifacts", "__pycache__", "node_modules", "tests"}
 RECORD_DIR = "assurance"
@@ -102,6 +122,14 @@ def load_schemas(root: Path) -> dict[str, Draft202012Validator]:
     return validators
 
 
+def load_evidence_schema(root: Path) -> Draft202012Validator:
+    """Load only the authoritative Evidence Schema used by export validation."""
+
+    schema = load_json(root / "schema" / SCHEMA_FILES["evidence"])
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema, format_checker=FormatChecker())
+
+
 def load_export_schemas(root: Path) -> dict[str, Draft202012Validator]:
     validators: dict[str, Draft202012Validator] = {}
     for artifact_type, filename in EXPORT_SCHEMA_FILES.items():
@@ -111,6 +139,84 @@ def load_export_schemas(root: Path) -> dict[str, Draft202012Validator]:
             schema, format_checker=FormatChecker()
         )
     return validators
+
+
+def validate_export_configuration(
+    evidence: Any,
+    path: str,
+    root: Path,
+    profile: dict[str, Any],
+) -> list[Finding]:
+    """Validate the complete configuration against its closed type contract."""
+
+    if not isinstance(evidence, dict):
+        return [
+            Finding(
+                "error",
+                "configuration-contract",
+                path,
+                "Evidence record must be an object",
+            )
+        ]
+    evidence_type = evidence.get("type")
+    configuration = evidence.get("configuration")
+    contracts = profile.get("configuration_contracts")
+    if (
+        evidence_type not in EXPORTABLE_EVIDENCE_TYPES
+        or not isinstance(configuration, dict)
+        or not isinstance(contracts, dict)
+        or not isinstance(contracts.get(evidence_type), dict)
+    ):
+        return [
+            Finding(
+                "error",
+                "configuration-contract",
+                path,
+                "Evidence type has no reviewed export configuration contract",
+            )
+        ]
+
+    contract = contracts[evidence_type]
+    expected_id = f"private-match-evidence-export-configuration/{evidence_type}"
+    schema_path = root / "schema" / CONFIGURATION_SCHEMA_FILE
+    try:
+        schema_digest = file_digest(schema_path.read_bytes())
+    except OSError:
+        return [
+            Finding(
+                "error",
+                "configuration-contract",
+                path,
+                "configuration contract is unavailable",
+            )
+        ]
+    if (
+        contract.get("id") != expected_id
+        or contract.get("version") != "0.1"
+        or contract.get("digest") != schema_digest
+    ):
+        return [
+            Finding(
+                "error",
+                "configuration-contract",
+                path,
+                "configuration contract binding does not match",
+            )
+        ]
+
+    validator = load_export_schemas(root)["evidence-export-configuration"]
+    wrapper = {"evidence_type": evidence_type, "configuration": configuration}
+    return [
+        Finding(
+            "error",
+            "configuration-contract",
+            path,
+            f"{_json_path(error)}: closed configuration contract violation",
+        )
+        for error in sorted(
+            validator.iter_errors(wrapper), key=lambda item: list(item.absolute_path)
+        )
+    ]
 
 
 def _detached_digest(domain: str, value: dict[str, Any], field: str) -> str:
@@ -164,9 +270,22 @@ def validate_export_bundle(
 
     evidence = bundle.get("evidence_record")
     findings.extend(
-        validate_record(evidence, f"{path}:evidence_record", load_schemas(root))
+        validate_record(
+            evidence,
+            f"{path}:evidence_record",
+            {"evidence": load_evidence_schema(root)},
+        )
     )
     if isinstance(evidence, dict):
+        if profile is not None:
+            findings.extend(
+                validate_export_configuration(
+                    evidence,
+                    f"{path}:evidence_record.configuration",
+                    root,
+                    profile,
+                )
+            )
         if evidence.get("lifecycle") != "sanitized":
             findings.append(
                 Finding(
@@ -373,6 +492,33 @@ def validate_export_bundle(
                         "exporter-implementation",
                         path,
                         "bundle does not bind the complete current exporter implementation",
+                    )
+                )
+            trust_digests = {
+                item.get("path"): item.get("digest")
+                for item in manifest.get("test_trust_artifacts", [])
+                if isinstance(item, dict)
+            }
+            fixture = bundle.get("fixture_provenance")
+            if mode == TEST_FIXTURE_MODE:
+                if not isinstance(fixture, dict) or fixture.get(
+                    "fixture_catalog_digest"
+                ) != trust_digests.get(FIXTURE_CATALOG_PATH):
+                    findings.append(
+                        Finding(
+                            "error",
+                            "export-fixture-provenance",
+                            path,
+                            "test bundle does not bind the authorized fixture catalog",
+                        )
+                    )
+            elif fixture is not None:
+                findings.append(
+                    Finding(
+                        "error",
+                        "export-fixture-provenance",
+                        path,
+                        "candidate bundle must not claim synthetic fixture provenance",
                     )
                 )
 

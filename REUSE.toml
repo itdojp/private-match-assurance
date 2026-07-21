@@ -11,6 +11,7 @@ path = [
   "requirements-build.txt",
   "requirements-dev.in",
   "requirements-dev.txt",
+  "manifests/*.json",
   "profiles/*.json",
   "schema/*.json",
   "scripts/*.py",

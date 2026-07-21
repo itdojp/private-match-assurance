@@ -17,14 +17,26 @@ from scripts.canonical_json import (
     strict_loads,
 )
 from scripts.export_public_evidence import (
+    TEST_FIXTURE_MODE,
     ExportError,
+    _candidate_digest,
     _load_profile,
     bundle_digest,
     export_candidate,
     main,
+    review_subject_digest,
     run_export,
     source_evidence_digest,
     validate_public_bundle,
+)
+from scripts.exporter_manifest import (
+    MANIFEST_PATH,
+    ImplementationManifestError,
+    build_implementation_manifest,
+    canonical_manifest_bytes,
+    implementation_digest,
+    manifest_file_digest,
+    verify_implementation_manifest,
 )
 from scripts.validate_assurance import (
     load_export_schemas,
@@ -55,11 +67,36 @@ def load_json(path: Path) -> dict:
     return value
 
 
+def bind_reviews(candidate: dict) -> dict:
+    subject = review_subject_digest(candidate)
+    candidate["review_subject_digest"] = subject
+    for review in candidate["review_markers"].values():
+        review["reviewed_subject_digest"] = subject
+    return candidate
+
+
+def export_fixture_candidate(candidate: dict, profile: dict, root: Path) -> dict:
+    return export_candidate(candidate, profile, root, mode=TEST_FIXTURE_MODE)
+
+
+def validate_fixture_bundle(bundle: dict, root: Path, profile: dict) -> None:
+    validate_public_bundle(bundle, root, profile, mode=TEST_FIXTURE_MODE)
+
+
+def real_candidate(candidate: dict) -> dict:
+    candidate = copy.deepcopy(candidate)
+    candidate["artifact_status"] = "export-candidate"
+    for index, review in enumerate(candidate["review_markers"].values(), start=8):
+        review["reviewer_role"] = "authorized-human"
+        review["review_digest"] = "sha256:" + format(index, "x") * 64
+    return bind_reviews(candidate)
+
+
 def rebound(candidate: dict) -> dict:
     candidate["source_binding"]["source_evidence_record_digest"] = (
         source_evidence_digest(candidate["evidence_record"])
     )
-    return candidate
+    return bind_reviews(candidate)
 
 
 class EvidenceExportTests(unittest.TestCase):
@@ -87,11 +124,12 @@ class EvidenceExportTests(unittest.TestCase):
             input_name=Path(fixture),
             profile_name=Path("profiles/public-evidence-export.v0.1.json"),
             output_dir=relative_output,
+            mode=TEST_FIXTURE_MODE,
         )
 
     def assertRejected(self, candidate: dict, code: str) -> ExportError:
         with self.assertRaises(ExportError) as caught:
-            export_candidate(candidate, self.profile, ROOT)
+            export_fixture_candidate(candidate, self.profile, ROOT)
         self.assertEqual(caught.exception.code, code)
         return caught.exception
 
@@ -104,7 +142,13 @@ class EvidenceExportTests(unittest.TestCase):
                 )
                 self.assertEqual(bundle["bundle_digest"], bundle_digest(bundle))
                 self.assertEqual(
-                    validate_export_bundle(bundle, fixture, ROOT, profile=self.profile),
+                    validate_export_bundle(
+                        bundle,
+                        fixture,
+                        ROOT,
+                        profile=self.profile,
+                        mode=TEST_FIXTURE_MODE,
+                    ),
                     [],
                 )
 
@@ -113,7 +157,9 @@ class EvidenceExportTests(unittest.TestCase):
             set(load_export_schemas(ROOT)),
             {
                 "evidence-export-candidate",
+                "evidence-export-fixture-catalog",
                 "evidence-export-profile",
+                "evidence-exporter-implementation",
                 "public-evidence-export",
             },
         )
@@ -126,10 +172,10 @@ class EvidenceExportTests(unittest.TestCase):
                 self.assertEqual(bundle["sanitization_report"]["input_status"], status)
                 self.assertEqual(bundle["sanitization_report"]["output_status"], status)
                 self.assertEqual(bundle["evidence_record"]["lifecycle"], "sanitized")
-                self.assertEqual(bundle["publication"]["status"], "candidate")
+                self.assertEqual(bundle["publication"]["status"], "test-only")
                 self.assertEqual(
                     bundle["review_requirements"]["final_publication_approval"],
-                    "required-not-provided",
+                    "not-applicable-test-only",
                 )
 
     def test_map_order_and_semantic_set_order_are_deterministic(self) -> None:
@@ -143,8 +189,8 @@ class EvidenceExportTests(unittest.TestCase):
         reordered["evidence_record"]["input_digests"].insert(0, extra)
         rebound(original)
         rebound(reordered)
-        first = export_candidate(original, self.profile, ROOT)
-        second = export_candidate(reordered, self.profile, ROOT)
+        first = export_candidate(real_candidate(original), self.profile, ROOT)
+        second = export_candidate(real_candidate(reordered), self.profile, ROOT)
         self.assertEqual(canonicalize(first), canonicalize(second))
         self.assertEqual(first["bundle_digest"], second["bundle_digest"])
 
@@ -175,7 +221,7 @@ class EvidenceExportTests(unittest.TestCase):
         original_history = copy.deepcopy(
             candidate["evidence_record"]["lifecycle_history"]
         )
-        bundle = export_candidate(candidate, self.profile, ROOT)
+        bundle = export_candidate(real_candidate(candidate), self.profile, ROOT)
         self.assertEqual(
             bundle["evidence_record"]["lifecycle_history"], original_history
         )
@@ -286,13 +332,13 @@ class EvidenceExportTests(unittest.TestCase):
         rebound(candidate)
         self.assertTrue(self.assertRejected(candidate, "evidence-lifecycle-start"))
 
-        bundle = export_candidate(
+        bundle = export_fixture_candidate(
             load_json(INPUT_ROOT / "status-skip.json"), self.profile, ROOT
         )
         bundle["sanitization_report"]["output_status"] = "pass"
         bundle["bundle_digest"] = bundle_digest(bundle)
         with self.assertRaises(ExportError):
-            validate_public_bundle(bundle, ROOT, self.profile)
+            validate_fixture_bundle(bundle, ROOT, self.profile)
 
     def test_ip_vulnerability_and_review_gates_fail_closed(self) -> None:
         cases = []
@@ -312,7 +358,7 @@ class EvidenceExportTests(unittest.TestCase):
         for candidate in cases:
             with self.subTest(candidate=len(candidate)):
                 with self.assertRaises(ExportError):
-                    export_candidate(candidate, self.profile, ROOT)
+                    export_fixture_candidate(candidate, self.profile, ROOT)
 
     def test_final_publication_approval_cannot_be_supplied_or_generated(self) -> None:
         candidate = load_json(INPUT_ROOT / "safe-pass.json")
@@ -320,17 +366,17 @@ class EvidenceExportTests(unittest.TestCase):
             "status": "approved"
         }
         self.assertRejected(candidate, "candidate-schema")
-        bundle = export_candidate(
+        bundle = export_fixture_candidate(
             load_json(INPUT_ROOT / "safe-pass.json"), self.profile, ROOT
         )
         self.assertNotIn("publication_approval", bundle["exporter"])
         self.assertEqual(
             bundle["publication"],
-            {"status": "candidate", "automation_permitted": False},
+            {"status": "test-only", "automation_permitted": False},
         )
 
     def test_bundle_rejects_raw_or_value_digest_redaction_fields(self) -> None:
-        bundle = export_candidate(
+        bundle = export_fixture_candidate(
             load_json(INPUT_ROOT / "approved-omission.json"), self.profile, ROOT
         )
         for field in ("original_value", "value_digest"):
@@ -339,7 +385,7 @@ class EvidenceExportTests(unittest.TestCase):
                 mutated["omissions"][0][field] = "synthetic"
                 mutated["bundle_digest"] = bundle_digest(mutated)
                 with self.assertRaises(ExportError):
-                    validate_public_bundle(mutated, ROOT, self.profile)
+                    validate_fixture_bundle(mutated, ROOT, self.profile)
 
     def test_path_boundary_missing_directory_symlink_and_output_escape(self) -> None:
         kwargs = {
@@ -438,7 +484,7 @@ class EvidenceExportTests(unittest.TestCase):
                 subprocess, "run", side_effect=AssertionError("subprocess")
             ),
         ):
-            bundle = export_candidate(candidate, self.profile, ROOT)
+            bundle = export_fixture_candidate(candidate, self.profile, ROOT)
         self.assertEqual(bundle["sanitization_report"]["outcome"], "exported")
 
     def test_expected_bundle_is_strict_canonical_utf8(self) -> None:
@@ -447,6 +493,383 @@ class EvidenceExportTests(unittest.TestCase):
                 raw = path.read_bytes()
                 value = strict_loads(raw, max_bytes=1_048_576)
                 self.assertEqual(raw, canonicalize(value) + b"\n")
+
+    def test_trusted_execution_modes_and_public_bundle_distinction(self) -> None:
+        synthetic = load_json(INPUT_ROOT / "safe-pass.json")
+        real = real_candidate(synthetic)
+        real_bundle = export_candidate(real, self.profile, ROOT)
+        self.assertEqual(real_bundle["artifact_status"], "export-candidate")
+        self.assertEqual(real_bundle["publication"]["status"], "candidate")
+        self.assertEqual(
+            real_bundle["review_requirements"]["final_publication_approval"],
+            "required-not-provided",
+        )
+        self.assertEqual(
+            validate_export_bundle(real_bundle, "real", ROOT, profile=self.profile),
+            [],
+        )
+
+        with self.assertRaises(ExportError):
+            export_candidate(synthetic, self.profile, ROOT)
+        synthetic_role = copy.deepcopy(real)
+        synthetic_role["review_markers"]["privacy"]["reviewer_role"] = (
+            "synthetic-reviewer"
+        )
+        with self.assertRaises(ExportError):
+            export_candidate(synthetic_role, self.profile, ROOT)
+        fixture_digest = copy.deepcopy(real)
+        fixture_digest["review_markers"]["privacy"]["review_digest"] = synthetic[
+            "review_markers"
+        ]["privacy"]["review_digest"]
+        with self.assertRaises(ExportError) as caught:
+            export_candidate(fixture_digest, self.profile, ROOT)
+        self.assertEqual(caught.exception.code, "review-role")
+
+        _path, synthetic_bundle = self.export_file("safe-pass.json")
+        self.assertEqual(synthetic_bundle["artifact_status"], "test-only")
+        self.assertEqual(synthetic_bundle["publication"]["status"], "test-only")
+        self.assertTrue(
+            all(
+                item["reviewer_role"] == "synthetic-reviewer"
+                for item in synthetic_bundle["review_provenance"]
+            )
+        )
+        with self.assertRaises(ExportError):
+            validate_public_bundle(synthetic_bundle, ROOT, self.profile)
+
+        uncatalogued = copy.deepcopy(synthetic)
+        uncatalogued["export_candidate_id"] = "PM-EXPORT-CANDIDATE-UNLISTED"
+        bind_reviews(uncatalogued)
+        with self.assertRaises(ExportError) as caught:
+            export_candidate(uncatalogued, self.profile, ROOT, mode=TEST_FIXTURE_MODE)
+        self.assertEqual(caught.exception.code, "fixture-catalog")
+        with self.assertRaises(ExportError) as caught:
+            export_candidate(
+                synthetic,
+                self.profile,
+                ROOT,
+                mode=TEST_FIXTURE_MODE,
+                input_name=Path("different-name.json"),
+            )
+        self.assertEqual(caught.exception.code, "fixture-catalog")
+
+        authorized_fixture = copy.deepcopy(synthetic)
+        authorized_fixture["review_markers"]["privacy"]["reviewer_role"] = (
+            "authorized-human"
+        )
+        with self.assertRaises(ExportError) as caught:
+            export_candidate(
+                authorized_fixture, self.profile, ROOT, mode=TEST_FIXTURE_MODE
+            )
+        self.assertEqual(caught.exception.code, "review-role")
+
+        with self.assertRaises(ExportError) as caught:
+            run_export(
+                root=ROOT,
+                staging_root=self.temp_root.relative_to(ROOT),
+                input_name=Path("safe-pass.json"),
+                profile_name=Path("profiles/public-evidence-export.v0.1.json"),
+                output_dir=self.temp_root.relative_to(ROOT) / "mode-out",
+                mode=TEST_FIXTURE_MODE,
+            )
+        self.assertEqual(caught.exception.code, "fixture-root")
+
+        promoted = copy.deepcopy(synthetic_bundle)
+        promoted["artifact_status"] = "export-candidate"
+        promoted["publication"]["status"] = "candidate"
+        promoted["review_requirements"]["final_publication_approval"] = (
+            "required-not-provided"
+        )
+        promoted["bundle_digest"] = bundle_digest(promoted)
+        with self.assertRaises(ExportError):
+            validate_public_bundle(promoted, ROOT, self.profile)
+
+        demoted = copy.deepcopy(real_bundle)
+        demoted["artifact_status"] = "test-only"
+        demoted["publication"]["status"] = "test-only"
+        demoted["review_requirements"]["final_publication_approval"] = (
+            "not-applicable-test-only"
+        )
+        demoted["bundle_digest"] = bundle_digest(demoted)
+        with self.assertRaises(ExportError):
+            validate_public_bundle(demoted, ROOT, self.profile, mode=TEST_FIXTURE_MODE)
+
+    def test_fixture_catalog_pins_candidates_and_expected_bundles(self) -> None:
+        catalog = load_json(ROOT / "tests/fixtures/export/fixture-catalog.v0.1.json")
+        self.assertEqual(catalog["artifact_status"], "test-only")
+        self.assertEqual(len(catalog["fixtures"]), 10)
+        for entry in catalog["fixtures"]:
+            with self.subTest(fixture=entry["relative_input_path"]):
+                candidate = load_json(INPUT_ROOT / entry["relative_input_path"])
+                bundle = load_json(EXPECTED_ROOT / entry["relative_input_path"])
+                self.assertEqual(
+                    entry["candidate_digest"], _candidate_digest(candidate)
+                )
+                self.assertEqual(
+                    entry["expected_bundle_digest"], bundle["bundle_digest"]
+                )
+
+    def test_review_subject_covers_every_reviewable_candidate_field(self) -> None:
+        base = real_candidate(load_json(INPUT_ROOT / "safe-pass.json"))
+
+        def update_source(candidate: dict) -> None:
+            candidate["source_binding"]["source_evidence_record_digest"] = (
+                source_evidence_digest(candidate["evidence_record"])
+            )
+
+        mutations: list[tuple[str, object]] = []
+
+        def add(name: str, mutator: object) -> None:
+            mutations.append((name, mutator))
+
+        add(
+            "summary",
+            lambda c: c["evidence_record"].__setitem__(
+                "summary", "Changed reviewed summary."
+            ),
+        )
+        add(
+            "configuration",
+            lambda c: c["evidence_record"]["configuration"].__setitem__(
+                "case_count", 4
+            ),
+        )
+        add(
+            "status",
+            lambda c: (
+                c["evidence_record"].__setitem__("status", "fail"),
+                c["source_binding"].__setitem__("original_status", "fail"),
+            ),
+        )
+        add(
+            "source revision",
+            lambda c: c["source_binding"].__setitem__(
+                "private_source_revision_digest", "sha256:" + "1" * 64
+            ),
+        )
+        add(
+            "source set",
+            lambda c: c["source_binding"].__setitem__(
+                "source_evidence_set_digest", "sha256:" + "2" * 64
+            ),
+        )
+        add(
+            "subject artifact",
+            lambda c: (
+                c["evidence_record"]["subject"].__setitem__(
+                    "digest", "sha256:" + "3" * 64
+                ),
+                c["artifact_binding"].__setitem__(
+                    "subject_artifact_digest", "sha256:" + "3" * 64
+                ),
+            ),
+        )
+        add(
+            "state machine",
+            lambda c: c["protocol_binding"].__setitem__(
+                "state_machine_digest", "sha256:" + "4" * 64
+            ),
+        )
+        add(
+            "message registry",
+            lambda c: c["protocol_binding"].__setitem__(
+                "message_registry_digest", "sha256:" + "5" * 64
+            ),
+        )
+        add(
+            "conformance suite",
+            lambda c: c["conformance_suite_binding"].__setitem__(
+                "digest", "sha256:" + "6" * 64
+            ),
+        )
+        add(
+            "sensitivity",
+            lambda c: c["sensitivity_markers"].__setitem__(
+                "contains_customer_or_personal_data", True
+            ),
+        )
+        add(
+            "sanitization time",
+            lambda c: c["sanitization_event"].__setitem__(
+                "recorded_at", "2026-07-21T01:03:00Z"
+            ),
+        )
+        add(
+            "sanitization review",
+            lambda c: c["sanitization_event"].__setitem__(
+                "review_digest", "sha256:" + "7" * 64
+            ),
+        )
+        add(
+            "omission added",
+            lambda c: c["requested_omissions"].append(
+                {
+                    "path": "$.evidence_record.public_artifacts",
+                    "rule_id": "OMIT-PUBLIC-ARTIFACTS",
+                    "human_review_digest": "sha256:" + "8" * 64,
+                }
+            ),
+        )
+        add(
+            "profile digest",
+            lambda c: c["export_profile"].__setitem__("digest", "sha256:" + "9" * 64),
+        )
+        add(
+            "candidate id",
+            lambda c: c.__setitem__(
+                "export_candidate_id", "PM-EXPORT-CANDIDATE-CHANGED"
+            ),
+        )
+
+        lifecycle = copy.deepcopy(base)
+        lifecycle["evidence_record"]["lifecycle"] = "collected"
+        lifecycle["evidence_record"]["lifecycle_history"] = lifecycle[
+            "evidence_record"
+        ]["lifecycle_history"][:1]
+        lifecycle["source_binding"]["original_lifecycle"] = "collected"
+        update_source(lifecycle)
+        mutations.append(("lifecycle", lambda _candidate: None))
+
+        omission_base = real_candidate(load_json(INPUT_ROOT / "approved-omission.json"))
+        omission_removed = copy.deepcopy(omission_base)
+        omission_removed["requested_omissions"] = []
+        omission_changed = copy.deepcopy(omission_base)
+        omission_changed["requested_omissions"][0]["rule_id"] = "OTHER-RULE"
+
+        for name, mutator in mutations:
+            candidate = lifecycle if name == "lifecycle" else copy.deepcopy(base)
+            if callable(mutator):
+                mutator(candidate)
+            if name in {"summary", "configuration", "status", "subject artifact"}:
+                update_source(candidate)
+            with self.subTest(field=name):
+                self.assertNotEqual(
+                    candidate["review_subject_digest"], review_subject_digest(candidate)
+                )
+                with self.assertRaises(ExportError):
+                    export_candidate(candidate, self.profile, ROOT)
+
+        for name, candidate in (
+            ("omission removed", omission_removed),
+            ("omission rule", omission_changed),
+        ):
+            with self.subTest(field=name):
+                self.assertNotEqual(
+                    candidate["review_subject_digest"], review_subject_digest(candidate)
+                )
+                with self.assertRaises(ExportError):
+                    export_candidate(candidate, self.profile, ROOT)
+
+    def test_review_provenance_is_complete_and_value_safe(self) -> None:
+        candidate = real_candidate(load_json(INPUT_ROOT / "safe-pass.json"))
+        bundle = export_candidate(candidate, self.profile, ROOT)
+        self.assertEqual(
+            {item["scope"] for item in bundle["review_provenance"]},
+            {"privacy", "security-boundary", "ip", "vulnerability"},
+        )
+        for item in bundle["review_provenance"]:
+            self.assertEqual(
+                item["reviewed_subject_digest"], bundle["review_subject_digest"]
+            )
+            self.assertEqual(item["reviewer_role"], "authorized-human")
+            self.assertEqual(
+                set(item),
+                {
+                    "scope",
+                    "status",
+                    "reviewer_role",
+                    "review_digest",
+                    "reviewed_subject_digest",
+                },
+            )
+
+    def test_implementation_manifest_covers_all_behavior_inputs(self) -> None:
+        manifest = load_json(ROOT / MANIFEST_PATH)
+        verify_implementation_manifest(manifest, ROOT, self.profile["profile_digest"])
+        first = build_implementation_manifest(ROOT, self.profile["profile_digest"])
+        second = build_implementation_manifest(ROOT, self.profile["profile_digest"])
+        self.assertEqual(
+            canonical_manifest_bytes(first), canonical_manifest_bytes(second)
+        )
+        self.assertEqual(manifest_file_digest(manifest), manifest_file_digest(first))
+
+        required = {
+            "scripts/export_public_evidence.py",
+            "scripts/canonical_json.py",
+            "scripts/validate_assurance.py",
+            "schema/evidence-export-candidate.v0.1.schema.json",
+            "schema/public-evidence-export.v0.1.schema.json",
+            "schema/evidence-item.schema.json",
+            "requirements-build.txt",
+            "requirements-dev.txt",
+        }
+        listed = {
+            item["path"]
+            for field in ("source_files", "schema_files", "dependency_lock_files")
+            for item in manifest[field]
+        }
+        listed.add(manifest["evidence_schema_reference"]["path"])
+        self.assertTrue(required.issubset(listed))
+
+        for changed_path in sorted(required):
+            with self.subTest(changed=changed_path):
+                changed = copy.deepcopy(manifest)
+                entries = [
+                    item
+                    for field in (
+                        "source_files",
+                        "schema_files",
+                        "dependency_lock_files",
+                    )
+                    for item in changed[field]
+                ] + [changed["evidence_schema_reference"]]
+                entry = next(item for item in entries if item["path"] == changed_path)
+                entry["digest"] = "sha256:" + "f" * 64
+                changed["implementation_digest"] = implementation_digest(changed)
+                self.assertNotEqual(
+                    changed["implementation_digest"], manifest["implementation_digest"]
+                )
+                with self.assertRaises(ImplementationManifestError):
+                    verify_implementation_manifest(
+                        changed, ROOT, self.profile["profile_digest"]
+                    )
+
+    def test_implementation_manifest_rejects_profile_paths_and_stale_bundle(
+        self,
+    ) -> None:
+        manifest = load_json(ROOT / MANIFEST_PATH)
+        with self.assertRaises(ImplementationManifestError):
+            verify_implementation_manifest(manifest, ROOT, "sha256:" + "0" * 64)
+
+        invalid_manifests = []
+        missing = copy.deepcopy(manifest)
+        missing["source_files"].pop()
+        invalid_manifests.append(missing)
+        duplicate = copy.deepcopy(manifest)
+        duplicate["source_files"].append(copy.deepcopy(duplicate["source_files"][0]))
+        invalid_manifests.append(duplicate)
+        escape = copy.deepcopy(manifest)
+        escape["source_files"][0]["path"] = "../outside.py"
+        invalid_manifests.append(escape)
+        for value in invalid_manifests:
+            value["implementation_digest"] = implementation_digest(value)
+            with self.assertRaises(ImplementationManifestError):
+                verify_implementation_manifest(
+                    value, ROOT, self.profile["profile_digest"]
+                )
+
+        bundle = export_candidate(
+            real_candidate(load_json(INPUT_ROOT / "safe-pass.json")),
+            self.profile,
+            ROOT,
+        )
+        bundle["exporter"]["implementation_digest"] = "sha256:" + "f" * 64
+        bundle["digest_bindings"]["exporter_implementation_digest"] = (
+            "sha256:" + "f" * 64
+        )
+        bundle["bundle_digest"] = bundle_digest(bundle)
+        with self.assertRaises(ExportError):
+            validate_public_bundle(bundle, ROOT, self.profile)
 
     def test_programmatic_negative_zero_is_rejected(self) -> None:
         with self.assertRaises(CanonicalJSONError):

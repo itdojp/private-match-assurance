@@ -14,8 +14,20 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 try:
     from canonical_json import CanonicalJSONError, domain_digest, strict_loads
+    from exporter_manifest import (
+        MANIFEST_PATH,
+        ImplementationManifestError,
+        manifest_file_digest,
+        verify_implementation_manifest,
+    )
 except ImportError:  # pragma: no cover - package import during unit tests
     from scripts.canonical_json import CanonicalJSONError, domain_digest, strict_loads
+    from scripts.exporter_manifest import (
+        MANIFEST_PATH,
+        ImplementationManifestError,
+        manifest_file_digest,
+        verify_implementation_manifest,
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -36,13 +48,18 @@ SCHEMA_FILES = {
 }
 EXPORT_SCHEMA_FILES = {
     "evidence-export-candidate": "evidence-export-candidate.v0.1.schema.json",
+    "evidence-export-fixture-catalog": "evidence-export-fixture-catalog.v0.1.schema.json",
     "evidence-export-profile": "evidence-export-profile.v0.1.schema.json",
+    "evidence-exporter-implementation": "evidence-exporter-implementation.v0.1.schema.json",
     "public-evidence-export": "public-evidence-export.v0.1.schema.json",
 }
 
 PROFILE_DOMAIN = "private-match-evidence-export-profile/v0.1"
 EXPORTED_EVIDENCE_DOMAIN = "private-match-exported-evidence/v0.1"
 BUNDLE_DOMAIN = "private-match-public-evidence-bundle/v0.1"
+EXPORT_CANDIDATE_MODE = "export-candidate"
+TEST_FIXTURE_MODE = "test-fixture"
+REVIEW_SCOPES = {"privacy", "security-boundary", "ip", "vulnerability"}
 
 EXCLUDED_DIRS = {".git", ".venv", "artifacts", "__pycache__", "node_modules", "tests"}
 RECORD_DIR = "assurance"
@@ -108,6 +125,7 @@ def validate_export_bundle(
     root: Path,
     *,
     profile: dict[str, Any] | None = None,
+    mode: str = EXPORT_CANDIDATE_MODE,
 ) -> list[Finding]:
     """Validate a public export without treating it as a publication approval."""
 
@@ -126,6 +144,23 @@ def validate_export_bundle(
         )
     if not isinstance(bundle, dict):
         return findings
+
+    expected_artifact_status = (
+        "export-candidate" if mode == EXPORT_CANDIDATE_MODE else "test-only"
+    )
+    if mode not in {EXPORT_CANDIDATE_MODE, TEST_FIXTURE_MODE}:
+        findings.append(
+            Finding("error", "export-mode", path, "unsupported validation mode")
+        )
+    elif bundle.get("artifact_status") != expected_artifact_status:
+        findings.append(
+            Finding(
+                "error",
+                "export-mode",
+                path,
+                "artifact status does not match the trusted validation mode",
+            )
+        )
 
     evidence = bundle.get("evidence_record")
     findings.extend(
@@ -188,9 +223,10 @@ def validate_export_bundle(
         )
 
     publication = bundle.get("publication")
+    expected_publication = "candidate" if mode == EXPORT_CANDIDATE_MODE else "test-only"
     if (
         not isinstance(publication, dict)
-        or publication.get("status") != "candidate"
+        or publication.get("status") != expected_publication
         or publication.get("automation_permitted") is not False
     ):
         findings.append(
@@ -198,13 +234,18 @@ def validate_export_bundle(
                 "error",
                 "export-publication-gate",
                 path,
-                "export must remain a non-published candidate",
+                "publication state must remain non-published and match the mode",
             )
         )
     requirements = bundle.get("review_requirements")
+    expected_final_approval = (
+        "required-not-provided"
+        if mode == EXPORT_CANDIDATE_MODE
+        else "not-applicable-test-only"
+    )
     if (
         not isinstance(requirements, dict)
-        or requirements.get("final_publication_approval") != "required-not-provided"
+        or requirements.get("final_publication_approval") != expected_final_approval
     ):
         findings.append(
             Finding(
@@ -214,6 +255,46 @@ def validate_export_bundle(
                 "human publication approval must remain absent",
             )
         )
+    provenance = bundle.get("review_provenance")
+    expected_role = (
+        "authorized-human" if mode == EXPORT_CANDIDATE_MODE else "synthetic-reviewer"
+    )
+    subject_digest = bundle.get("review_subject_digest")
+    if not isinstance(provenance, list):
+        findings.append(
+            Finding(
+                "error",
+                "export-review-provenance",
+                path,
+                "review provenance is missing",
+            )
+        )
+    else:
+        scopes = [item.get("scope") for item in provenance if isinstance(item, dict)]
+        if len(scopes) != 4 or set(scopes) != REVIEW_SCOPES:
+            findings.append(
+                Finding(
+                    "error",
+                    "export-review-provenance",
+                    path,
+                    "all review scopes must occur exactly once",
+                )
+            )
+        for item in provenance:
+            if not isinstance(item, dict):
+                continue
+            if (
+                item.get("reviewed_subject_digest") != subject_digest
+                or item.get("reviewer_role") != expected_role
+            ):
+                findings.append(
+                    Finding(
+                        "error",
+                        "export-review-provenance",
+                        path,
+                        "review subject or reviewer role does not match the artifact mode",
+                    )
+                )
     omissions = bundle.get("omissions")
     if isinstance(omissions, list):
         permitted = {"path", "rule_id", "category", "action", "human_review_digest"}
@@ -254,6 +335,46 @@ def validate_export_bundle(
                     "bundle profile binding does not match",
                 )
             )
+        manifest_path = root / MANIFEST_PATH
+        try:
+            manifest = load_json(manifest_path)
+            validator = load_export_schemas(root)["evidence-exporter-implementation"]
+            manifest_schema_errors = list(validator.iter_errors(manifest))
+            if manifest_schema_errors:
+                raise ImplementationManifestError(
+                    "implementation manifest schema failure"
+                )
+            verify_implementation_manifest(manifest, root, expected_profile)
+        except (OSError, CanonicalJSONError, ImplementationManifestError):
+            findings.append(
+                Finding(
+                    "error",
+                    "exporter-implementation",
+                    path,
+                    "complete exporter implementation manifest does not validate",
+                )
+            )
+        else:
+            exporter = bundle.get("exporter")
+            bindings = bundle.get("digest_bindings")
+            if (
+                not isinstance(exporter, dict)
+                or exporter.get("implementation_manifest_digest")
+                != manifest_file_digest(manifest)
+                or exporter.get("implementation_digest")
+                != manifest.get("implementation_digest")
+                or not isinstance(bindings, dict)
+                or bindings.get("exporter_implementation_digest")
+                != manifest.get("implementation_digest")
+            ):
+                findings.append(
+                    Finding(
+                        "error",
+                        "exporter-implementation",
+                        path,
+                        "bundle does not bind the complete current exporter implementation",
+                    )
+                )
 
     return findings
 
@@ -802,6 +923,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="also validate a public export bundle within the repository",
     )
+    parser.add_argument(
+        "--export-mode",
+        choices=(EXPORT_CANDIDATE_MODE, TEST_FIXTURE_MODE),
+        default=EXPORT_CANDIDATE_MODE,
+        help="trusted mode for all explicitly supplied export bundles",
+    )
     return parser
 
 
@@ -855,7 +982,11 @@ def main(argv: list[str] | None = None) -> int:
             continue
         findings.extend(
             validate_export_bundle(
-                bundle, _relative(bundle_path, root), root, profile=profile
+                bundle,
+                _relative(bundle_path, root),
+                root,
+                profile=profile,
+                mode=args.export_mode,
             )
         )
     write_reports(report_dir, findings, len(records))

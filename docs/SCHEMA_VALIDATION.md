@@ -255,15 +255,22 @@ bundle can be checked together with the existing repository records:
 
 ```console
 python scripts/export_public_evidence.py \
+  --mode test-fixture \
+  --staging-root tests/fixtures/export/input \
   --input protocol-conformance.json \
   --output-dir .codex-local/tmp/export
 python scripts/validate_assurance.py \
   --root . \
   --report-dir .codex-local/tmp/report \
+  --export-mode test-fixture \
   --export-bundle .codex-local/tmp/export/public-evidence-export.v0.1.json
 ```
 
-Only committed synthetic fixtures are used by public CI. Generated bundles are
-not uploaded as workflow artifacts. See
+Default validation treats a bundle as a real `export-candidate`. Synthetic
+validation requires explicit `test-fixture` mode, the exact committed staging
+root, catalogued candidate and expected-bundle digests, and test-only review and
+publication markers. Validation also recomputes the complete review-subject and
+exporter implementation bindings. Only committed synthetic fixtures are used by
+public CI. Generated bundles are not uploaded as workflow artifacts. See
 [`EVIDENCE_EXPORT.md`](EVIDENCE_EXPORT.md) for the trust and publication
 boundary.

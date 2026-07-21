@@ -51,7 +51,10 @@ Never publish:
 The draft [public Evidence export contract](docs/EVIDENCE_EXPORT.md) is the only
 defined metadata transfer boundary. It accepts one closed, staged candidate,
 preserves result status, and emits at most a `sanitized` publication candidate.
-It does not read private repositories or grant publication approval.
+Its default human-reviewed mode is separate from the explicit, catalog-bound
+synthetic fixture mode; review scopes bind the complete candidate subject, and
+bundles bind the complete exporter implementation manifest. It does not read
+private repositories or grant publication approval.
 
 ## Related repositories
 

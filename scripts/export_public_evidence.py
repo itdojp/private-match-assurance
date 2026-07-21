@@ -24,8 +24,13 @@ try:
         CanonicalJSONError,
         canonicalize,
         domain_digest,
-        file_digest,
         strict_loads,
+    )
+    from exporter_manifest import (
+        MANIFEST_PATH,
+        ImplementationManifestError,
+        manifest_file_digest,
+        verify_implementation_manifest,
     )
     from validate_assurance import load_schemas, validate_record
 except ImportError:  # pragma: no cover - package import during unit tests
@@ -33,8 +38,13 @@ except ImportError:  # pragma: no cover - package import during unit tests
         CanonicalJSONError,
         canonicalize,
         domain_digest,
-        file_digest,
         strict_loads,
+    )
+    from scripts.exporter_manifest import (
+        MANIFEST_PATH,
+        ImplementationManifestError,
+        manifest_file_digest,
+        verify_implementation_manifest,
     )
     from scripts.validate_assurance import load_schemas, validate_record
 
@@ -43,10 +53,21 @@ VERSION = "0.1"
 DEFAULT_INPUT_LIMIT = 262_144
 PROFILE_DOMAIN = "private-match-evidence-export-profile/v0.1"
 CANDIDATE_DOMAIN = "private-match-evidence-export-candidate/v0.1"
+REVIEW_SUBJECT_DOMAIN = "private-match-evidence-export-review-subject/v0.1"
 SOURCE_EVIDENCE_DOMAIN = "private-match-source-evidence-record/v0.1"
 EXPORTED_EVIDENCE_DOMAIN = "private-match-exported-evidence/v0.1"
 BUNDLE_DOMAIN = "private-match-public-evidence-bundle/v0.1"
 OUTPUT_FILENAME = "public-evidence-export.v0.1.json"
+EXPORT_CANDIDATE_MODE = "export-candidate"
+TEST_FIXTURE_MODE = "test-fixture"
+FIXTURE_STAGING_ROOT = Path("tests/fixtures/export/input")
+FIXTURE_CATALOG_PATH = Path("tests/fixtures/export/fixture-catalog.v0.1.json")
+REVIEW_SCOPES = {
+    "privacy": "privacy",
+    "security_boundary": "security-boundary",
+    "ip": "ip",
+    "vulnerability": "vulnerability",
+}
 EXPECTED_PROFILE_FIELDS = {
     "schema_version",
     "profile_id",
@@ -255,10 +276,84 @@ def _candidate_digest(candidate: dict[str, Any]) -> str:
     return domain_digest(CANDIDATE_DOMAIN, material)
 
 
+def review_subject_digest(candidate: dict[str, Any]) -> str:
+    """Bind every review to all candidate material except the reviews themselves."""
+
+    material = copy.deepcopy(candidate)
+    material.pop("review_markers", None)
+    material.pop("review_subject_digest", None)
+    evidence = material.get("evidence_record")
+    if isinstance(evidence, dict):
+        _sort_semantic_sets(evidence)
+    omissions = material.get("requested_omissions")
+    if isinstance(omissions, list):
+        omissions.sort(key=lambda item: (item.get("path", ""), item.get("rule_id", "")))
+    return domain_digest(REVIEW_SUBJECT_DOMAIN, material)
+
+
 def source_evidence_digest(evidence: dict[str, Any]) -> str:
     material = copy.deepcopy(evidence)
     _sort_semantic_sets(material)
     return domain_digest(SOURCE_EVIDENCE_DOMAIN, material)
+
+
+def _load_closed_json(root: Path, relative: Path, schema_name: str, code: str) -> Any:
+    path = _resolve_repo_subpath(root, relative, kind=code)
+    if path.is_symlink() or not path.is_file():
+        _reject(code, f"$.{code}", "required repository artifact is unavailable")
+    try:
+        value = strict_loads(path.read_bytes(), max_bytes=1_048_576)
+    except (OSError, CanonicalJSONError) as error:
+        raise ExportError(
+            code, f"$.{code}", "required artifact is not strict JSON"
+        ) from error
+    _validate_schema(value, _load_schema(root, schema_name), code=code)
+    return value
+
+
+def _load_fixture_catalog(root: Path) -> dict[str, Any]:
+    value = _load_closed_json(
+        root,
+        FIXTURE_CATALOG_PATH,
+        "evidence-export-fixture-catalog.v0.1.schema.json",
+        "fixture-catalog",
+    )
+    if not isinstance(value, dict):
+        _reject("fixture-catalog", "$.fixture_catalog", "catalog must be an object")
+    ids: set[str] = set()
+    paths: set[str] = set()
+    for entry in value["fixtures"]:
+        if entry["fixture_id"] in ids or entry["relative_input_path"] in paths:
+            _reject(
+                "fixture-catalog",
+                "$.fixture_catalog",
+                "fixture identifiers and paths must be unique",
+            )
+        ids.add(entry["fixture_id"])
+        paths.add(entry["relative_input_path"])
+    return value
+
+
+def _load_implementation_manifest(
+    root: Path, profile: dict[str, Any]
+) -> tuple[dict[str, Any], str]:
+    value = _load_closed_json(
+        root,
+        MANIFEST_PATH,
+        "evidence-exporter-implementation.v0.1.schema.json",
+        "implementation-manifest",
+    )
+    if not isinstance(value, dict):
+        _reject("implementation-manifest", "$.exporter", "manifest must be an object")
+    try:
+        verify_implementation_manifest(value, root, profile["profile_digest"])
+    except ImplementationManifestError as error:
+        raise ExportError(
+            "implementation-manifest",
+            "$.exporter",
+            "implementation manifest or a listed file does not match",
+        ) from error
+    return value, manifest_file_digest(value)
 
 
 def _load_profile(path: Path) -> dict[str, Any]:
@@ -510,10 +605,76 @@ def _validate_protocol_binding(
         )
 
 
-def _validate_reviews(candidate: dict[str, Any]) -> None:
-    artifact_status = candidate["artifact_status"]
+def _fixture_entry(
+    candidate: dict[str, Any], catalog: dict[str, Any], input_name: Path | None
+) -> dict[str, Any] | None:
+    digest = _candidate_digest(candidate)
+    matches = [
+        entry for entry in catalog["fixtures"] if entry["candidate_digest"] == digest
+    ]
+    if len(matches) != 1:
+        return None
+    entry = matches[0]
+    if input_name is not None and entry["relative_input_path"] != input_name.as_posix():
+        return None
+    return entry
+
+
+def _validate_execution_mode(
+    candidate: dict[str, Any],
+    mode: str,
+    catalog: dict[str, Any],
+    input_name: Path | None,
+) -> dict[str, Any] | None:
+    if mode not in {EXPORT_CANDIDATE_MODE, TEST_FIXTURE_MODE}:
+        _reject("execution-mode", "$.mode", "unsupported trusted execution mode")
+    expected_status = (
+        "export-candidate" if mode == EXPORT_CANDIDATE_MODE else "test-only"
+    )
+    if candidate.get("artifact_status") != expected_status:
+        _reject(
+            "execution-mode",
+            "$.artifact_status",
+            "candidate status does not match the trusted execution mode",
+        )
+    entry = _fixture_entry(candidate, catalog, input_name)
+    if mode == TEST_FIXTURE_MODE and entry is None:
+        _reject(
+            "fixture-catalog",
+            "$.input",
+            "test fixture is not catalogued with the accepted candidate digest",
+        )
+    if mode == EXPORT_CANDIDATE_MODE and entry is not None:
+        _reject(
+            "execution-mode",
+            "$.artifact_status",
+            "catalogued synthetic fixture cannot be exported as a candidate",
+        )
+    return entry
+
+
+def _validate_reviews(
+    candidate: dict[str, Any],
+    mode: str,
+    catalog: dict[str, Any],
+) -> None:
+    expected_role = (
+        "authorized-human" if mode == EXPORT_CANDIDATE_MODE else "synthetic-reviewer"
+    )
+    actual_subject = review_subject_digest(candidate)
+    if candidate["review_subject_digest"] != actual_subject:
+        _reject(
+            "review-subject",
+            "$.review_subject_digest",
+            "review subject digest does not match candidate material",
+        )
+    fixture_review_digests = {
+        digest
+        for entry in catalog["fixtures"]
+        for digest in entry["synthetic_review_digests"]
+    }
     reviews = candidate["review_markers"]
-    for name in ("privacy", "security_boundary", "ip", "vulnerability"):
+    for name, expected_scope in REVIEW_SCOPES.items():
         review = reviews[name]
         if review["status"] not in {"approved", "not-applicable"}:
             _reject(
@@ -521,23 +682,32 @@ def _validate_reviews(candidate: dict[str, Any]) -> None:
                 f"$.review_markers.{name}.status",
                 "required human review is not approved",
             )
-        if (
-            artifact_status == "test-only"
-            and review["reviewer_role"] != "synthetic-reviewer"
-        ):
+        if review["reviewer_role"] != expected_role:
             _reject(
                 "review-role",
                 f"$.review_markers.{name}.reviewer_role",
-                "test-only fixture must use the synthetic reviewer role",
+                "reviewer role does not match the trusted execution mode",
+            )
+        if review["review_scope"] != expected_scope:
+            _reject(
+                "review-scope",
+                f"$.review_markers.{name}.review_scope",
+                "review scope does not match its closed marker slot",
+            )
+        if review["reviewed_subject_digest"] != actual_subject:
+            _reject(
+                "review-subject",
+                f"$.review_markers.{name}.reviewed_subject_digest",
+                "review marker does not bind the complete candidate subject",
             )
         if (
-            artifact_status != "test-only"
-            and review["reviewer_role"] != "authorized-human"
+            mode == EXPORT_CANDIDATE_MODE
+            and review["review_digest"] in fixture_review_digests
         ):
             _reject(
                 "review-role",
-                f"$.review_markers.{name}.reviewer_role",
-                "real candidates require an authorized human role",
+                f"$.review_markers.{name}.review_digest",
+                "fixture-only review digest is invalid in candidate mode",
             )
     ip_review = reviews["ip"]
     if ip_review["unpublished_invention"] or ip_review["patent_candidate"]:
@@ -691,7 +861,8 @@ def _construct_bundle(
     profile: dict[str, Any],
     evidence: dict[str, Any],
     omissions: list[dict[str, str]],
-    exporter_digest: str,
+    implementation_manifest: dict[str, Any],
+    implementation_manifest_digest: str,
 ) -> dict[str, Any]:
     candidate_digest = _candidate_digest(candidate)
     evidence_digest = domain_digest(EXPORTED_EVIDENCE_DOMAIN, evidence)
@@ -700,8 +871,21 @@ def _construct_bundle(
     protocol = candidate["protocol_binding"]
     suite = candidate["conformance_suite_binding"]
     reviews = candidate["review_markers"]
+    artifact_status = candidate["artifact_status"]
+    test_only = artifact_status == "test-only"
+    review_provenance = [
+        {
+            "scope": REVIEW_SCOPES[name],
+            "status": reviews[name]["status"],
+            "reviewer_role": reviews[name]["reviewer_role"],
+            "review_digest": reviews[name]["review_digest"],
+            "reviewed_subject_digest": reviews[name]["reviewed_subject_digest"],
+        }
+        for name in REVIEW_SCOPES
+    ]
     bundle: dict[str, Any] = {
         "schema_version": VERSION,
+        "artifact_status": artifact_status,
         "record_type": "public-evidence-export",
         "export_profile": {
             "id": profile["profile_id"],
@@ -710,10 +894,12 @@ def _construct_bundle(
         },
         "export_candidate_id": candidate["export_candidate_id"],
         "export_candidate_digest": candidate_digest,
+        "review_subject_digest": candidate["review_subject_digest"],
         "exporter": {
-            "identity": "private-match-assurance/export_public_evidence.py",
+            "identity": "private-match-assurance/evidence-exporter",
             "version": VERSION,
-            "source_revision_digest": exporter_digest,
+            "implementation_manifest_digest": implementation_manifest_digest,
+            "implementation_digest": implementation_manifest["implementation_digest"],
         },
         "evidence_record": evidence,
         "digest_bindings": {
@@ -728,7 +914,9 @@ def _construct_bundle(
             "protocol_message_registry_digest": protocol["message_registry_digest"],
             "protocol_conformance_suite_digest": suite["digest"],
             "export_profile_digest": profile["profile_digest"],
-            "exporter_source_revision_digest": exporter_digest,
+            "exporter_implementation_digest": implementation_manifest[
+                "implementation_digest"
+            ],
             "exported_evidence_record_digest": evidence_digest,
         },
         "sanitization_report": {
@@ -743,7 +931,10 @@ def _construct_bundle(
                 "prohibited-field-scan",
                 "prohibited-value-scan",
                 "review-gates",
+                "review-subject-binding",
                 "status-preservation",
+                "trusted-execution-mode",
+                "exporter-implementation-manifest",
             ],
             "allowlist_result": "pass",
             "prohibited_field_scan_result": "pass",
@@ -760,26 +951,49 @@ def _construct_bundle(
             "vulnerability_review_marker": reviews["vulnerability"]["status"],
         },
         "omissions": omissions,
+        "review_provenance": review_provenance,
         "review_requirements": {
             "privacy": reviews["privacy"]["status"],
             "security_boundary": reviews["security_boundary"]["status"],
             "ip": reviews["ip"]["status"],
             "vulnerability": reviews["vulnerability"]["status"],
-            "final_publication_approval": "required-not-provided",
+            "final_publication_approval": (
+                "not-applicable-test-only" if test_only else "required-not-provided"
+            ),
         },
-        "publication": {"status": "candidate", "automation_permitted": False},
+        "publication": {
+            "status": "test-only" if test_only else "candidate",
+            "automation_permitted": False,
+        },
     }
     bundle["bundle_digest"] = bundle_digest(bundle)
     return bundle
 
 
-def validate_public_bundle(bundle: Any, root: Path, profile: dict[str, Any]) -> None:
+def validate_public_bundle(
+    bundle: Any,
+    root: Path,
+    profile: dict[str, Any],
+    *,
+    mode: str = EXPORT_CANDIDATE_MODE,
+) -> None:
     schema = _load_schema(root, "public-evidence-export.v0.1.schema.json")
     _validate_schema(bundle, schema, code="bundle-schema")
     if not isinstance(bundle, dict):
         _reject("bundle-shape", "$", "bundle must be an object")
     if set(bundle) != set(profile["allowed_output_fields"]):
         _reject("bundle-allowlist", "$", "bundle fields do not match the profile")
+    expected_status = (
+        "export-candidate" if mode == EXPORT_CANDIDATE_MODE else "test-only"
+    )
+    if mode not in {EXPORT_CANDIDATE_MODE, TEST_FIXTURE_MODE}:
+        _reject("execution-mode", "$.mode", "unsupported validation mode")
+    if bundle["artifact_status"] != expected_status:
+        _reject(
+            "execution-mode",
+            "$.artifact_status",
+            "bundle status does not match the trusted validation mode",
+        )
     if bundle["bundle_digest"] != bundle_digest(bundle):
         _reject("bundle-digest", "$.bundle_digest", "bundle digest does not match")
     if bundle["digest_bindings"]["export_profile_digest"] != profile["profile_digest"]:
@@ -798,13 +1012,74 @@ def validate_public_bundle(bundle: Any, root: Path, profile: dict[str, Any]) -> 
             "candidate digest binding does not match",
         )
     if (
-        bundle["digest_bindings"]["exporter_source_revision_digest"]
-        != bundle["exporter"]["source_revision_digest"]
+        bundle["digest_bindings"]["exporter_implementation_digest"]
+        != bundle["exporter"]["implementation_digest"]
     ):
         _reject(
             "exporter-digest",
-            "$.digest_bindings.exporter_source_revision_digest",
-            "exporter digest binding does not match",
+            "$.digest_bindings.exporter_implementation_digest",
+            "exporter implementation digest binding does not match",
+        )
+    implementation, implementation_manifest_digest = _load_implementation_manifest(
+        root, profile
+    )
+    if (
+        bundle["exporter"]["implementation_manifest_digest"]
+        != implementation_manifest_digest
+        or bundle["exporter"]["implementation_digest"]
+        != implementation["implementation_digest"]
+    ):
+        _reject(
+            "exporter-digest",
+            "$.exporter",
+            "bundle does not bind the current complete exporter implementation",
+        )
+    if bundle["review_subject_digest"] not in {
+        item.get("reviewed_subject_digest")
+        for item in bundle["review_provenance"]
+        if isinstance(item, dict)
+    }:
+        _reject(
+            "review-subject",
+            "$.review_provenance",
+            "review provenance does not bind the bundle review subject",
+        )
+    provenance = bundle["review_provenance"]
+    by_scope = {item["scope"]: item for item in provenance if isinstance(item, dict)}
+    if set(by_scope) != set(REVIEW_SCOPES.values()) or len(provenance) != len(by_scope):
+        _reject(
+            "review-scope",
+            "$.review_provenance",
+            "all review scopes must occur exactly once",
+        )
+    expected_role = (
+        "authorized-human" if mode == EXPORT_CANDIDATE_MODE else "synthetic-reviewer"
+    )
+    for scope, item in by_scope.items():
+        if (
+            item["reviewed_subject_digest"] != bundle["review_subject_digest"]
+            or item["reviewer_role"] != expected_role
+        ):
+            _reject(
+                "review-provenance",
+                f"$.review_provenance.{scope}",
+                "review provenance subject or role does not match",
+            )
+    expected_publication = "candidate" if mode == EXPORT_CANDIDATE_MODE else "test-only"
+    expected_approval = (
+        "required-not-provided"
+        if mode == EXPORT_CANDIDATE_MODE
+        else "not-applicable-test-only"
+    )
+    if (
+        bundle["publication"]["status"] != expected_publication
+        or bundle["review_requirements"]["final_publication_approval"]
+        != expected_approval
+    ):
+        _reject(
+            "publication-mode",
+            "$.publication",
+            "publication state does not match the artifact mode",
         )
     evidence = bundle["evidence_record"]
     report = bundle["sanitization_report"]
@@ -840,22 +1115,46 @@ def validate_public_bundle(bundle: Any, root: Path, profile: dict[str, Any]) -> 
 
 
 def export_candidate(
-    candidate: Any, profile: dict[str, Any], root: Path
+    candidate: Any,
+    profile: dict[str, Any],
+    root: Path,
+    *,
+    mode: str = EXPORT_CANDIDATE_MODE,
+    input_name: Path | None = None,
 ) -> dict[str, Any]:
     if not isinstance(candidate, dict):
         _reject("candidate-shape", "$", "candidate root must be an object")
     candidate_schema = _load_schema(root, "evidence-export-candidate.v0.1.schema.json")
     _validate_schema(candidate, candidate_schema, code="candidate-schema")
+    catalog = _load_fixture_catalog(root)
     _validate_allowlist(candidate, profile)
     _validate_evidence(candidate["evidence_record"], root, "$.evidence_record")
     _validate_bindings(candidate, profile)
     _scan_sensitive_values(candidate)
-    _validate_reviews(candidate)
+    _validate_reviews(candidate, mode, catalog)
+    fixture_entry = _validate_execution_mode(candidate, mode, catalog, input_name)
     evidence, omissions = _construct_evidence(candidate, profile)
     _validate_evidence(evidence, root, "$.evidence_record")
-    exporter_digest = file_digest(Path(__file__).read_bytes())
-    bundle = _construct_bundle(candidate, profile, evidence, omissions, exporter_digest)
-    validate_public_bundle(bundle, root, profile)
+    implementation, implementation_manifest_digest = _load_implementation_manifest(
+        root, profile
+    )
+    bundle = _construct_bundle(
+        candidate,
+        profile,
+        evidence,
+        omissions,
+        implementation,
+        implementation_manifest_digest,
+    )
+    validate_public_bundle(bundle, root, profile, mode=mode)
+    if fixture_entry is not None and (
+        fixture_entry["expected_bundle_digest"] != bundle["bundle_digest"]
+    ):
+        _reject(
+            "fixture-catalog",
+            "$.bundle_digest",
+            "test bundle does not match the catalogued expected digest",
+        )
     return bundle
 
 
@@ -908,8 +1207,15 @@ def run_export(
     input_name: Path,
     profile_name: Path,
     output_dir: Path,
+    mode: str = EXPORT_CANDIDATE_MODE,
 ) -> tuple[Path, dict[str, Any]]:
     root = root.resolve()
+    if mode == TEST_FIXTURE_MODE and staging_root != FIXTURE_STAGING_ROOT:
+        _reject(
+            "fixture-root",
+            "$.staging_root",
+            "test mode is restricted to the committed fixture staging root",
+        )
     input_path = resolve_input_path(root, staging_root, input_name)
     profile_path = resolve_profile_path(root, profile_name)
     output_root = resolve_output_dir(root, output_dir)
@@ -920,7 +1226,9 @@ def run_export(
         candidate = strict_loads(raw, max_bytes=limit)
     except CanonicalJSONError as error:
         raise ExportError("input-parse", "$.input", str(error)) from error
-    bundle = export_candidate(candidate, profile, root)
+    bundle = export_candidate(
+        candidate, profile, root, mode=mode, input_name=input_name
+    )
     payload = canonicalize(bundle) + b"\n"
     output_path = output_root / OUTPUT_FILENAME
     try:
@@ -936,7 +1244,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument(
-        "--staging-root", type=Path, default=Path("tests/fixtures/export/input")
+        "--staging-root", type=Path, default=Path("staging/evidence-export")
+    )
+    parser.add_argument(
+        "--mode",
+        choices=(EXPORT_CANDIDATE_MODE, TEST_FIXTURE_MODE),
+        default=EXPORT_CANDIDATE_MODE,
+        help="trusted caller mode; test-fixture is limited to the committed catalog",
     )
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument(
@@ -957,12 +1271,15 @@ def main(argv: list[str] | None = None) -> int:
             input_name=args.input,
             profile_name=args.profile,
             output_dir=args.output_dir,
+            mode=args.mode,
         )
     except ExportError as error:
         print(error, file=sys.stderr)
         return 1
     print(
-        f"export: status=candidate lifecycle={bundle['evidence_record']['lifecycle']} output={output_path}"
+        "export: "
+        f"status={bundle['publication']['status']} "
+        f"lifecycle={bundle['evidence_record']['lifecycle']} output={output_path}"
     )
     return 0
 

@@ -27,8 +27,13 @@ digested export profile. The exporter:
 - preserves all Evidence result statuses exactly;
 - appends at most a `sanitized` lifecycle entry;
 - emits a deterministic RFC 8785 bundle with digest bindings; and
-- always leaves final publication approval absent and publication status at
-  `candidate`.
+- separates default human-reviewed candidate mode from a caller-selected,
+  catalog-bound synthetic fixture mode;
+- binds every review scope to the complete reviewed candidate material and
+  retains safe review provenance publicly;
+- binds the complete behavior-affecting exporter implementation manifest; and
+- always leaves final publication approval absent. Real output remains a
+  `candidate`; synthetic output remains machine-readable `test-only`.
 
 The existing Evidence Schema 0.1 is unchanged. Export-specific metadata lives
 in the enclosing bundle.
@@ -94,6 +99,32 @@ Pattern scanners have unavoidable false negatives and false positives. Closed
 schemas and allowlists are primary. The scanner catches common bypasses and
 produces only a value-free path/category error; human review remains mandatory.
 
+### Candidate-controlled fixture marker versus trusted execution mode
+
+Allowing input `artifact_status` to select synthetic review would make the
+review gate self-authorizing. The caller therefore selects the mode independently.
+Normal mode accepts only `export-candidate` plus `authorized-human` markers.
+Fixture mode accepts only the exact committed staging root and catalogued input,
+candidate digest, expected bundle digest, `test-only` status, and
+`synthetic-reviewer` markers. The public bundle retains that distinction.
+
+### Opaque review digest versus complete review-subject binding
+
+An approval-artifact digest alone does not state what was reviewed. Each closed
+review scope now binds a domain-separated digest over every reviewable candidate
+field except the review markers and digest itself. Safe scope, role, status,
+approval digest, and subject digest remain in the public bundle. Human authority
+and approval authorship are still reviewed manually.
+
+### Single source-file digest versus implementation manifest
+
+Digesting only the CLI omits helper code, validators, Schemas, the Evidence
+Schema, and dependency locks that change accepted inputs or output bytes. A
+closed, deterministic manifest binds all of those files plus the runtime
+profile and expected export-profile digest. The profile remains independently
+versioned. The fixture catalog remains separate conformance authority to avoid
+making test expectations part of the production implementation identity.
+
 ## Consequences
 
 - Future private producers must transform raw evidence into the candidate
@@ -101,16 +132,21 @@ produces only a value-free path/category error; human review remains mandatory.
 - Unknown Evidence types and configuration fields require an explicit profile
   revision.
 - Equal semantic input is reproducible without a runtime Protocol dependency.
+- Any reviewable material change requires renewed scope-specific review
+  bindings, and any listed implementation change produces a new implementation
+  digest.
 - Private evidence is intentionally not publicly reproducible; the public
   bundle states this limitation and binds the source by digest.
 - A successful export establishes neither security nor publication approval.
 
 ## Compatibility
 
-This is an additive draft 0.1 contract. It does not change existing Assurance
-records or their interpretation. Profile changes alter the profile digest and
-require candidate regeneration and review. No stable compatibility commitment
-or production exporter is declared.
+This is an additive draft 0.1 contract with no stable compatibility commitment.
+It does not change existing Assurance records or their interpretation. The
+review hardening changes draft candidate and bundle shapes, so earlier draft
+fixtures must be regenerated. Profile or implementation changes alter their
+separate digests and require candidate review or bundle regeneration. No
+production exporter is declared.
 
 ## Human decisions retained
 

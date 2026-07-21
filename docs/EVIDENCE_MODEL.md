@@ -206,6 +206,12 @@ omission, and review rules are specified in
 [`EVIDENCE_EXPORT.md`](EVIDENCE_EXPORT.md). Export success means only that a
 synthetic or human-reviewed metadata candidate reached lifecycle `sanitized`;
 it is not publication approval and does not change the Evidence result status.
+Synthetic processing is a caller-selected, committed-catalog-only test mode;
+candidate input cannot self-select it. Every review scope binds the complete
+reviewable candidate subject, and the public bundle retains safe scope, role,
+status, review-artifact digest, and reviewed-subject digest. Export bundles also
+bind the complete reviewed exporter implementation manifest rather than one
+source file.
 
 ## Reproducibility
 

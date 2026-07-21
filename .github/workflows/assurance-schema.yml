@@ -38,6 +38,8 @@ jobs:
       - name: Export synthetic public Evidence fixture
         run: |
           python scripts/export_public_evidence.py \
+            --mode test-fixture \
+            --staging-root tests/fixtures/export/input \
             --input protocol-conformance.json \
             --output-dir .codex-local/tmp/export
           cmp \
@@ -48,6 +50,7 @@ jobs:
           python scripts/validate_assurance.py
           --root .
           --report-dir artifacts
+          --export-mode test-fixture
           --export-bundle .codex-local/tmp/export/public-evidence-export.v0.1.json
       - name: Validate REUSE licensing metadata
         run: reuse lint

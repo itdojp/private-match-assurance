@@ -7,7 +7,8 @@ closed, metadata-only Evidence candidate into a public review bundle. It does
 not read raw logs or private source repositories, publish anything, sign a
 release, or create a human approval.
 
-The contract consists of three independently validated artifacts:
+The contract consists of independently validated candidate, bundle, profile,
+fixture-authority, and implementation-binding artifacts:
 
 - [`evidence-export-candidate.v0.1.schema.json`](../schema/evidence-export-candidate.v0.1.schema.json)
   defines the private-side metadata envelope.
@@ -16,6 +17,11 @@ The contract consists of three independently validated artifacts:
 - [`public-evidence-export.v0.1.json`](../profiles/public-evidence-export.v0.1.json)
   is the reviewed allowlist, omission, lifecycle, digest, path, and
   serialization policy.
+- [`fixture-catalog.v0.1.json`](../tests/fixtures/export/fixture-catalog.v0.1.json)
+  pins every synthetic input and expected bundle used by public CI.
+- [`evidence-exporter-implementation.v0.1.json`](../manifests/evidence-exporter-implementation.v0.1.json)
+  binds the behavior-affecting Python, Schemas, Evidence Schema, dependency
+  locks, runtime profile, and expected export-profile digest.
 
 The existing Evidence Schema 0.1 remains unchanged and authoritative for the
 embedded `evidence_record` in both contracts.
@@ -27,7 +33,7 @@ vulnerability review markers. It checks their structure and approved or
 not-applicable state. It cannot establish that the recorded reviewer had the
 claimed authority. That is a human review responsibility.
 
-The exporter always emits:
+Normal `export-candidate` mode emits:
 
 ```json
 {"automation_permitted":false,"status":"candidate"}
@@ -37,9 +43,13 @@ It also records `final_publication_approval: required-not-provided`. CI, an
 Agent, and the exporter cannot change the lifecycle beyond `sanitized` or set a
 publication approval. A separate human-only publication process is required.
 
-Synthetic fixtures use `artifact_status: test-only`, the
-`synthetic-reviewer` role, and synthetic digests. They are not evidence of an
-actual review.
+Synthetic fixtures can be processed only under the caller-selected
+`test-fixture` mode. That mode requires the exact committed fixture root, a
+catalogued relative input path, and matching candidate and expected-bundle
+digests. Its bundle retains `artifact_status: test-only`, publication status
+`test-only`, and `final_publication_approval: not-applicable-test-only`.
+Candidate data cannot select this mode. Synthetic fixtures use the
+`synthetic-reviewer` role and are not evidence of an actual review.
 
 ## Private-side candidate
 
@@ -52,6 +62,7 @@ staging root. It contains only a closed metadata envelope:
   conformance-suite digests;
 - the export profile and its digest;
 - typed review and sensitivity markers;
+- a detached `review_subject_digest` binding the complete reviewed material;
 - an input-supplied sanitization event; and
 - zero or more profile-authorized optional omissions.
 
@@ -60,7 +71,8 @@ credentials, and actual publication approvals are not candidate fields.
 
 ## Public bundle
 
-The output binds the input candidate, exporter source file, export profile,
+The output binds the input candidate, complete exporter implementation
+manifest, export profile,
 sanitized Evidence record, Protocol artifacts, conformance suite, private
 source revision, source evidence set, subject artifact, and Evidence output.
 These digests establish identity and origin bindings only. They do not prove
@@ -68,6 +80,43 @@ security, correctness, privacy, completeness, or publication suitability.
 
 The bundle digest is detached: it is computed over the complete RFC 8785
 bundle with the `bundle_digest` member omitted. This avoids a self-reference.
+
+## Review-subject and provenance binding
+
+The domain-separated `review_subject_digest` covers the schema/profile
+identity, artifact mode, candidate ID, complete Evidence record, source,
+artifact, Protocol and suite bindings, sensitivity markers, sanitization event,
+and all omission requests. Only `review_markers` and the digest member itself
+are excluded to avoid a cycle. The same semantic-set normalization used for
+candidate identity is applied.
+
+Privacy, security-boundary, IP, and vulnerability markers each declare a
+closed scope and must bind that exact digest. Adding, removing, or changing an
+omission therefore also invalidates every existing marker. Omission entries do
+not repeat `reviewed_subject_digest`, which would create a cycle; the complete
+omission set is already part of the top-level subject.
+
+The public bundle retains, for all four scopes, the safe reviewer role, status,
+approval-artifact digest, and reviewed-subject digest. It does not retain a
+reviewer name, email address, account identifier, private URL, or raw approval
+text. Structure and digest equality do not prove that the reviewer had the
+claimed authority; human review remains required.
+
+## Exporter implementation binding
+
+The implementation manifest lists repository-relative paths and SHA-256
+digests for `export_public_evidence.py`, `canonical_json.py`,
+`exporter_manifest.py`, `validate_assurance.py`, all export contract Schemas,
+the unchanged Evidence Schema, and both dependency locks. It separately binds
+the expected export-profile digest and the reviewed CPython/platform/JCS
+profile. Paths are unique, symlink-free, repository-contained regular files.
+
+`implementation_digest` is RFC 8785 over the manifest without that member,
+under domain `private-match-evidence-exporter-implementation/v0.1`. The bundle
+also binds the SHA-256 digest of the complete canonical manifest file. Runtime
+validation recomputes every listed file digest. The profile digest remains a
+separate binding. These digests establish reproducible implementation identity,
+not correctness, privacy, security, or publication approval.
 
 ## Status and lifecycle
 
@@ -140,6 +189,7 @@ Example using only the committed synthetic fixture:
 
 ```console
 python scripts/export_public_evidence.py \
+  --mode test-fixture \
   --staging-root tests/fixtures/export/input \
   --input protocol-conformance.json \
   --profile profiles/public-evidence-export.v0.1.json \
@@ -196,11 +246,14 @@ The exporter fixtures are checked with:
 ```console
 python -m unittest discover -s tests -p 'test_*.py'
 python scripts/export_public_evidence.py \
+  --mode test-fixture \
+  --staging-root tests/fixtures/export/input \
   --input protocol-conformance.json \
   --output-dir .codex-local/tmp/export
 python scripts/validate_assurance.py \
   --root . \
   --report-dir .codex-local/tmp/report \
+  --export-mode test-fixture \
   --export-bundle .codex-local/tmp/export/public-evidence-export.v0.1.json
 ```
 

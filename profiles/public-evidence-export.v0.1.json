@@ -2,7 +2,7 @@
   "schema_version": "0.1",
   "profile_id": "private-match-public-evidence-export",
   "profile_version": "0.1",
-  "profile_digest": "sha256:ebb0f5ff62e47a7fce22934f2d012f99bb834e2e2a0db313c293d29c2269b210",
+  "profile_digest": "sha256:f1598c3e3e24e25697ac3d733e69b516ebd13495a147e1db64861ab59ae7a585",
   "input_contract": "evidence-export-candidate.v0.1",
   "output_contract": "public-evidence-export.v0.1",
   "allowed_candidate_fields": [
@@ -15,6 +15,7 @@
     "protocol_binding",
     "requested_omissions",
     "review_markers",
+    "review_subject_digest",
     "sanitization_event",
     "schema_version",
     "sensitivity_markers",
@@ -67,6 +68,7 @@
     ]
   },
   "allowed_output_fields": [
+    "artifact_status",
     "bundle_digest",
     "digest_bindings",
     "evidence_record",
@@ -77,7 +79,9 @@
     "omissions",
     "publication",
     "record_type",
+    "review_provenance",
     "review_requirements",
+    "review_subject_digest",
     "sanitization_report",
     "schema_version"
   ],

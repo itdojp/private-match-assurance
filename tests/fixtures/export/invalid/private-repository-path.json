@@ -4,7 +4,7 @@
   "export_profile": {
     "id": "private-match-public-evidence-export",
     "version": "0.1",
-    "digest": "sha256:ebb0f5ff62e47a7fce22934f2d012f99bb834e2e2a0db313c293d29c2269b210"
+    "digest": "sha256:f1598c3e3e24e25697ac3d733e69b516ebd13495a147e1db64861ab59ae7a585"
   },
   "export_candidate_id": "PM-EXPORT-CANDIDATE-0090",
   "evidence_record": {
@@ -93,19 +93,25 @@
     "privacy": {
       "status": "approved",
       "reviewer_role": "synthetic-reviewer",
-      "review_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      "review_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "review_scope": "privacy",
+      "reviewed_subject_digest": "sha256:62b164bec06b309333abf73a6b47f0499b737624a75be3664903a0a25dda23cd"
     },
     "security_boundary": {
       "status": "approved",
       "reviewer_role": "synthetic-reviewer",
-      "review_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+      "review_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "review_scope": "security-boundary",
+      "reviewed_subject_digest": "sha256:62b164bec06b309333abf73a6b47f0499b737624a75be3664903a0a25dda23cd"
     },
     "ip": {
       "status": "not-applicable",
       "reviewer_role": "synthetic-reviewer",
       "review_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
       "unpublished_invention": false,
-      "patent_candidate": false
+      "patent_candidate": false,
+      "review_scope": "ip",
+      "reviewed_subject_digest": "sha256:62b164bec06b309333abf73a6b47f0499b737624a75be3664903a0a25dda23cd"
     },
     "vulnerability": {
       "status": "not-applicable",
@@ -113,7 +119,9 @@
       "review_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
       "contains_vulnerability_information": false,
       "embargo_status": "not-embargoed",
-      "remediation_approved": false
+      "remediation_approved": false,
+      "review_scope": "vulnerability",
+      "reviewed_subject_digest": "sha256:62b164bec06b309333abf73a6b47f0499b737624a75be3664903a0a25dda23cd"
     }
   },
   "sensitivity_markers": {
@@ -128,5 +136,6 @@
     "recorded_at": "2026-07-21T01:02:00Z",
     "review_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
   },
-  "requested_omissions": []
+  "requested_omissions": [],
+  "review_subject_digest": "sha256:62b164bec06b309333abf73a6b47f0499b737624a75be3664903a0a25dda23cd"
 }

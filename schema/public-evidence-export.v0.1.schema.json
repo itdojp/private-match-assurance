@@ -1,0 +1,565 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-evidence-export-0.1.json",
+  "title": "Private Match public evidence export bundle v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "record_type",
+    "export_profile",
+    "export_candidate_id",
+    "export_candidate_digest",
+    "review_subject_digest",
+    "exporter",
+    "fixture_provenance",
+    "evidence_record",
+    "digest_bindings",
+    "sanitization_report",
+    "omissions",
+    "review_provenance",
+    "review_requirements",
+    "publication",
+    "bundle_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "enum": [
+        "export-candidate",
+        "test-only"
+      ]
+    },
+    "record_type": {
+      "const": "public-evidence-export"
+    },
+    "export_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "digest"
+      ],
+      "properties": {
+        "id": {
+          "const": "private-match-public-evidence-export"
+        },
+        "version": {
+          "const": "0.1"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "export_candidate_id": {
+      "type": "string",
+      "pattern": "^PM-EXPORT-CANDIDATE-[A-Z0-9-]{4,64}$"
+    },
+    "export_candidate_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "review_subject_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "exporter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "version",
+        "implementation_manifest_digest",
+        "implementation_digest"
+      ],
+      "properties": {
+        "identity": {
+          "const": "private-match-assurance/evidence-exporter"
+        },
+        "version": {
+          "const": "0.1"
+        },
+        "implementation_manifest_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "implementation_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "fixture_provenance": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fixture_id",
+            "fixture_catalog_digest"
+          ],
+          "properties": {
+            "fixture_id": {
+              "type": "string",
+              "pattern": "^FIXTURE-[A-Z0-9-]{4,64}$"
+            },
+            "fixture_catalog_digest": {
+              "$ref": "#/$defs/digest"
+            }
+          }
+        }
+      ]
+    },
+    "evidence_record": {
+      "type": "object"
+    },
+    "digest_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "private_source_revision_digest",
+        "source_evidence_set_digest",
+        "source_evidence_record_digest",
+        "input_candidate_digest",
+        "subject_artifact_digest",
+        "evidence_output_digest",
+        "protocol_source_revision_digest",
+        "protocol_state_machine_digest",
+        "protocol_message_registry_digest",
+        "protocol_conformance_suite_digest",
+        "export_profile_digest",
+        "exporter_implementation_digest",
+        "exported_evidence_record_digest"
+      ],
+      "properties": {
+        "private_source_revision_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "source_evidence_set_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "source_evidence_record_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "input_candidate_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "subject_artifact_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "evidence_output_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "protocol_source_revision_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "protocol_state_machine_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "protocol_message_registry_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "protocol_conformance_suite_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "export_profile_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "exported_evidence_record_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "exporter_implementation_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "sanitization_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "input_interface",
+        "checks_executed",
+        "allowlist_result",
+        "prohibited_field_scan_result",
+        "prohibited_value_scan_result",
+        "status_preservation_result",
+        "input_status",
+        "output_status",
+        "input_lifecycle",
+        "output_lifecycle",
+        "digest_binding_result",
+        "privacy_review_marker",
+        "security_review_marker",
+        "ip_review_marker",
+        "vulnerability_review_marker"
+      ],
+      "properties": {
+        "outcome": {
+          "const": "exported"
+        },
+        "checks_executed": {
+          "type": "array",
+          "minItems": 15,
+          "maxItems": 19,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "allowlist",
+              "candidate-schema",
+              "closed-configuration",
+              "digest-bindings",
+              "evidence-schema",
+              "export-profile-binding",
+              "exporter-implementation-manifest",
+              "fixture-entry-binding",
+              "input-size",
+              "lifecycle-limit",
+              "path-boundary",
+              "prohibited-field-scan",
+              "prohibited-value-scan",
+              "review-gates",
+              "review-status-parity",
+              "review-subject-binding",
+              "status-preservation",
+              "strict-input-parse",
+              "trusted-execution-mode"
+            ]
+          }
+        },
+        "allowlist_result": {
+          "const": "pass"
+        },
+        "prohibited_field_scan_result": {
+          "const": "pass"
+        },
+        "prohibited_value_scan_result": {
+          "const": "pass"
+        },
+        "status_preservation_result": {
+          "const": "pass"
+        },
+        "input_status": {
+          "$ref": "#/$defs/status"
+        },
+        "output_status": {
+          "$ref": "#/$defs/status"
+        },
+        "input_lifecycle": {
+          "enum": [
+            "validated",
+            "sanitized"
+          ]
+        },
+        "output_lifecycle": {
+          "const": "sanitized"
+        },
+        "digest_binding_result": {
+          "const": "pass"
+        },
+        "privacy_review_marker": {
+          "const": "approved"
+        },
+        "security_review_marker": {
+          "const": "approved"
+        },
+        "ip_review_marker": {
+          "enum": [
+            "approved",
+            "not-applicable"
+          ]
+        },
+        "vulnerability_review_marker": {
+          "enum": [
+            "approved",
+            "not-applicable"
+          ]
+        },
+        "input_interface": {
+          "enum": [
+            "programmatic",
+            "staged-file"
+          ]
+        }
+      }
+    },
+    "omissions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "rule_id",
+          "category",
+          "action",
+          "human_review_digest"
+        ],
+        "properties": {
+          "path": {
+            "const": "$.evidence_record.public_artifacts"
+          },
+          "rule_id": {
+            "const": "OMIT-PUBLIC-ARTIFACTS"
+          },
+          "category": {
+            "const": "optional-public-reference"
+          },
+          "action": {
+            "const": "omitted-by-profile"
+          },
+          "human_review_digest": {
+            "$ref": "#/$defs/digest"
+          }
+        }
+      },
+      "uniqueItems": true
+    },
+    "review_provenance": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "status",
+          "reviewer_role",
+          "review_digest",
+          "reviewed_subject_digest"
+        ],
+        "properties": {
+          "scope": {
+            "enum": [
+              "privacy",
+              "security-boundary",
+              "ip",
+              "vulnerability"
+            ]
+          },
+          "status": {
+            "enum": [
+              "approved",
+              "not-applicable"
+            ]
+          },
+          "reviewer_role": {
+            "enum": [
+              "authorized-human",
+              "synthetic-reviewer"
+            ]
+          },
+          "review_digest": {
+            "$ref": "#/$defs/digest"
+          },
+          "reviewed_subject_digest": {
+            "$ref": "#/$defs/digest"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "scope": {
+                  "const": "privacy"
+                }
+              },
+              "required": [
+                "scope"
+              ]
+            },
+            "then": {
+              "properties": {
+                "status": {
+                  "const": "approved"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "scope": {
+                  "const": "security-boundary"
+                }
+              },
+              "required": [
+                "scope"
+              ]
+            },
+            "then": {
+              "properties": {
+                "status": {
+                  "const": "approved"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "review_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "privacy",
+        "security_boundary",
+        "ip",
+        "vulnerability",
+        "final_publication_approval"
+      ],
+      "properties": {
+        "privacy": {
+          "const": "approved"
+        },
+        "security_boundary": {
+          "const": "approved"
+        },
+        "ip": {
+          "enum": [
+            "approved",
+            "not-applicable"
+          ]
+        },
+        "vulnerability": {
+          "enum": [
+            "approved",
+            "not-applicable"
+          ]
+        },
+        "final_publication_approval": {
+          "enum": [
+            "required-not-provided",
+            "not-applicable-test-only"
+          ]
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "automation_permitted"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "candidate",
+            "test-only"
+          ]
+        },
+        "automation_permitted": {
+          "const": false
+        }
+      }
+    },
+    "bundle_digest": {
+      "$ref": "#/$defs/digest"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail",
+        "skip",
+        "unsupported",
+        "timeout",
+        "tool-error"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "artifact_status": {
+            "const": "export-candidate"
+          }
+        },
+        "required": [
+          "artifact_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "publication": {
+            "properties": {
+              "status": {
+                "const": "candidate"
+              }
+            }
+          },
+          "review_requirements": {
+            "properties": {
+              "final_publication_approval": {
+                "const": "required-not-provided"
+              }
+            }
+          },
+          "fixture_provenance": {
+            "type": "null"
+          },
+          "export_candidate_id": {
+            "pattern": "^PM-EXPORT-CANDIDATE-[0-9A-F]{32}$"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "artifact_status": {
+            "const": "test-only"
+          }
+        },
+        "required": [
+          "artifact_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "publication": {
+            "properties": {
+              "status": {
+                "const": "test-only"
+              }
+            }
+          },
+          "review_requirements": {
+            "properties": {
+              "final_publication_approval": {
+                "const": "not-applicable-test-only"
+              }
+            }
+          },
+          "fixture_provenance": {
+            "type": "object"
+          },
+          "export_candidate_id": {
+            "pattern": "^PM-EXPORT-CANDIDATE-[A-Z0-9-]{4,64}$"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -48,6 +48,19 @@ Never publish:
 - unpublished inventions or patent candidates
 - evidence whose origin or redaction cannot be established
 
+The draft [public Evidence export contract](docs/EVIDENCE_EXPORT.md) is the only
+defined metadata transfer boundary. It accepts one closed, staged candidate,
+requires private-side lifecycle `validated` or an exactly matching existing
+`sanitized` event, preserves result status, and emits at most a `sanitized`
+publication candidate.
+Its default human-reviewed mode is separate from the explicit, catalog-bound
+synthetic fixture mode; review scopes bind the complete candidate subject, and
+bundles bind the complete exporter implementation manifest. It does not read
+private repositories or grant publication approval. Exportable configuration
+shapes are closed per Evidence type, and the implementation binding covers the
+fixture trust catalog plus enforced CPython/JCS requirements; the listed OS
+target is not execution provenance.
+
 ## Related repositories
 
 - `itdojp/private-match-protocol` — public protocol specifications and conformance assets

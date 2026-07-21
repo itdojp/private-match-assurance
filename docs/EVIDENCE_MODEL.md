@@ -201,6 +201,32 @@ The private product repository should export a sanitized package containing:
 
 Raw logs and private source remain outside the public package.
 
+The versioned input, output, profile, status/lifecycle preservation, digest,
+omission, and review rules are specified in
+[`EVIDENCE_EXPORT.md`](EVIDENCE_EXPORT.md). Export success means only that a
+synthetic or human-reviewed metadata candidate reached lifecycle `sanitized`;
+it is not publication approval and does not change the Evidence result status.
+The input must already be `validated` (or already `sanitized` with an exact
+matching event); the exporter does not promote `collected` Evidence or claim
+that private-side validation occurred.
+Synthetic processing is a caller-selected, committed-catalog-only test mode;
+candidate input cannot self-select it. Every review scope binds the complete
+reviewable candidate subject, and the public bundle retains safe scope, role,
+status, review-artifact digest, and reviewed-subject digest. The status is
+cross-checked against the matching requirement and sanitization marker. A
+test-only bundle resolves its fixture ID to one manifest-bound catalog entry
+whose candidate digest must match, and all bundles require visible/bound/current
+profile-digest parity. Export bundles also bind the complete reviewed exporter
+implementation manifest rather than one source file. That manifest also binds
+the synthetic fixture authority catalog, closed configuration Schema,
+dependency locks, and enforced CPython/JCS requirements; its OS/architecture
+entry is a tested target, not execution provenance. Public validation is
+profile-required and recomputes the Evidence subject/output/exported-record and
+reviewed Protocol bindings. Real candidate identifiers are opaque 128-bit
+values, and the scanner covers all candidate-controlled public string surfaces.
+The reported sanitization checks are an exact set derived from the trusted
+programmatic or staged-file execution context, not caller-supplied claims.
+
 ## Reproducibility
 
 Publicly reproducible evidence should include inputs, commands, tool versions, and expected results. Evidence dependent on private data or infrastructure must be labeled `privately reproducible` or `not publicly reproducible`, with the reason stated.

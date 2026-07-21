@@ -1,0 +1,12 @@
+{
+  "embedded-secret": "embedded-secret.json",
+  "customer-identifier": "customer-identifier.json",
+  "internal-url": "internal-url.json",
+  "account-identifier": "account-identifier.json",
+  "private-repository-path": "private-repository-path.json",
+  "status-rewrite": "status-rewrite.json",
+  "missing-source-digest": "missing-source-digest.json",
+  "unapproved-vulnerability": "unapproved-vulnerability.json",
+  "unknown-field": "unknown-field.json",
+  "ambiguous-redaction": "ambiguous-redaction.json"
+}

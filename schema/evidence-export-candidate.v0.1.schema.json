@@ -1,0 +1,481 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/evidence-export-candidate-0.1.json",
+  "title": "Private Match private-side evidence export candidate v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "export_profile",
+    "export_candidate_id",
+    "review_subject_digest",
+    "evidence_record",
+    "source_binding",
+    "artifact_binding",
+    "protocol_binding",
+    "conformance_suite_binding",
+    "review_markers",
+    "sensitivity_markers",
+    "sanitization_event",
+    "requested_omissions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "enum": [
+        "test-only",
+        "export-candidate"
+      ]
+    },
+    "export_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "digest"
+      ],
+      "properties": {
+        "id": {
+          "const": "private-match-public-evidence-export"
+        },
+        "version": {
+          "const": "0.1"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "export_candidate_id": {
+      "type": "string",
+      "pattern": "^PM-EXPORT-CANDIDATE-[A-Z0-9-]{4,64}$"
+    },
+    "review_subject_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "evidence_record": {
+      "type": "object"
+    },
+    "source_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "private_source_revision_digest",
+        "source_evidence_set_digest",
+        "source_evidence_record_digest",
+        "original_status",
+        "original_lifecycle"
+      ],
+      "properties": {
+        "private_source_revision_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "source_evidence_set_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "source_evidence_record_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "original_status": {
+          "$ref": "#/$defs/status"
+        },
+        "original_lifecycle": {
+          "enum": [
+            "validated",
+            "sanitized"
+          ]
+        }
+      }
+    },
+    "artifact_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject_artifact_digest",
+        "evidence_output_digest"
+      ],
+      "properties": {
+        "subject_artifact_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "evidence_output_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "protocol_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_profile",
+        "protocol_version",
+        "source_revision_digest",
+        "state_machine_digest",
+        "message_registry_digest"
+      ],
+      "properties": {
+        "protocol_profile": {
+          "const": "private-match-core"
+        },
+        "protocol_version": {
+          "const": "0.1"
+        },
+        "source_revision_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "state_machine_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "message_registry_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "conformance_suite_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identifier",
+        "version",
+        "digest"
+      ],
+      "properties": {
+        "identifier": {
+          "const": "private-match-core-message-conformance"
+        },
+        "version": {
+          "const": "0.1"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "review_markers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "privacy",
+        "security_boundary",
+        "ip",
+        "vulnerability"
+      ],
+      "properties": {
+        "privacy": {
+          "$ref": "#/$defs/requiredReview"
+        },
+        "security_boundary": {
+          "$ref": "#/$defs/requiredReview"
+        },
+        "ip": {
+          "$ref": "#/$defs/ipReview"
+        },
+        "vulnerability": {
+          "$ref": "#/$defs/vulnerabilityReview"
+        }
+      }
+    },
+    "sensitivity_markers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contains_customer_or_personal_data",
+        "contains_secrets_or_credentials",
+        "contains_private_locator",
+        "contains_raw_vulnerability_detail",
+        "unpublished_invention",
+        "patent_candidate"
+      ],
+      "properties": {
+        "contains_customer_or_personal_data": {
+          "const": false
+        },
+        "contains_secrets_or_credentials": {
+          "const": false
+        },
+        "contains_private_locator": {
+          "const": false
+        },
+        "contains_raw_vulnerability_detail": {
+          "const": false
+        },
+        "unpublished_invention": {
+          "const": false
+        },
+        "patent_candidate": {
+          "const": false
+        }
+      }
+    },
+    "sanitization_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recorded_at",
+        "review_digest"
+      ],
+      "properties": {
+        "recorded_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "review_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "requested_omissions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "rule_id",
+          "human_review_digest"
+        ],
+        "properties": {
+          "path": {
+            "const": "$.evidence_record.public_artifacts"
+          },
+          "rule_id": {
+            "const": "OMIT-PUBLIC-ARTIFACTS"
+          },
+          "human_review_digest": {
+            "$ref": "#/$defs/digest"
+          }
+        }
+      },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail",
+        "skip",
+        "unsupported",
+        "timeout",
+        "tool-error"
+      ]
+    },
+    "requiredReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "review_scope",
+        "reviewed_subject_digest",
+        "status",
+        "reviewer_role",
+        "review_digest"
+      ],
+      "properties": {
+        "review_scope": {
+          "enum": [
+            "privacy",
+            "security-boundary",
+            "ip",
+            "vulnerability"
+          ]
+        },
+        "reviewed_subject_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "status": {
+          "const": "approved"
+        },
+        "reviewer_role": {
+          "enum": [
+            "authorized-human",
+            "synthetic-reviewer"
+          ]
+        },
+        "review_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "ipReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "review_scope",
+        "reviewed_subject_digest",
+        "status",
+        "reviewer_role",
+        "review_digest",
+        "unpublished_invention",
+        "patent_candidate"
+      ],
+      "properties": {
+        "review_scope": {
+          "enum": [
+            "privacy",
+            "security-boundary",
+            "ip",
+            "vulnerability"
+          ]
+        },
+        "reviewed_subject_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "status": {
+          "enum": [
+            "approved",
+            "not-applicable"
+          ]
+        },
+        "reviewer_role": {
+          "enum": [
+            "authorized-human",
+            "synthetic-reviewer"
+          ]
+        },
+        "review_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "unpublished_invention": {
+          "const": false
+        },
+        "patent_candidate": {
+          "const": false
+        }
+      }
+    },
+    "vulnerabilityReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "review_scope",
+        "reviewed_subject_digest",
+        "status",
+        "reviewer_role",
+        "review_digest",
+        "contains_vulnerability_information",
+        "embargo_status",
+        "remediation_approved"
+      ],
+      "properties": {
+        "review_scope": {
+          "enum": [
+            "privacy",
+            "security-boundary",
+            "ip",
+            "vulnerability"
+          ]
+        },
+        "reviewed_subject_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "status": {
+          "enum": [
+            "approved",
+            "not-applicable"
+          ]
+        },
+        "reviewer_role": {
+          "enum": [
+            "authorized-human",
+            "synthetic-reviewer"
+          ]
+        },
+        "review_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "contains_vulnerability_information": {
+          "type": "boolean"
+        },
+        "embargo_status": {
+          "const": "not-embargoed"
+        },
+        "remediation_approved": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "contains_vulnerability_information": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "approved"
+              },
+              "remediation_approved": {
+                "const": true
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "remediation_approved": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "artifact_status": {
+            "const": "export-candidate"
+          }
+        },
+        "required": [
+          "artifact_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "export_candidate_id": {
+            "pattern": "^PM-EXPORT-CANDIDATE-[0-9A-F]{32}$"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "artifact_status": {
+            "const": "test-only"
+          }
+        },
+        "required": [
+          "artifact_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "export_candidate_id": {
+            "pattern": "^PM-EXPORT-CANDIDATE-[A-Z0-9-]{4,64}$"
+          }
+        }
+      }
+    }
+  ]
+}

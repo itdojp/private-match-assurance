@@ -1,0 +1,492 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/evidence-export-profile-0.1.json",
+  "title": "Private Match public Evidence export profile v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "profile_version",
+    "profile_digest",
+    "input_contract",
+    "output_contract",
+    "allowed_candidate_fields",
+    "allowed_evidence_fields",
+    "configuration_contracts",
+    "allowed_output_fields",
+    "prohibited_field_names",
+    "prohibited_value_classes",
+    "allowed_omission_rules",
+    "status_preservation",
+    "lifecycle_rule",
+    "path_policy",
+    "identifier_policy",
+    "vulnerability_ip_policy",
+    "reviewed_protocol_binding",
+    "required_sanitization_checks",
+    "serialization"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "profile_id": {
+      "const": "private-match-public-evidence-export"
+    },
+    "profile_version": {
+      "const": "0.1"
+    },
+    "profile_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "input_contract": {
+      "const": "evidence-export-candidate.v0.1"
+    },
+    "output_contract": {
+      "const": "public-evidence-export.v0.1"
+    },
+    "allowed_candidate_fields": {
+      "$ref": "#/$defs/stringSet"
+    },
+    "allowed_evidence_fields": {
+      "$ref": "#/$defs/stringSet"
+    },
+    "configuration_contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conformance",
+        "test",
+        "model-check",
+        "provenance",
+        "review"
+      ],
+      "properties": {
+        "conformance": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/configurationContract"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "private-match-evidence-export-configuration/conformance"
+                }
+              }
+            }
+          ]
+        },
+        "test": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/configurationContract"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "private-match-evidence-export-configuration/test"
+                }
+              }
+            }
+          ]
+        },
+        "model-check": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/configurationContract"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "private-match-evidence-export-configuration/model-check"
+                }
+              }
+            }
+          ]
+        },
+        "provenance": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/configurationContract"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "private-match-evidence-export-configuration/provenance"
+                }
+              }
+            }
+          ]
+        },
+        "review": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/configurationContract"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "private-match-evidence-export-configuration/review"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "allowed_output_fields": {
+      "$ref": "#/$defs/stringSet"
+    },
+    "prohibited_field_names": {
+      "$ref": "#/$defs/stringSet"
+    },
+    "prohibited_value_classes": {
+      "$ref": "#/$defs/stringSet"
+    },
+    "allowed_omission_rules": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "rule_id",
+          "category",
+          "action"
+        ],
+        "properties": {
+          "path": {
+            "const": "$.evidence_record.public_artifacts"
+          },
+          "rule_id": {
+            "const": "OMIT-PUBLIC-ARTIFACTS"
+          },
+          "category": {
+            "const": "optional-public-reference"
+          },
+          "action": {
+            "const": "omitted-by-profile"
+          }
+        }
+      }
+    },
+    "status_preservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "allowed"
+      ],
+      "properties": {
+        "mode": {
+          "const": "exact"
+        },
+        "allowed": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "pass",
+              "fail",
+              "skip",
+              "unsupported",
+              "timeout",
+              "tool-error"
+            ]
+          },
+          "minItems": 6,
+          "maxItems": 6,
+          "uniqueItems": true
+        }
+      }
+    },
+    "lifecycle_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximum_output",
+        "allowed_input",
+        "output",
+        "publication_forbidden"
+      ],
+      "properties": {
+        "maximum_output": {
+          "const": "sanitized"
+        },
+        "allowed_input": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "validated",
+              "sanitized"
+            ]
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "output": {
+          "const": "sanitized"
+        },
+        "publication_forbidden": {
+          "const": true
+        }
+      }
+    },
+    "path_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "explicit_single_file",
+        "relative_to_staging_root",
+        "recursive_scan",
+        "symlinks",
+        "maximum_input_bytes"
+      ],
+      "properties": {
+        "explicit_single_file": {
+          "const": true
+        },
+        "relative_to_staging_root": {
+          "const": true
+        },
+        "recursive_scan": {
+          "const": false
+        },
+        "symlinks": {
+          "const": false
+        },
+        "maximum_input_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 1048576
+        }
+      }
+    },
+    "identifier_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "private_revision",
+        "customer_or_personal",
+        "private_locator",
+        "export_candidate_id",
+        "test_fixture_id",
+        "exporter_generates_identifier"
+      ],
+      "properties": {
+        "private_revision": {
+          "const": "digest-only"
+        },
+        "customer_or_personal": {
+          "const": "reject"
+        },
+        "private_locator": {
+          "const": "reject"
+        },
+        "export_candidate_id": {
+          "const": "opaque-128-bit"
+        },
+        "test_fixture_id": {
+          "const": "catalog-bound-synthetic"
+        },
+        "exporter_generates_identifier": {
+          "const": false
+        }
+      }
+    },
+    "vulnerability_ip_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "embargoed",
+        "patent_candidate",
+        "raw_vulnerability_detail",
+        "unpublished_invention"
+      ],
+      "properties": {
+        "embargoed": {
+          "const": "reject"
+        },
+        "patent_candidate": {
+          "const": "reject"
+        },
+        "raw_vulnerability_detail": {
+          "const": "reject"
+        },
+        "unpublished_invention": {
+          "const": "reject"
+        }
+      }
+    },
+    "reviewed_protocol_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_profile",
+        "protocol_version",
+        "merge_commit",
+        "source_revision_digest",
+        "state_machine_digest",
+        "message_registry_digest",
+        "conformance_suite_digest"
+      ],
+      "properties": {
+        "protocol_profile": {
+          "const": "private-match-core"
+        },
+        "protocol_version": {
+          "const": "0.1"
+        },
+        "merge_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "source_revision_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "state_machine_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "message_registry_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "conformance_suite_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "serialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "encoding",
+        "implementation",
+        "implementation_version",
+        "current_time_insertion",
+        "random_identifier_generation"
+      ],
+      "properties": {
+        "format": {
+          "const": "RFC8785"
+        },
+        "encoding": {
+          "const": "UTF-8"
+        },
+        "implementation": {
+          "const": "rfc8785-python"
+        },
+        "implementation_version": {
+          "const": "0.1.4"
+        },
+        "current_time_insertion": {
+          "const": false
+        },
+        "random_identifier_generation": {
+          "const": false
+        }
+      }
+    },
+    "required_sanitization_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "common",
+        "file-interface",
+        "test-fixture"
+      ],
+      "properties": {
+        "common": {
+          "type": "array",
+          "minItems": 15,
+          "maxItems": 15,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sanitizationCheck"
+          }
+        },
+        "file-interface": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sanitizationCheck"
+          }
+        },
+        "test-fixture": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sanitizationCheck"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "configurationContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "digest"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^private-match-evidence-export-configuration/(?:test|conformance|model-check|provenance|review)$"
+        },
+        "version": {
+          "const": "0.1"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "stringSet": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "sanitizationCheck": {
+      "type": "string",
+      "enum": [
+        "allowlist",
+        "candidate-schema",
+        "closed-configuration",
+        "digest-bindings",
+        "evidence-schema",
+        "export-profile-binding",
+        "exporter-implementation-manifest",
+        "fixture-entry-binding",
+        "input-size",
+        "lifecycle-limit",
+        "path-boundary",
+        "prohibited-field-scan",
+        "prohibited-value-scan",
+        "review-gates",
+        "review-status-parity",
+        "review-subject-binding",
+        "status-preservation",
+        "strict-input-parse",
+        "trusted-execution-mode"
+      ]
+    }
+  }
+}

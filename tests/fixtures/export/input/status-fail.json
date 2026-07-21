@@ -1,0 +1,141 @@
+{
+  "schema_version": "0.1",
+  "artifact_status": "test-only",
+  "export_profile": {
+    "id": "private-match-public-evidence-export",
+    "version": "0.1",
+    "digest": "sha256:546a139d100951c3836a454115e3dbf6ee1effef973e129cb82ff60a9fcf128d"
+  },
+  "export_candidate_id": "PM-EXPORT-CANDIDATE-0002",
+  "evidence_record": {
+    "schema_version": "0.1",
+    "record_type": "evidence",
+    "id": "PM-EVIDENCE-1002",
+    "type": "test",
+    "status": "fail",
+    "lifecycle": "validated",
+    "lifecycle_history": [
+      {
+        "state": "collected",
+        "recorded_at": "2026-07-21T01:00:00Z",
+        "review_digest": null
+      },
+      {
+        "state": "validated",
+        "recorded_at": "2026-07-21T01:01:00Z",
+        "review_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    ],
+    "subject": {
+      "type": "protocol",
+      "identifier": "synthetic-public-subject",
+      "version": "0.1",
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "input_digests": [
+      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ],
+    "output_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "producer": {
+      "type": "local-runner",
+      "identity": "synthetic-fixture-runner"
+    },
+    "tool": {
+      "name": "synthetic-fixture-tool",
+      "version": "0.1",
+      "source": "reviewed-public-fixture"
+    },
+    "started_at": "2026-07-21T01:00:00Z",
+    "completed_at": "2026-07-21T01:00:30Z",
+    "execution": {
+      "ran": true,
+      "required": true,
+      "reason": null
+    },
+    "configuration": {
+      "test_suite": "synthetic-export",
+      "case_count": 3
+    },
+    "model_check": null,
+    "summary": "Synthetic fail evidence retained without status conversion.",
+    "private_source_metadata": null,
+    "public_artifacts": [
+      "reports/synthetic-evidence.json"
+    ],
+    "limitations": [
+      "Synthetic fixture only; no production or customer evidence."
+    ]
+  },
+  "source_binding": {
+    "private_source_revision_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "source_evidence_set_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "source_evidence_record_digest": "sha256:1fac7d2fc47d8056427ff75bb68acdbf93ef0c23ca8bc5fa7a0db38029e8b513",
+    "original_status": "fail",
+    "original_lifecycle": "validated"
+  },
+  "artifact_binding": {
+    "subject_artifact_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "evidence_output_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "protocol_binding": {
+    "protocol_profile": "private-match-core",
+    "protocol_version": "0.1",
+    "source_revision_digest": "sha256:dba1e8d6efc6083c62c2e4b44f6e12eaa4f5c6cb5ff0cd047a9ad3df0306a208",
+    "state_machine_digest": "sha256:42e63b8a1f413e932e46370aae5fa0d972f3ab71d93efe08557472b4c7066fe8",
+    "message_registry_digest": "sha256:2ff1685ca4325a0ff3bd49c7a411cd7f0857add6215c2f285097bdf40dcbc2b6"
+  },
+  "conformance_suite_binding": {
+    "identifier": "private-match-core-message-conformance",
+    "version": "0.1",
+    "digest": "sha256:19d2218c11c6ac7ba1d2f0884ba9e3c79cbd1264bd3ef682e543bcb9a63ccf0f"
+  },
+  "review_markers": {
+    "privacy": {
+      "status": "approved",
+      "reviewer_role": "synthetic-reviewer",
+      "review_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "review_scope": "privacy",
+      "reviewed_subject_digest": "sha256:8fc52aedc0e53d7a2be7a0f80f4aff743b8c1353e979b0dbbe2eec14bde4b744"
+    },
+    "security_boundary": {
+      "status": "approved",
+      "reviewer_role": "synthetic-reviewer",
+      "review_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "review_scope": "security-boundary",
+      "reviewed_subject_digest": "sha256:8fc52aedc0e53d7a2be7a0f80f4aff743b8c1353e979b0dbbe2eec14bde4b744"
+    },
+    "ip": {
+      "status": "not-applicable",
+      "reviewer_role": "synthetic-reviewer",
+      "review_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "unpublished_invention": false,
+      "patent_candidate": false,
+      "review_scope": "ip",
+      "reviewed_subject_digest": "sha256:8fc52aedc0e53d7a2be7a0f80f4aff743b8c1353e979b0dbbe2eec14bde4b744"
+    },
+    "vulnerability": {
+      "status": "not-applicable",
+      "reviewer_role": "synthetic-reviewer",
+      "review_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "contains_vulnerability_information": false,
+      "embargo_status": "not-embargoed",
+      "remediation_approved": false,
+      "review_scope": "vulnerability",
+      "reviewed_subject_digest": "sha256:8fc52aedc0e53d7a2be7a0f80f4aff743b8c1353e979b0dbbe2eec14bde4b744"
+    }
+  },
+  "sensitivity_markers": {
+    "contains_customer_or_personal_data": false,
+    "contains_secrets_or_credentials": false,
+    "contains_private_locator": false,
+    "contains_raw_vulnerability_detail": false,
+    "unpublished_invention": false,
+    "patent_candidate": false
+  },
+  "sanitization_event": {
+    "recorded_at": "2026-07-21T01:02:00Z",
+    "review_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "requested_omissions": [],
+  "review_subject_digest": "sha256:8fc52aedc0e53d7a2be7a0f80f4aff743b8c1353e979b0dbbe2eec14bde4b744"
+}

@@ -22,6 +22,26 @@ python -m pip install --require-hashes -r requirements-build.txt
 python -m pip install --require-hashes --no-build-isolation -r requirements-dev.txt
 ```
 
+The supported public CI target is CPython 3.12 on GitHub-hosted Ubuntu x86-64.
+`requirements-build.txt` includes the build backend; `requirements-dev.txt`
+contains direct and transitive validation dependencies with hashes. Regenerate
+the development lock from `requirements-dev.in` with the reviewed `uv` release:
+
+```console
+uv pip compile \
+  --python-version 3.12 \
+  --python-platform x86_64-unknown-linux-gnu \
+  --generate-hashes \
+  requirements-dev.in \
+  --output-file requirements-dev.txt
+```
+
+Run the command twice and require byte-identical output before review. A lock
+renewal must recheck dependency versions, licenses, hashes, Python support, and
+RFC 8785 vectors. Other Python versions and platforms are not claimed by this
+lock; create and review a separate platform lock rather than weakening
+`--require-hashes`.
+
 Run regression tests:
 
 ```bash
@@ -107,6 +127,19 @@ Model-check evidence must provide typed `model_check` data containing:
 - whether exploration completed within the declared bounds
 
 Evidence of every other type uses `model_check: null`.
+
+The public export profile adds a separate closed configuration contract for
+the exportable `test`, `conformance`, `model-check`, `provenance`, and `review`
+types. The profile binds each type to the configuration contract ID, version,
+and Schema digest. Nested unknown fields, wrong scalar types, malformed
+identifier/version objects, and unlisted Evidence types are rejected. This
+does not change the open `configuration` field in the general Evidence Schema
+0.1 or reinterpret existing repository records.
+
+Evidence offered to the public exporter must already be `validated`, or be
+`sanitized` with an exact matching final sanitization event. General Evidence
+may still exist at `collected`, but the exporter returns
+`lifecycle-not-validated` and never synthesizes the missing validation event.
 
 `private_source_metadata` is either null or a digest-bound allowlisted object. It cannot contain
 repository names or URLs, hostnames, account identifiers, filesystem paths, or other private
@@ -225,3 +258,51 @@ This lane does not:
 - inspect private source or raw evidence
 - sign an evidence manifest
 - approve publication
+
+## Public Evidence export validation
+
+The export contracts are strict JSON Schema Draft 2020-12 documents. The
+exporter performs additional status, lifecycle, digest, allowlist, path,
+sensitivity, and review-marker checks before constructing a bundle. A generated
+bundle can be checked together with the existing repository records:
+
+```console
+python scripts/export_public_evidence.py \
+  --mode test-fixture \
+  --staging-root tests/fixtures/export/input \
+  --input protocol-conformance.json \
+  --output-dir .codex-local/tmp/export
+python scripts/validate_assurance.py \
+  --root . \
+  --report-dir .codex-local/tmp/report \
+  --export-profile profiles/public-evidence-export.v0.1.json \
+  --export-mode test-fixture \
+  --export-bundle .codex-local/tmp/export/public-evidence-export.v0.1.json
+```
+
+Supplying any `--export-bundle` makes `--export-profile` semantically
+mandatory. The profile must be a repository-contained regular non-symlink file
+whose strict JSON, Schema, ID/version, self-digest, and manifest binding all
+validate. Missing or malformed profiles fail closed with stable
+`export-profile-*` findings; ordinary Assurance-record validation without an
+export bundle remains unchanged.
+
+Default validation treats a bundle as a real `export-candidate`. Synthetic
+validation requires explicit `test-fixture` mode, the exact committed staging
+root, one unique catalogued fixture ID whose candidate digest matches the
+bundle, the manifest-bound catalog digest, and test-only review/publication
+markers. The expected bundle remains a separate byte-for-byte CI oracle so that
+the fixture catalog does not create a catalog/manifest/bundle digest cycle.
+Validation also requires exact review-status parity across provenance,
+requirements, and sanitization-report markers, plus equality of the visible,
+digest-bound, and current export-profile digests. Both public validators use
+the same semantic binding helper. They also recompute the embedded Evidence
+subject/output/exported-record bindings and compare every Protocol digest with
+the reviewed profile pin. The check report must exactly equal the profile's
+closed check set for the declared mode and programmatic or staged-file
+interface. Real candidate identifiers use the closed opaque 128-bit form, and
+all candidate-controlled public strings receive the same defense-in-depth
+scan. Only committed synthetic fixtures are used by
+public CI. Generated bundles are not uploaded as workflow artifacts. See
+[`EVIDENCE_EXPORT.md`](EVIDENCE_EXPORT.md) for the trust and publication
+boundary.

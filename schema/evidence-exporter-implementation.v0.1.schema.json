@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/evidence-exporter-implementation-0.1.json",
+  "title": "Private Match Evidence exporter implementation manifest v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "exporter",
+    "source_files",
+    "schema_files",
+    "evidence_schema_reference",
+    "dependency_lock_files",
+    "test_trust_artifacts",
+    "runtime_requirements",
+    "tested_target",
+    "expected_export_profile_digest",
+    "implementation_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "artifact_status": {"const": "draft"},
+    "exporter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "version"],
+      "properties": {
+        "identity": {"const": "private-match-assurance/evidence-exporter"},
+        "version": {"const": "0.1"}
+      }
+    },
+    "source_files": {"$ref": "#/$defs/fileSet"},
+    "schema_files": {"$ref": "#/$defs/fileSet"},
+    "evidence_schema_reference": {"$ref": "#/$defs/file"},
+    "dependency_lock_files": {"$ref": "#/$defs/fileSet"},
+    "test_trust_artifacts": {"$ref": "#/$defs/fileSet"},
+    "runtime_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python_implementation", "python_major_minor", "canonicalization", "canonicalization_package", "canonicalization_package_version"],
+      "properties": {
+        "python_implementation": {"const": "CPython"},
+        "python_major_minor": {"const": "3.12"},
+        "canonicalization": {"const": "RFC 8785"},
+        "canonicalization_package": {"const": "rfc8785"},
+        "canonicalization_package_version": {"const": "0.1.4"}
+      }
+    },
+    "tested_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operating_system", "architecture", "execution_provenance"],
+      "properties": {
+        "operating_system": {"const": "Ubuntu 24.04"},
+        "architecture": {"const": "x86_64"},
+        "execution_provenance": {"const": false}
+      }
+    },
+    "expected_export_profile_digest": {"$ref": "#/$defs/digest"},
+    "implementation_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$"
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest"],
+      "properties": {
+        "path": {"$ref": "#/$defs/path"},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "fileSet": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/file"}
+    }
+  }
+}

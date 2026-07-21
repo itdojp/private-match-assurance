@@ -148,6 +148,37 @@ copy. Both public validators therefore require the visible digest, binding
 copy, and current reviewed profile digest to be identical while preserving the
 closed profile ID/version.
 
+The profile is a required trust input, not an optional validation aid. Public
+bundle validation fails before success if the repository-contained profile is
+missing, symlinked, malformed, digest-invalid, unsupported, or inconsistent
+with the implementation manifest. Structure-only validation remains internal
+and is not used by the CLI, CI, exporter, or repository validator.
+
+### Semantic candidate labels versus opaque identifiers
+
+A free-form candidate ID can leak customer, tenant, account, repository, or
+personal context even when the Evidence record is clean. Real candidates
+therefore carry a producer-supplied opaque 128-bit hexadecimal identifier.
+Synthetic IDs remain deterministic only under fixture mode and exact catalog
+binding. The supplemental scanner covers the entire candidate-controlled public
+surface; the closed Schemas and review process remain the primary defenses.
+
+### Claimed checks versus trusted execution context
+
+A caller-provided check list can falsely claim file-boundary work during an
+in-memory transform. The profile now defines a closed common, file-interface,
+and fixture check catalog. The exporter derives the sorted exact set from a
+trusted programmatic or staged-file execution context after each interface
+check succeeds, and both public validators recompute the expected set. Unknown,
+missing, duplicated, or inapplicable checks fail closed.
+
+### Reported digest success versus complete recomputation
+
+The sanitization report is not accepted as proof of binding. Both validators
+recompute the Evidence subject, output, and exported-record relationships and
+compare every Protocol binding against the current profile. Only then may the
+closed report retain `digest_binding_result: pass`.
+
 ### Single source-file digest versus implementation manifest
 
 Digesting only the CLI omits helper code, validators, Schemas, the Evidence

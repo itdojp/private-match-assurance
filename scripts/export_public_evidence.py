@@ -4,18 +4,13 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import copy
 import dataclasses
-import ipaddress
 import os
-import re
 import stat
 import sys
-import unicodedata
 from pathlib import Path
 from typing import Any, Iterable
-from urllib.parse import unquote, urlsplit
 
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -31,6 +26,18 @@ try:
         ImplementationManifestError,
         manifest_file_digest,
         verify_implementation_manifest,
+    )
+    from public_export_policy import (
+        EXPORT_CANDIDATE_MODE,
+        PROGRAMMATIC_INTERFACE,
+        STAGED_FILE_INTERFACE,
+        TEST_FIXTURE_MODE,
+        PublicExportPolicyError,
+        candidate_identifier_is_valid,
+        compute_profile_digest,
+        expected_sanitization_checks,
+        load_required_export_profile,
+        scan_public_strings,
     )
     from validate_assurance import (
         ExportArtifactError,
@@ -53,6 +60,18 @@ except ImportError:  # pragma: no cover - package import during unit tests
         manifest_file_digest,
         verify_implementation_manifest,
     )
+    from scripts.public_export_policy import (
+        EXPORT_CANDIDATE_MODE,
+        PROGRAMMATIC_INTERFACE,
+        STAGED_FILE_INTERFACE,
+        TEST_FIXTURE_MODE,
+        PublicExportPolicyError,
+        candidate_identifier_is_valid,
+        compute_profile_digest,
+        expected_sanitization_checks,
+        load_required_export_profile,
+        scan_public_strings,
+    )
     from scripts.validate_assurance import (
         ExportArtifactError,
         load_export_fixture_catalog,
@@ -65,15 +84,12 @@ except ImportError:  # pragma: no cover - package import during unit tests
 
 VERSION = "0.1"
 DEFAULT_INPUT_LIMIT = 262_144
-PROFILE_DOMAIN = "private-match-evidence-export-profile/v0.1"
 CANDIDATE_DOMAIN = "private-match-evidence-export-candidate/v0.1"
 REVIEW_SUBJECT_DOMAIN = "private-match-evidence-export-review-subject/v0.1"
 SOURCE_EVIDENCE_DOMAIN = "private-match-source-evidence-record/v0.1"
 EXPORTED_EVIDENCE_DOMAIN = "private-match-exported-evidence/v0.1"
 BUNDLE_DOMAIN = "private-match-public-evidence-bundle/v0.1"
 OUTPUT_FILENAME = "public-evidence-export.v0.1.json"
-EXPORT_CANDIDATE_MODE = "export-candidate"
-TEST_FIXTURE_MODE = "test-fixture"
 FIXTURE_STAGING_ROOT = Path("tests/fixtures/export/input")
 REVIEW_SCOPES = {
     "privacy": "privacy",
@@ -101,6 +117,7 @@ EXPECTED_PROFILE_FIELDS = {
     "identifier_policy",
     "vulnerability_ip_policy",
     "reviewed_protocol_binding",
+    "required_sanitization_checks",
     "serialization",
 }
 
@@ -115,6 +132,31 @@ class ExportError(Exception):
 
     def __str__(self) -> str:
         return f"export: error [{self.code}] {self.path}: {self.detail}"
+
+
+@dataclasses.dataclass(frozen=True)
+class ExportExecutionContext:
+    """Closed, trusted execution context; callers cannot provide check names."""
+
+    mode: str
+    input_interface: str
+
+    def __post_init__(self) -> None:
+        if self.mode not in {EXPORT_CANDIDATE_MODE, TEST_FIXTURE_MODE}:
+            raise ValueError("unsupported export mode")
+        if self.input_interface not in {
+            PROGRAMMATIC_INTERFACE,
+            STAGED_FILE_INTERFACE,
+        }:
+            raise ValueError("unsupported export input interface")
+
+    @classmethod
+    def programmatic(cls, mode: str) -> ExportExecutionContext:
+        return cls(mode=mode, input_interface=PROGRAMMATIC_INTERFACE)
+
+    @classmethod
+    def staged_file(cls, mode: str) -> ExportExecutionContext:
+        return cls(mode=mode, input_interface=STAGED_FILE_INTERFACE)
 
 
 def _reject(code: str, path: str, detail: str) -> None:
@@ -231,9 +273,7 @@ def resolve_output_dir(root: Path, output_name: Path) -> Path:
 
 
 def profile_digest(profile: dict[str, Any]) -> str:
-    material = copy.deepcopy(profile)
-    material.pop("profile_digest", None)
-    return domain_digest(PROFILE_DOMAIN, material)
+    return compute_profile_digest(profile)
 
 
 def bundle_digest(bundle: dict[str, Any]) -> str:
@@ -346,6 +386,12 @@ def _load_implementation_manifest(
     )
     if not isinstance(value, dict):
         _reject("implementation-manifest", "$.exporter", "manifest must be an object")
+    if value.get("expected_export_profile_digest") != profile["profile_digest"]:
+        _reject(
+            "export-profile-binding",
+            "$.exporter",
+            "implementation manifest does not bind the current export profile",
+        )
     try:
         verify_implementation_manifest(value, root, profile["profile_digest"])
     except ImplementationManifestError as error:
@@ -359,46 +405,11 @@ def _load_implementation_manifest(
 
 def _load_profile(path: Path) -> dict[str, Any]:
     try:
-        profile = strict_loads(path.read_bytes(), max_bytes=262_144)
-    except (OSError, CanonicalJSONError) as error:
-        raise ExportError(
-            "profile-parse", "$.profile", "profile is not strict JSON"
-        ) from error
-    if not isinstance(profile, dict) or set(profile) != EXPECTED_PROFILE_FIELDS:
-        _reject(
-            "profile-allowlist",
-            "$.profile",
-            "profile fields do not match the reviewed contract",
-        )
-    schema_path = (
-        path.parent.parent / "schema" / "evidence-export-profile.v0.1.schema.json"
-    )
-    try:
-        schema = strict_loads(schema_path.read_bytes(), max_bytes=1_048_576)
-    except (OSError, CanonicalJSONError) as error:
-        raise ExportError(
-            "profile-schema", "$.profile", "profile schema is unavailable"
-        ) from error
-    if not isinstance(schema, dict):
-        _reject("profile-schema", "$.profile", "profile schema root must be an object")
-    _validate_schema(profile, schema, code="profile-schema")
-    expected = profile_digest(profile)
-    if profile.get("profile_digest") != expected:
-        _reject(
-            "profile-digest",
-            "$.profile.profile_digest",
-            "profile digest does not match",
-        )
-    if (
-        profile.get("profile_id") != "private-match-public-evidence-export"
-        or profile.get("profile_version") != VERSION
-    ):
-        _reject("profile-version", "$.profile", "unsupported export profile")
-    serialization = profile.get("serialization")
-    if not isinstance(serialization, dict) or serialization.get("format") != "RFC8785":
-        _reject(
-            "profile-serialization", "$.profile.serialization", "RFC 8785 is required"
-        )
+        profile = load_required_export_profile(path.parent.parent, path)
+    except PublicExportPolicyError as error:
+        raise ExportError(error.code, "$.profile", str(error)) from error
+    if set(profile) != EXPECTED_PROFILE_FIELDS:
+        _reject("export-profile-schema", "$.profile", "profile fields do not match")
     return profile
 
 
@@ -413,125 +424,6 @@ def _iter_leaves(value: Any, path: str = "$") -> Iterable[tuple[str, str, str | 
             yield from _iter_leaves(child, f"{path}[{index}]")
     elif isinstance(value, str):
         yield path, "", value
-
-
-_SECRET_PATTERNS = (
-    re.compile(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----", re.I),
-    re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"),
-    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{10,}\b", re.I),
-    re.compile(r"\beyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\b"),
-    re.compile(r"\b(?:password|passwd|secret|token|client_secret)\s*[:=]\s*\S+", re.I),
-    re.compile(r"[a-z][a-z0-9+.-]*://[^\s/:@]+:[^\s/@]+@", re.I),
-)
-_EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![\w.-])")
-_PHONE = re.compile(r"(?<!\d)(?:\+\d{1,3}[ .-]?)?(?:\d[ .-]?){9,14}(?!\d)")
-_WINDOWS_PATH = re.compile(
-    r"(?:^|\s)[A-Za-z]:\\(?:Users|Windows|ProgramData|private|home)\\", re.I
-)
-_POSIX_PATH = re.compile(
-    r"(?:^|[\s('])/(?:home|Users|root|etc|var|srv|opt|mnt|private)/", re.I
-)
-_ACCOUNT_ID = re.compile(r"(?<![0-9a-f])\d{12}(?![0-9a-f])", re.I)
-_STRUCTURED_IDENTIFIER = re.compile(
-    r"\b(?:account|customer|cust|project|subscription|tenant)[-_][A-Za-z0-9]{4,}\b",
-    re.I,
-)
-_CONTROL_OR_BIDI = re.compile(
-    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]"
-)
-_PRIVATE_LOCATOR = re.compile(
-    r"(?:private-match-product|git@|ssh://|(?:^|/)\.git(?:/|$))", re.I
-)
-_VULNERABILITY_DETAIL = re.compile(
-    r"(?:exploit\s+(?:code|command)|reproduction\s+command|vulnerable\s+private\s+endpoint|attack\s+prerequisite)",
-    re.I,
-)
-
-
-def _decoded_forms(value: str) -> list[str]:
-    forms = [value, unicodedata.normalize("NFKC", value), unquote(value)]
-    compact = value.strip()
-    if (
-        8 <= len(compact) <= 8192
-        and len(compact) % 4 == 0
-        and re.fullmatch(r"[A-Za-z0-9+/=]+", compact)
-    ):
-        try:
-            decoded = base64.b64decode(compact, validate=True).decode(
-                "utf-8", errors="strict"
-            )
-        except (ValueError, UnicodeError):
-            pass
-        else:
-            forms.append(decoded)
-    return list(dict.fromkeys(forms))
-
-
-def _is_nonpublic_host(text: str) -> bool:
-    candidates: set[str] = set()
-    stripped = text.strip("[](){}<>,.;'\" ")
-    if "://" in stripped:
-        try:
-            host = urlsplit(stripped).hostname
-        except ValueError:
-            host = None
-        if host:
-            candidates.add(host)
-    for token in re.findall(
-        r"\[?[0-9a-fA-F:.]+\]?|[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+|localhost", stripped
-    ):
-        candidates.add(token.strip("[]"))
-    for host in candidates:
-        lowered = host.lower().rstrip(".")
-        if lowered == "localhost" or lowered.endswith(
-            (".localhost", ".internal", ".local", ".lan")
-        ):
-            return True
-        if lowered in {"metadata.google.internal", "instance-data"}:
-            return True
-        try:
-            address = ipaddress.ip_address(lowered)
-        except ValueError:
-            continue
-        if not address.is_global:
-            return True
-    return False
-
-
-def _sensitive_value_class(value: str) -> str | None:
-    if re.fullmatch(r"sha256:[0-9a-f]{64}", value) or re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z", value
-    ):
-        return None
-    for form in _decoded_forms(value):
-        if _CONTROL_OR_BIDI.search(form):
-            return "control-or-bidi-character"
-        if any(pattern.search(form) for pattern in _SECRET_PATTERNS):
-            return "private-key-or-token"
-        if _PRIVATE_LOCATOR.search(form):
-            return "private-repository-locator"
-        if (
-            _WINDOWS_PATH.search(form)
-            or _POSIX_PATH.search(form)
-            or re.match(r"^[A-Za-z]:\\", form)
-            or form.startswith(("/", "~/", "file:///"))
-            or re.search(r"(?:^|[/\\])\.\.(?:$|[/\\])", form)
-        ):
-            return "private-repository-locator"
-        if _is_nonpublic_host(form):
-            return "internal-host-or-address"
-        if _ACCOUNT_ID.search(form):
-            return "account-identifier"
-        if (
-            _EMAIL.search(form)
-            or _PHONE.search(form)
-            or _STRUCTURED_IDENTIFIER.search(form)
-        ):
-            return "customer-or-personal-identifier"
-        if _VULNERABILITY_DETAIL.search(form):
-            return "raw-vulnerability-detail"
-    return None
 
 
 def _validate_allowlist(
@@ -580,14 +472,22 @@ def _validate_allowlist(
             _reject("prohibited-field", path, "a prohibited field name is present")
 
 
-def _scan_sensitive_values(candidate: dict[str, Any]) -> None:
-    evidence = candidate["evidence_record"]
-    for path, _key, value in _iter_leaves(evidence, "$.evidence_record"):
-        if value is None:
-            continue
-        category = _sensitive_value_class(value)
-        if category:
-            _reject("sensitive-value", path, f"prohibited value class: {category}")
+def _scan_sensitive_values(value: Any, path: str = "$") -> None:
+    for finding in scan_public_strings(value, path):
+        _reject(
+            "sensitive-value",
+            finding.path,
+            f"prohibited value class: {finding.category}",
+        )
+
+
+def _validate_candidate_identifier(candidate: dict[str, Any], mode: str) -> None:
+    if not candidate_identifier_is_valid(candidate.get("export_candidate_id"), mode):
+        _reject(
+            "candidate-id",
+            "$.export_candidate_id",
+            "candidate identifier does not match its trusted execution mode",
+        )
 
 
 def _validate_protocol_binding(
@@ -628,7 +528,11 @@ def _fixture_entry(
     if len(matches) != 1:
         return None
     entry = matches[0]
-    if input_name is not None and entry["relative_input_path"] != input_name.as_posix():
+    if (
+        entry.get("export_candidate_id") != candidate.get("export_candidate_id")
+        or input_name is not None
+        and entry["relative_input_path"] != input_name.as_posix()
+    ):
         return None
     return entry
 
@@ -916,6 +820,7 @@ def _construct_bundle(
     implementation_manifest_digest: str,
     fixture_entry: dict[str, Any] | None,
     fixture_catalog_digest: str,
+    execution_context: ExportExecutionContext,
 ) -> dict[str, Any]:
     candidate_digest = _candidate_digest(candidate)
     evidence_digest = domain_digest(EXPORTED_EVIDENCE_DOMAIN, evidence)
@@ -988,21 +893,12 @@ def _construct_bundle(
         },
         "sanitization_report": {
             "outcome": "exported",
-            "checks_executed": [
-                "allowlist",
-                "candidate-schema",
-                "digest-bindings",
-                "evidence-schema",
-                "lifecycle-limit",
-                "path-boundary",
-                "prohibited-field-scan",
-                "prohibited-value-scan",
-                "review-gates",
-                "review-subject-binding",
-                "status-preservation",
-                "trusted-execution-mode",
-                "exporter-implementation-manifest",
-            ],
+            "input_interface": execution_context.input_interface,
+            "checks_executed": expected_sanitization_checks(
+                profile,
+                execution_context.mode,
+                execution_context.input_interface,
+            ),
             "allowlist_result": "pass",
             "prohibited_field_scan_result": "pass",
             "prohibited_value_scan_result": "pass",
@@ -1201,10 +1097,20 @@ def export_candidate(
     *,
     mode: str = EXPORT_CANDIDATE_MODE,
     input_name: Path | None = None,
+    execution_context: ExportExecutionContext | None = None,
 ) -> dict[str, Any]:
     if not isinstance(candidate, dict):
         _reject("candidate-shape", "$", "candidate root must be an object")
+    if execution_context is None:
+        execution_context = ExportExecutionContext.programmatic(mode)
+    if execution_context.mode != mode:
+        _reject(
+            "execution-context",
+            "$.execution_context",
+            "execution context mode does not match the trusted mode",
+        )
     _validate_lifecycle_precondition(candidate, profile)
+    _validate_candidate_identifier(candidate, mode)
     candidate_schema = _load_schema(root, "evidence-export-candidate.v0.1.schema.json")
     _validate_schema(candidate, candidate_schema, code="candidate-schema")
     catalog, fixture_catalog_digest = _load_fixture_catalog(root)
@@ -1228,6 +1134,7 @@ def export_candidate(
         implementation_manifest_digest,
         fixture_entry,
         fixture_catalog_digest,
+        execution_context,
     )
     validate_public_bundle(bundle, root, profile, mode=mode)
     return bundle
@@ -1302,7 +1209,12 @@ def run_export(
     except CanonicalJSONError as error:
         raise ExportError("input-parse", "$.input", str(error)) from error
     bundle = export_candidate(
-        candidate, profile, root, mode=mode, input_name=input_name
+        candidate,
+        profile,
+        root,
+        mode=mode,
+        input_name=input_name,
+        execution_context=ExportExecutionContext.staged_file(mode),
     )
     payload = canonicalize(bundle) + b"\n"
     output_path = output_root / OUTPUT_FILENAME

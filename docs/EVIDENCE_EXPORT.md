@@ -31,6 +31,12 @@ fixture-authority, and implementation-binding artifacts:
 The existing Evidence Schema 0.1 remains unchanged and authoritative for the
 embedded `evidence_record` in both contracts.
 
+Every public-bundle validation requires the reviewed profile as a regular,
+non-symlink repository file. The verifier strictly parses and Schema-validates
+it, recomputes its digest, checks the supported ID/version, and matches the
+implementation manifest's expected profile digest. The public CLI and CI do
+not expose a structure-only or profile-optional validation path.
+
 ## Trust and publication boundary
 
 The exporter requires separate privacy, security-boundary, IP, and
@@ -85,6 +91,11 @@ staging root. It contains only a closed metadata envelope:
 
 Raw evidence, logs, customer identifiers, private repository locators,
 credentials, and actual publication approvals are not candidate fields.
+Real candidates use an opaque 128-bit identifier of the form
+`PM-EXPORT-CANDIDATE-<32 uppercase hexadecimal characters>`; the exporter does
+not generate it. Synthetic identifiers are accepted only in `test-fixture`
+mode when the exact identifier and candidate digest match one committed catalog
+entry.
 
 ## Public bundle
 
@@ -95,6 +106,11 @@ artifact, and Evidence output. A test-only bundle additionally binds its
 fixture ID and the manifest-covered fixture-catalog digest.
 The visible `export_profile.digest`, the digest-binding copy, and the current
 reviewed profile digest must be identical.
+The subject-artifact and Evidence-output bindings must equal their embedded
+Evidence fields. The exported Evidence digest is recomputed with its reviewed
+domain separator, and all four Protocol digests must equal the profile's
+reviewed Protocol pin. `sanitization_report.digest_binding_result: pass` is an
+output of those checks, not evidence that substitutes for recomputation.
 These digests establish identity and origin bindings only. They do not prove
 security, correctness, privacy, completeness, or publication suitability.
 
@@ -202,6 +218,14 @@ values, filesystem paths, or host data. The sanitization timestamp is an
 explicit reviewed candidate field. Equal approved semantic input and profile
 therefore produce byte-identical output.
 
+The profile also closes the sanitization check catalog. Common checks are
+always required; the supported staged-file interface adds path-boundary,
+input-size, and strict-input-parse checks; fixture mode adds the exact catalog
+entry binding. `checks_executed` is a sorted, duplicate-free exact set derived
+from a trusted execution context. A direct programmatic transform cannot claim
+staged-file checks that it did not perform; the public CLI uses the staged-file
+interface.
+
 The dependency review on 2026-07-21 used
 [`rfc8785` 0.1.4](https://pypi.org/project/rfc8785/), which declares Python
 3.8 or newer and the Apache Software License. The lock contains both published
@@ -245,8 +269,12 @@ identifiers and versions must also equal the reviewed candidate bindings. An
 unknown type, nested member, wrong type, malformed versioned artifact, or
 contract digest mismatch fails closed rather than being redacted.
 
-Every public string leaf is also checked as defense in depth. The scanner uses
-Unicode NFKC and constrained URL/base64 decoding for detection only; it never
+Every candidate-controlled and publicly emitted string leaf is also checked as
+defense in depth, including the candidate identifier, omission fields, review
+marker surfaces, and sanitization event. Closed constants, enums, reviewed
+timestamps, and digests have narrow path-aware handling rather than a blanket
+string exemption. The scanner uses Unicode NFKC and constrained URL/base64
+decoding for detection only; it never
 silently normalizes output. It checks common credential and private-key forms,
 internal or non-public destinations, metadata endpoints, private repository and
 absolute path forms, account/customer/personal identifiers, control/bidi/zero

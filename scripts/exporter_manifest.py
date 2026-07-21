@@ -23,6 +23,7 @@ SOURCE_PATHS = (
     "scripts/canonical_json.py",
     "scripts/export_public_evidence.py",
     "scripts/exporter_manifest.py",
+    "scripts/public_export_policy.py",
     "scripts/validate_assurance.py",
 )
 SCHEMA_PATHS = (

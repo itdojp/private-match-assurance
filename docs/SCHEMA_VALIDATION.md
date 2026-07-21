@@ -275,9 +275,17 @@ python scripts/export_public_evidence.py \
 python scripts/validate_assurance.py \
   --root . \
   --report-dir .codex-local/tmp/report \
+  --export-profile profiles/public-evidence-export.v0.1.json \
   --export-mode test-fixture \
   --export-bundle .codex-local/tmp/export/public-evidence-export.v0.1.json
 ```
+
+Supplying any `--export-bundle` makes `--export-profile` semantically
+mandatory. The profile must be a repository-contained regular non-symlink file
+whose strict JSON, Schema, ID/version, self-digest, and manifest binding all
+validate. Missing or malformed profiles fail closed with stable
+`export-profile-*` findings; ordinary Assurance-record validation without an
+export bundle remains unchanged.
 
 Default validation treats a bundle as a real `export-candidate`. Synthetic
 validation requires explicit `test-fixture` mode, the exact committed staging
@@ -288,7 +296,13 @@ the fixture catalog does not create a catalog/manifest/bundle digest cycle.
 Validation also requires exact review-status parity across provenance,
 requirements, and sanitization-report markers, plus equality of the visible,
 digest-bound, and current export-profile digests. Both public validators use
-the same semantic binding helper. Only committed synthetic fixtures are used by
+the same semantic binding helper. They also recompute the embedded Evidence
+subject/output/exported-record bindings and compare every Protocol digest with
+the reviewed profile pin. The check report must exactly equal the profile's
+closed check set for the declared mode and programmatic or staged-file
+interface. Real candidate identifiers use the closed opaque 128-bit form, and
+all candidate-controlled public strings receive the same defense-in-depth
+scan. Only committed synthetic fixtures are used by
 public CI. Generated bundles are not uploaded as workflow artifacts. See
 [`EVIDENCE_EXPORT.md`](EVIDENCE_EXPORT.md) for the trust and publication
 boundary.

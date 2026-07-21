@@ -92,17 +92,24 @@
     },
     "fixture_provenance": {
       "anyOf": [
-        {"type": "null"},
+        {
+          "type": "null"
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["fixture_id", "fixture_catalog_digest"],
+          "required": [
+            "fixture_id",
+            "fixture_catalog_digest"
+          ],
           "properties": {
             "fixture_id": {
               "type": "string",
               "pattern": "^FIXTURE-[A-Z0-9-]{4,64}$"
             },
-            "fixture_catalog_digest": {"$ref": "#/$defs/digest"}
+            "fixture_catalog_digest": {
+              "$ref": "#/$defs/digest"
+            }
           }
         }
       ]
@@ -182,6 +189,7 @@
       "additionalProperties": false,
       "required": [
         "outcome",
+        "input_interface",
         "checks_executed",
         "allowlist_result",
         "prohibited_field_scan_result",
@@ -203,12 +211,33 @@
         },
         "checks_executed": {
           "type": "array",
-          "minItems": 8,
+          "minItems": 15,
+          "maxItems": 19,
+          "uniqueItems": true,
           "items": {
             "type": "string",
-            "pattern": "^[a-z0-9-]+$"
-          },
-          "uniqueItems": true
+            "enum": [
+              "allowlist",
+              "candidate-schema",
+              "closed-configuration",
+              "digest-bindings",
+              "evidence-schema",
+              "export-profile-binding",
+              "exporter-implementation-manifest",
+              "fixture-entry-binding",
+              "input-size",
+              "lifecycle-limit",
+              "path-boundary",
+              "prohibited-field-scan",
+              "prohibited-value-scan",
+              "review-gates",
+              "review-status-parity",
+              "review-subject-binding",
+              "status-preservation",
+              "strict-input-parse",
+              "trusted-execution-mode"
+            ]
+          }
         },
         "allowlist_result": {
           "const": "pass"
@@ -256,6 +285,12 @@
           "enum": [
             "approved",
             "not-applicable"
+          ]
+        },
+        "input_interface": {
+          "enum": [
+            "programmatic",
+            "staged-file"
           ]
         }
       }
@@ -338,20 +373,40 @@
         "allOf": [
           {
             "if": {
-              "properties": {"scope": {"const": "privacy"}},
-              "required": ["scope"]
+              "properties": {
+                "scope": {
+                  "const": "privacy"
+                }
+              },
+              "required": [
+                "scope"
+              ]
             },
             "then": {
-              "properties": {"status": {"const": "approved"}}
+              "properties": {
+                "status": {
+                  "const": "approved"
+                }
+              }
             }
           },
           {
             "if": {
-              "properties": {"scope": {"const": "security-boundary"}},
-              "required": ["scope"]
+              "properties": {
+                "scope": {
+                  "const": "security-boundary"
+                }
+              },
+              "required": [
+                "scope"
+              ]
             },
             "then": {
-              "properties": {"status": {"const": "approved"}}
+              "properties": {
+                "status": {
+                  "const": "approved"
+                }
+              }
             }
           }
         ]
@@ -463,6 +518,9 @@
           },
           "fixture_provenance": {
             "type": "null"
+          },
+          "export_candidate_id": {
+            "pattern": "^PM-EXPORT-CANDIDATE-[0-9A-F]{32}$"
           }
         }
       }
@@ -496,6 +554,9 @@
           },
           "fixture_provenance": {
             "type": "object"
+          },
+          "export_candidate_id": {
+            "pattern": "^PM-EXPORT-CANDIDATE-[A-Z0-9-]{4,64}$"
           }
         }
       }

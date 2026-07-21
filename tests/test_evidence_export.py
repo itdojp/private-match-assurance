@@ -8,7 +8,7 @@ import struct
 import subprocess
 import tempfile
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -56,6 +56,13 @@ from scripts.validate_assurance import (
     validate_export_bundle,
     validate_record,
 )
+from scripts.validate_assurance import main as assurance_main
+from scripts.public_export_policy import (
+    PROGRAMMATIC_INTERFACE,
+    STAGED_FILE_INTERFACE,
+    expected_sanitization_checks,
+    scan_public_strings,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,6 +105,9 @@ def validate_fixture_bundle(bundle: dict, root: Path, profile: dict) -> None:
 def real_candidate(candidate: dict) -> dict:
     candidate = copy.deepcopy(candidate)
     candidate["artifact_status"] = "export-candidate"
+    candidate["export_candidate_id"] = (
+        "PM-EXPORT-CANDIDATE-8D7D6658D2E84E568E39520A852A6D88"
+    )
     for index, review in enumerate(candidate["review_markers"].values(), start=8):
         review["reviewer_role"] = "authorized-human"
         review["review_digest"] = "sha256:" + format(index, "x") * 64
@@ -166,8 +176,8 @@ class EvidenceExportTests(unittest.TestCase):
             self.assertEqual(caught.exception.code, semantic_code)
             self.assertIn(semantic_code, {finding.code for finding in findings})
 
-    def copy_manifest_inputs(self) -> Path:
-        root = self.temp_root / "manifest-root"
+    def copy_manifest_inputs(self, name: str = "manifest-root") -> Path:
+        root = self.temp_root / name
         paths = {
             *SOURCE_PATHS,
             *SCHEMA_PATHS,
@@ -180,6 +190,48 @@ class EvidenceExportTests(unittest.TestCase):
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / relative, destination)
         return root
+
+    def copy_cli_root(self, name: str = "cli-root") -> Path:
+        root = self.copy_manifest_inputs(name)
+        for source in sorted((ROOT / "schema").glob("*.json")):
+            destination = root / "schema" / source.name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+        for relative in (
+            Path("profiles/public-evidence-export.v0.1.json"),
+            MANIFEST_PATH,
+        ):
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / relative, destination)
+        return root
+
+    def run_assurance_cli(
+        self,
+        root: Path,
+        bundle: dict,
+        *,
+        mode: str = TEST_FIXTURE_MODE,
+    ) -> tuple[int, dict]:
+        bundle_path = root / "bundle.json"
+        bundle_path.write_bytes(canonicalize(bundle) + b"\n")
+        report = root / "report"
+        with redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
+            result = assurance_main(
+                [
+                    "--root",
+                    str(root),
+                    "--report-dir",
+                    str(report),
+                    "--export-profile",
+                    "profiles/public-evidence-export.v0.1.json",
+                    "--export-mode",
+                    mode,
+                    "--export-bundle",
+                    "bundle.json",
+                ]
+            )
+        return result, load_json(report / "assurance-schema-report.json")
 
     def test_valid_fixture_outputs_match_committed_bytes(self) -> None:
         for fixture in sorted(path.name for path in INPUT_ROOT.glob("*.json")):
@@ -622,6 +674,10 @@ class EvidenceExportTests(unittest.TestCase):
                     run_export(**base, input_name=Path(name))
 
     def test_rejection_leaves_no_output_and_cli_error_is_value_free(self) -> None:
+        staging = self.temp_root / "sensitive-input"
+        staging.mkdir()
+        candidate = real_candidate(load_json(INVALID_ROOT / "embedded-secret.json"))
+        (staging / "embedded-secret.json").write_bytes(canonicalize(candidate))
         output = self.temp_root.relative_to(ROOT) / "rejected"
         stderr = io.StringIO()
         with redirect_stderr(stderr):
@@ -630,7 +686,7 @@ class EvidenceExportTests(unittest.TestCase):
                     "--root",
                     str(ROOT),
                     "--staging-root",
-                    "tests/fixtures/export/invalid",
+                    str(staging.relative_to(ROOT)),
                     "--input",
                     "embedded-secret.json",
                     "--output-dir",
@@ -989,6 +1045,295 @@ class EvidenceExportTests(unittest.TestCase):
             self.assertBothBundleValidatorsReject(
                 both_stale, mode=mode, semantic_code="profile-digest"
             )
+
+    def test_public_bundle_validation_requires_one_complete_profile(self) -> None:
+        fixture_bundle = export_fixture_candidate(
+            load_json(INPUT_ROOT / "safe-pass.json"), self.profile, ROOT
+        )
+        candidate_bundle = export_candidate(
+            real_candidate(load_json(INPUT_ROOT / "safe-pass.json")),
+            self.profile,
+            ROOT,
+        )
+        for name, bundle, mode in (
+            ("fixture", fixture_bundle, TEST_FIXTURE_MODE),
+            ("candidate", candidate_bundle, EXPORT_CANDIDATE_MODE),
+        ):
+            root = self.copy_cli_root(f"valid-profile-{name}")
+            result, report = self.run_assurance_cli(root, bundle, mode=mode)
+            self.assertEqual(result, 0)
+            self.assertEqual(report["summary"]["errors"], 0)
+
+        with self.assertRaises(TypeError):
+            validate_export_bundle(fixture_bundle, "missing-profile", ROOT)  # type: ignore[call-arg]
+
+        root = self.copy_cli_root("explicit-profile-required")
+        bundle_path = root / "bundle.json"
+        bundle_path.write_bytes(canonicalize(fixture_bundle) + b"\n")
+        report_path = root / "report"
+        with redirect_stdout(io.StringIO()):
+            result = assurance_main(
+                [
+                    "--root",
+                    str(root),
+                    "--report-dir",
+                    str(report_path),
+                    "--export-mode",
+                    TEST_FIXTURE_MODE,
+                    "--export-bundle",
+                    "bundle.json",
+                ]
+            )
+        self.assertEqual(result, 1)
+        report = load_json(report_path / "assurance-schema-report.json")
+        self.assertIn(
+            "export-profile-required",
+            {item["code"] for item in report["findings"]},
+        )
+
+        for mutation, expected_code in (
+            ("missing", "export-profile-required"),
+            ("symlink", "export-profile-required"),
+            ("malformed", "export-profile-parse"),
+            ("schema", "export-profile-schema"),
+            ("digest", "export-profile-digest"),
+            ("manifest-binding", "export-profile-binding"),
+        ):
+            with self.subTest(mutation=mutation):
+                root = self.copy_cli_root(f"profile-{mutation}")
+                profile_path = root / "profiles/public-evidence-export.v0.1.json"
+                if mutation == "missing":
+                    profile_path.unlink()
+                elif mutation == "symlink":
+                    target = profile_path.with_name("reviewed-profile.json")
+                    profile_path.rename(target)
+                    profile_path.symlink_to(target.name)
+                elif mutation == "malformed":
+                    profile_path.write_bytes(b"{")
+                elif mutation == "schema":
+                    value = load_json(profile_path)
+                    value["unknown"] = "synthetic"
+                    profile_path.write_bytes(canonicalize(value) + b"\n")
+                elif mutation == "digest":
+                    value = load_json(profile_path)
+                    value["profile_digest"] = "sha256:" + "0" * 64
+                    profile_path.write_bytes(canonicalize(value) + b"\n")
+                else:
+                    manifest_path = root / MANIFEST_PATH
+                    manifest = load_json(manifest_path)
+                    manifest["expected_export_profile_digest"] = "sha256:" + "0" * 64
+                    manifest["implementation_digest"] = implementation_digest(manifest)
+                    manifest_path.write_bytes(canonicalize(manifest) + b"\n")
+                result, report = self.run_assurance_cli(root, fixture_bundle)
+                self.assertEqual(result, 1)
+                codes = {item["code"] for item in report["findings"]}
+                self.assertIn(expected_code, codes)
+
+        root = self.copy_cli_root("no-bundle-no-profile")
+        (root / "profiles/public-evidence-export.v0.1.json").unlink()
+        report = root / "report"
+        with redirect_stdout(io.StringIO()):
+            result = assurance_main(["--root", str(root), "--report-dir", str(report)])
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            load_json(report / "assurance-schema-report.json")["summary"]["errors"],
+            0,
+        )
+
+    def test_all_recomputable_public_digest_bindings_are_enforced(self) -> None:
+        fixture = export_fixture_candidate(
+            load_json(INPUT_ROOT / "safe-pass.json"), self.profile, ROOT
+        )
+        candidate = export_candidate(
+            real_candidate(load_json(INPUT_ROOT / "safe-pass.json")),
+            self.profile,
+            ROOT,
+        )
+        mutations = (
+            ("subject binding", ("digest_bindings", "subject_artifact_digest")),
+            ("Evidence subject", ("evidence_record", "subject", "digest")),
+            ("output binding", ("digest_bindings", "evidence_output_digest")),
+            ("Evidence output", ("evidence_record", "output_digest")),
+            (
+                "Protocol source",
+                ("digest_bindings", "protocol_source_revision_digest"),
+            ),
+            (
+                "State Machine",
+                ("digest_bindings", "protocol_state_machine_digest"),
+            ),
+            (
+                "message registry",
+                ("digest_bindings", "protocol_message_registry_digest"),
+            ),
+            (
+                "conformance suite",
+                ("digest_bindings", "protocol_conformance_suite_digest"),
+            ),
+        )
+        for bundle, mode in (
+            (fixture, TEST_FIXTURE_MODE),
+            (candidate, EXPORT_CANDIDATE_MODE),
+        ):
+            validate_public_bundle(bundle, ROOT, self.profile, mode=mode)
+            self.assertEqual(
+                validate_export_bundle(
+                    bundle, "valid-binding", ROOT, profile=self.profile, mode=mode
+                ),
+                [],
+            )
+            for name, fields in mutations:
+                mutated = copy.deepcopy(bundle)
+                target = mutated
+                for field in fields[:-1]:
+                    target = target[field]
+                target[fields[-1]] = "sha256:" + "0" * 64
+                mutated["bundle_digest"] = bundle_digest(mutated)
+                with self.subTest(mode=mode, mutation=name):
+                    self.assertBothBundleValidatorsReject(
+                        mutated, mode=mode, semantic_code="digest-binding"
+                    )
+
+    def test_candidate_ids_are_opaque_and_all_public_strings_are_scanned(self) -> None:
+        valid = real_candidate(load_json(INPUT_ROOT / "safe-pass.json"))
+        bundle = export_candidate(valid, self.profile, ROOT)
+        self.assertEqual(
+            bundle["export_candidate_id"],
+            "PM-EXPORT-CANDIDATE-8D7D6658D2E84E568E39520A852A6D88",
+        )
+
+        for identifier in (
+            "PM-EXPORT-CANDIDATE-CUSTOMER-ACME",
+            "PM-EXPORT-CANDIDATE-TENANT-SYNTHETIC",
+            "PM-EXPORT-CANDIDATE-ACCOUNT-SYNTHETIC",
+            "PM-EXPORT-CANDIDATE-ORGANIZATION-SYNTHETIC",
+        ):
+            candidate = real_candidate(load_json(INPUT_ROOT / "safe-pass.json"))
+            candidate["export_candidate_id"] = identifier
+            bind_reviews(candidate)
+            with self.subTest(identifier=identifier):
+                with self.assertRaises(ExportError) as caught:
+                    export_candidate(candidate, self.profile, ROOT)
+                self.assertEqual(caught.exception.code, "candidate-id")
+                self.assertNotIn(identifier, str(caught.exception))
+
+        fixture = load_json(INPUT_ROOT / "safe-pass.json")
+        fixture_bundle = export_fixture_candidate(fixture, self.profile, ROOT)
+        self.assertEqual(
+            fixture_bundle["export_candidate_id"], fixture["export_candidate_id"]
+        )
+
+        wrong_mode = real_candidate(load_json(INPUT_ROOT / "safe-pass.json"))
+        wrong_mode["export_candidate_id"] = fixture["export_candidate_id"]
+        bind_reviews(wrong_mode)
+        with self.assertRaises(ExportError) as caught:
+            export_candidate(wrong_mode, self.profile, ROOT)
+        self.assertEqual(caught.exception.code, "candidate-id")
+
+        findings = scan_public_strings(
+            {"future_candidate_controlled_field": "synthetic@example.invalid"}
+        )
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].category, "customer-or-personal-identifier")
+
+        exposed = copy.deepcopy(bundle)
+        exposed["evidence_record"]["summary"] = "synthetic@example.invalid"
+        exposed["bundle_digest"] = bundle_digest(exposed)
+        self.assertBothBundleValidatorsReject(exposed, mode=EXPORT_CANDIDATE_MODE)
+
+    def test_checks_executed_are_exact_and_truthful_for_the_context(self) -> None:
+        fixture_output, staged_fixture = self.export_file("safe-pass.json")
+        self.assertTrue(fixture_output.is_file())
+        self.assertEqual(
+            staged_fixture["sanitization_report"]["input_interface"],
+            STAGED_FILE_INTERFACE,
+        )
+        self.assertEqual(
+            staged_fixture["sanitization_report"]["checks_executed"],
+            expected_sanitization_checks(
+                self.profile, TEST_FIXTURE_MODE, STAGED_FILE_INTERFACE
+            ),
+        )
+
+        programmatic_fixture = export_fixture_candidate(
+            load_json(INPUT_ROOT / "safe-pass.json"), self.profile, ROOT
+        )
+        self.assertEqual(
+            programmatic_fixture["sanitization_report"]["input_interface"],
+            PROGRAMMATIC_INTERFACE,
+        )
+        self.assertNotIn(
+            "path-boundary",
+            programmatic_fixture["sanitization_report"]["checks_executed"],
+        )
+
+        real = real_candidate(load_json(INPUT_ROOT / "safe-pass.json"))
+        staging = self.temp_root / "candidate-staging"
+        staging.mkdir()
+        (staging / "candidate.json").write_bytes(canonicalize(real) + b"\n")
+        _path, staged_candidate = run_export(
+            root=ROOT,
+            staging_root=staging.relative_to(ROOT),
+            input_name=Path("candidate.json"),
+            profile_name=Path("profiles/public-evidence-export.v0.1.json"),
+            output_dir=self.temp_root.relative_to(ROOT) / "candidate-output",
+            mode=EXPORT_CANDIDATE_MODE,
+        )
+        self.assertEqual(
+            staged_candidate["sanitization_report"]["checks_executed"],
+            expected_sanitization_checks(
+                self.profile, EXPORT_CANDIDATE_MODE, STAGED_FILE_INTERFACE
+            ),
+        )
+
+        mutations: list[tuple[str, dict, str, str | None]] = []
+        unknown = copy.deepcopy(staged_fixture)
+        unknown["sanitization_report"]["checks_executed"].append("unknown-check")
+        mutations.append(("unknown", unknown, TEST_FIXTURE_MODE, None))
+        missing = copy.deepcopy(staged_fixture)
+        missing["sanitization_report"]["checks_executed"].remove("digest-bindings")
+        mutations.append(("missing", missing, TEST_FIXTURE_MODE, "sanitization-checks"))
+        duplicate = copy.deepcopy(staged_fixture)
+        duplicate["sanitization_report"]["checks_executed"].append(
+            duplicate["sanitization_report"]["checks_executed"][0]
+        )
+        mutations.append(("duplicate", duplicate, TEST_FIXTURE_MODE, None))
+        candidate_fixture_check = copy.deepcopy(staged_candidate)
+        candidate_fixture_check["sanitization_report"]["checks_executed"].append(
+            "fixture-entry-binding"
+        )
+        candidate_fixture_check["sanitization_report"]["checks_executed"].sort()
+        mutations.append(
+            (
+                "candidate fixture check",
+                candidate_fixture_check,
+                EXPORT_CANDIDATE_MODE,
+                "sanitization-checks",
+            )
+        )
+        fixture_missing = copy.deepcopy(staged_fixture)
+        fixture_missing["sanitization_report"]["checks_executed"].remove(
+            "fixture-entry-binding"
+        )
+        mutations.append(
+            (
+                "fixture missing",
+                fixture_missing,
+                TEST_FIXTURE_MODE,
+                "sanitization-checks",
+            )
+        )
+        reordered = copy.deepcopy(staged_fixture)
+        reordered["sanitization_report"]["checks_executed"].reverse()
+        mutations.append(
+            ("reordered", reordered, TEST_FIXTURE_MODE, "sanitization-checks")
+        )
+        for name, mutated, mode, code in mutations:
+            mutated["bundle_digest"] = bundle_digest(mutated)
+            with self.subTest(mutation=name):
+                self.assertBothBundleValidatorsReject(
+                    mutated, mode=mode, semantic_code=code
+                )
 
     def test_review_subject_covers_every_reviewable_candidate_field(self) -> None:
         base = real_candidate(load_json(INPUT_ROOT / "safe-pass.json"))

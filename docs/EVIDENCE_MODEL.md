@@ -220,7 +220,12 @@ profile-digest parity. Export bundles also bind the complete reviewed exporter
 implementation manifest rather than one source file. That manifest also binds
 the synthetic fixture authority catalog, closed configuration Schema,
 dependency locks, and enforced CPython/JCS requirements; its OS/architecture
-entry is a tested target, not execution provenance.
+entry is a tested target, not execution provenance. Public validation is
+profile-required and recomputes the Evidence subject/output/exported-record and
+reviewed Protocol bindings. Real candidate identifiers are opaque 128-bit
+values, and the scanner covers all candidate-controlled public string surfaces.
+The reported sanitization checks are an exact set derived from the trusted
+programmatic or staged-file execution context, not caller-supplied claims.
 
 ## Reproducibility
 

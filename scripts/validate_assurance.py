@@ -25,6 +25,16 @@ try:
         manifest_file_digest,
         verify_implementation_manifest,
     )
+    from public_export_policy import (
+        EXPORT_CANDIDATE_MODE,
+        TEST_FIXTURE_MODE,
+        PublicExportPolicyError,
+        candidate_identifier_is_valid,
+        compute_profile_digest,
+        expected_sanitization_checks,
+        load_required_export_profile,
+        scan_public_strings,
+    )
 except ImportError:  # pragma: no cover - package import during unit tests
     from scripts.canonical_json import (
         CanonicalJSONError,
@@ -37,6 +47,16 @@ except ImportError:  # pragma: no cover - package import during unit tests
         ImplementationManifestError,
         manifest_file_digest,
         verify_implementation_manifest,
+    )
+    from scripts.public_export_policy import (
+        EXPORT_CANDIDATE_MODE,
+        TEST_FIXTURE_MODE,
+        PublicExportPolicyError,
+        candidate_identifier_is_valid,
+        compute_profile_digest,
+        expected_sanitization_checks,
+        load_required_export_profile,
+        scan_public_strings,
     )
 
 
@@ -65,11 +85,8 @@ EXPORT_SCHEMA_FILES = {
     "public-evidence-export": "public-evidence-export.v0.1.schema.json",
 }
 
-PROFILE_DOMAIN = "private-match-evidence-export-profile/v0.1"
 EXPORTED_EVIDENCE_DOMAIN = "private-match-exported-evidence/v0.1"
 BUNDLE_DOMAIN = "private-match-public-evidence-bundle/v0.1"
-EXPORT_CANDIDATE_MODE = "export-candidate"
-TEST_FIXTURE_MODE = "test-fixture"
 REVIEW_SCOPES = {"privacy", "security-boundary", "ip", "vulnerability"}
 REVIEW_STATUS_FIELDS = {
     "privacy": ("privacy", "privacy_review_marker", {"approved"}),
@@ -174,15 +191,22 @@ def load_export_fixture_catalog(root: Path) -> tuple[dict[str, Any], str]:
     if not isinstance(catalog, dict):
         raise ExportArtifactError("fixture catalog must be an object")
     identifiers: set[str] = set()
+    candidate_identifiers: set[str] = set()
     paths: set[str] = set()
     for entry in catalog["fixtures"]:
         identifier = entry["fixture_id"]
+        candidate_identifier = entry["export_candidate_id"]
         relative_path = entry["relative_input_path"]
-        if identifier in identifiers or relative_path in paths:
+        if (
+            identifier in identifiers
+            or candidate_identifier in candidate_identifiers
+            or relative_path in paths
+        ):
             raise ExportArtifactError(
                 "fixture catalog identifiers and paths must be unique"
             )
         identifiers.add(identifier)
+        candidate_identifiers.add(candidate_identifier)
         paths.add(relative_path)
     return catalog, file_digest(raw)
 
@@ -201,9 +225,7 @@ def validate_public_bundle_bindings(
         return []
     findings: list[Finding] = []
 
-    profile_material = dict(profile)
-    profile_material.pop("profile_digest", None)
-    expected_profile = domain_digest(PROFILE_DOMAIN, profile_material)
+    expected_profile = compute_profile_digest(profile)
     visible_profile = bundle.get("export_profile")
     digest_bindings = bundle.get("digest_bindings")
     if (
@@ -219,6 +241,81 @@ def validate_public_bundle_bindings(
                 "profile-digest",
                 path,
                 "visible, bound, and current export profile digests must match",
+            )
+        )
+
+    evidence = bundle.get("evidence_record")
+    report = bundle.get("sanitization_report")
+    digest_bindings = bundle.get("digest_bindings")
+    protocol_pin = profile.get("reviewed_protocol_binding")
+    digest_binding_valid = (
+        isinstance(evidence, dict)
+        and isinstance(evidence.get("subject"), dict)
+        and isinstance(digest_bindings, dict)
+        and digest_bindings.get("subject_artifact_digest")
+        == evidence["subject"].get("digest")
+        and digest_bindings.get("evidence_output_digest")
+        == evidence.get("output_digest")
+        and digest_bindings.get("exported_evidence_record_digest")
+        == domain_digest(EXPORTED_EVIDENCE_DOMAIN, evidence)
+        and isinstance(protocol_pin, dict)
+        and digest_bindings.get("protocol_source_revision_digest")
+        == protocol_pin.get("source_revision_digest")
+        and digest_bindings.get("protocol_state_machine_digest")
+        == protocol_pin.get("state_machine_digest")
+        and digest_bindings.get("protocol_message_registry_digest")
+        == protocol_pin.get("message_registry_digest")
+        and digest_bindings.get("protocol_conformance_suite_digest")
+        == protocol_pin.get("conformance_suite_digest")
+        and isinstance(report, dict)
+        and report.get("digest_binding_result") == "pass"
+    )
+    if not digest_binding_valid:
+        findings.append(
+            Finding(
+                "error",
+                "digest-binding",
+                path,
+                "recomputable Evidence and reviewed Protocol bindings must match",
+            )
+        )
+
+    input_interface = (
+        report.get("input_interface") if isinstance(report, dict) else None
+    )
+    expected_checks = expected_sanitization_checks(profile, mode, input_interface)
+    actual_checks = report.get("checks_executed") if isinstance(report, dict) else None
+    if (
+        not expected_checks
+        or not isinstance(actual_checks, list)
+        or actual_checks != expected_checks
+    ):
+        findings.append(
+            Finding(
+                "error",
+                "sanitization-checks",
+                path,
+                "executed sanitization checks do not match the reviewed context",
+            )
+        )
+
+    if not candidate_identifier_is_valid(bundle.get("export_candidate_id"), mode):
+        findings.append(
+            Finding(
+                "error",
+                "candidate-id",
+                path,
+                "candidate identifier does not match the trusted validation mode",
+            )
+        )
+
+    for sensitive in scan_public_strings(bundle, path):
+        findings.append(
+            Finding(
+                "error",
+                "sensitive-value",
+                sensitive.path,
+                f"prohibited public value class: {sensitive.category}",
             )
         )
 
@@ -302,6 +399,8 @@ def validate_public_bundle_bindings(
                 or trust_entries[0].get("digest") != catalog_digest
                 or valid_entry is None
                 or valid_entry.get("artifact_status") != "test-only"
+                or valid_entry.get("export_candidate_id")
+                != bundle.get("export_candidate_id")
                 or valid_entry.get("candidate_digest")
                 != bundle.get("export_candidate_digest")
             ):
@@ -414,7 +513,7 @@ def validate_export_bundle(
     path: str,
     root: Path,
     *,
-    profile: dict[str, Any] | None = None,
+    profile: dict[str, Any],
     mode: str = EXPORT_CANDIDATE_MODE,
 ) -> list[Finding]:
     """Validate a public export without treating it as a publication approval."""
@@ -461,15 +560,14 @@ def validate_export_bundle(
         )
     )
     if isinstance(evidence, dict):
-        if profile is not None:
-            findings.extend(
-                validate_export_configuration(
-                    evidence,
-                    f"{path}:evidence_record.configuration",
-                    root,
-                    profile,
-                )
+        findings.extend(
+            validate_export_configuration(
+                evidence,
+                f"{path}:evidence_record.configuration",
+                root,
+                profile,
             )
+        )
         if evidence.get("lifecycle") != "sanitized":
             findings.append(
                 Finding(
@@ -612,62 +710,78 @@ def validate_export_bundle(
                     )
                 )
 
-    if profile is not None:
-        profile_material = dict(profile)
-        profile_material.pop("profile_digest", None)
-        expected_profile = domain_digest(PROFILE_DOMAIN, profile_material)
-        verified_manifest: dict[str, Any] | None = None
-        manifest_path = root / MANIFEST_PATH
-        try:
-            manifest = load_json(manifest_path)
-            validator = load_export_schemas(root)["evidence-exporter-implementation"]
-            manifest_schema_errors = list(validator.iter_errors(manifest))
-            if manifest_schema_errors:
-                raise ImplementationManifestError(
-                    "implementation manifest schema failure"
-                )
-            verify_implementation_manifest(manifest, root, expected_profile)
-        except (OSError, CanonicalJSONError, ImplementationManifestError):
+    expected_profile = compute_profile_digest(profile)
+    verified_manifest: dict[str, Any] | None = None
+    manifest_path = root / MANIFEST_PATH
+    try:
+        manifest = load_json(manifest_path)
+        validator = load_export_schemas(root)["evidence-exporter-implementation"]
+        manifest_schema_errors = list(validator.iter_errors(manifest))
+        if manifest_schema_errors:
+            raise ImplementationManifestError("implementation manifest schema failure")
+    except (OSError, CanonicalJSONError, ImplementationManifestError):
+        findings.append(
+            Finding(
+                "error",
+                "exporter-implementation",
+                path,
+                "complete exporter implementation manifest does not validate",
+            )
+        )
+    else:
+        if manifest.get("expected_export_profile_digest") != expected_profile:
             findings.append(
                 Finding(
                     "error",
-                    "exporter-implementation",
+                    "export-profile-binding",
                     path,
-                    "complete exporter implementation manifest does not validate",
+                    "implementation manifest does not bind the current export profile",
                 )
             )
         else:
-            verified_manifest = manifest
-            exporter = bundle.get("exporter")
-            bindings = bundle.get("digest_bindings")
-            if (
-                not isinstance(exporter, dict)
-                or exporter.get("implementation_manifest_digest")
-                != manifest_file_digest(manifest)
-                or exporter.get("implementation_digest")
-                != manifest.get("implementation_digest")
-                or not isinstance(bindings, dict)
-                or bindings.get("exporter_implementation_digest")
-                != manifest.get("implementation_digest")
-            ):
+            try:
+                verify_implementation_manifest(manifest, root, expected_profile)
+            except ImplementationManifestError:
                 findings.append(
                     Finding(
                         "error",
                         "exporter-implementation",
                         path,
-                        "bundle does not bind the complete current exporter implementation",
+                        "complete exporter implementation manifest does not validate",
                     )
                 )
-        findings.extend(
-            validate_public_bundle_bindings(
-                bundle,
-                path,
-                root,
-                profile,
-                mode,
-                verified_manifest,
-            )
+            else:
+                verified_manifest = manifest
+                exporter = bundle.get("exporter")
+                bindings = bundle.get("digest_bindings")
+                if (
+                    not isinstance(exporter, dict)
+                    or exporter.get("implementation_manifest_digest")
+                    != manifest_file_digest(manifest)
+                    or exporter.get("implementation_digest")
+                    != manifest.get("implementation_digest")
+                    or not isinstance(bindings, dict)
+                    or bindings.get("exporter_implementation_digest")
+                    != manifest.get("implementation_digest")
+                ):
+                    findings.append(
+                        Finding(
+                            "error",
+                            "exporter-implementation",
+                            path,
+                            "bundle does not bind the complete current exporter implementation",
+                        )
+                    )
+    findings.extend(
+        validate_public_bundle_bindings(
+            bundle,
+            path,
+            root,
+            profile,
+            mode,
+            verified_manifest,
         )
+    )
 
     return findings
 
@@ -1222,6 +1336,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=EXPORT_CANDIDATE_MODE,
         help="trusted mode for all explicitly supplied export bundles",
     )
+    parser.add_argument(
+        "--export-profile",
+        type=Path,
+        default=None,
+        help="required reviewed profile for public bundle validation",
+    )
     return parser
 
 
@@ -1233,29 +1353,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     findings, records = validate_repository(root)
     profile: dict[str, Any] | None = None
-    profile_path = root / "profiles" / "public-evidence-export.v0.1.json"
-    if profile_path.exists():
-        try:
-            loaded_profile = load_json(profile_path)
-        except (OSError, CanonicalJSONError):
+    if args.export_bundle:
+        if args.export_profile is None:
             findings.append(
                 Finding(
                     "error",
-                    "export-profile-parse",
-                    _relative(profile_path, root),
-                    "profile is not strict JSON",
+                    "export-profile-required",
+                    "export-profile",
+                    "public bundle validation requires an explicit export profile",
                 )
             )
         else:
-            if isinstance(loaded_profile, dict):
-                profile = loaded_profile
-            else:
+            try:
+                profile = load_required_export_profile(root, args.export_profile)
+            except PublicExportPolicyError as error:
                 findings.append(
                     Finding(
                         "error",
-                        "export-profile-shape",
-                        _relative(profile_path, root),
-                        "profile must be an object",
+                        error.code,
+                        "export-profile",
+                        str(error),
                     )
                 )
     for requested in args.export_bundle:
@@ -1272,6 +1389,8 @@ def main(argv: list[str] | None = None) -> int:
                     "bundle is not a strict repository JSON file",
                 )
             )
+            continue
+        if profile is None:
             continue
         findings.extend(
             validate_export_bundle(

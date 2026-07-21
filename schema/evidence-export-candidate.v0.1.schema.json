@@ -437,5 +437,45 @@
         }
       ]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "artifact_status": {
+            "const": "export-candidate"
+          }
+        },
+        "required": [
+          "artifact_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "export_candidate_id": {
+            "pattern": "^PM-EXPORT-CANDIDATE-[0-9A-F]{32}$"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "artifact_status": {
+            "const": "test-only"
+          }
+        },
+        "required": [
+          "artifact_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "export_candidate_id": {
+            "pattern": "^PM-EXPORT-CANDIDATE-[A-Z0-9-]{4,64}$"
+          }
+        }
+      }
+    }
+  ]
 }

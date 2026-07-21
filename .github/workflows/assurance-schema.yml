@@ -50,6 +50,7 @@ jobs:
           python scripts/validate_assurance.py
           --root .
           --report-dir artifacts
+          --export-profile profiles/public-evidence-export.v0.1.json
           --export-mode test-fixture
           --export-bundle .codex-local/tmp/export/public-evidence-export.v0.1.json
       - name: Validate REUSE licensing metadata

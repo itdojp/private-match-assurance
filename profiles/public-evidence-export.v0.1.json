@@ -2,7 +2,7 @@
   "schema_version": "0.1",
   "profile_id": "private-match-public-evidence-export",
   "profile_version": "0.1",
-  "profile_digest": "sha256:aba1d03acbabad81aaa7c96a8daa64c4e38a9514f155c3aad24ce01ae4f4cc0b",
+  "profile_digest": "sha256:546a139d100951c3836a454115e3dbf6ee1effef973e129cb82ff60a9fcf128d",
   "input_contract": "evidence-export-candidate.v0.1",
   "output_contract": "public-evidence-export.v0.1",
   "allowed_candidate_fields": [
@@ -161,7 +161,10 @@
   "identifier_policy": {
     "private_revision": "digest-only",
     "customer_or_personal": "reject",
-    "private_locator": "reject"
+    "private_locator": "reject",
+    "export_candidate_id": "opaque-128-bit",
+    "test_fixture_id": "catalog-bound-synthetic",
+    "exporter_generates_identifier": false
   },
   "vulnerability_ip_policy": {
     "embargoed": "reject",
@@ -185,5 +188,32 @@
     "implementation_version": "0.1.4",
     "current_time_insertion": false,
     "random_identifier_generation": false
+  },
+  "required_sanitization_checks": {
+    "common": [
+      "allowlist",
+      "candidate-schema",
+      "closed-configuration",
+      "digest-bindings",
+      "evidence-schema",
+      "export-profile-binding",
+      "exporter-implementation-manifest",
+      "lifecycle-limit",
+      "prohibited-field-scan",
+      "prohibited-value-scan",
+      "review-gates",
+      "review-status-parity",
+      "review-subject-binding",
+      "status-preservation",
+      "trusted-execution-mode"
+    ],
+    "file-interface": [
+      "input-size",
+      "path-boundary",
+      "strict-input-parse"
+    ],
+    "test-fixture": [
+      "fixture-entry-binding"
+    ]
   }
 }

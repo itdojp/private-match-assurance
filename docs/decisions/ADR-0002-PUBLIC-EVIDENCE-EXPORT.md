@@ -123,6 +123,10 @@ candidate digest, `test-only` status, and `synthetic-reviewer` markers. The
 public bundle retains the fixture ID and catalog digest. Expected bytes are
 compared separately by CI rather than stored in the catalog, avoiding a cycle
 through catalog digest -> implementation digest -> bundle digest.
+Public validation resolves that ID to exactly one entry in the strict,
+manifest-bound catalog and requires its `test-only` status and candidate digest
+to match the bundle. Neither the ID, whole-catalog digest, nor candidate digest
+is sufficient by itself.
 
 ### Opaque review digest versus complete review-subject binding
 
@@ -131,6 +135,18 @@ review scope now binds a domain-separated digest over every reviewable candidate
 field except the review markers and digest itself. Safe scope, role, status,
 approval digest, and subject digest remain in the public bundle. Human authority
 and approval authorship are still reviewed manually.
+The retained status must equal the corresponding review requirement and
+sanitization-report marker. Privacy and security-boundary cannot be
+`not-applicable`; IP and vulnerability retain their reviewed
+`approved|not-applicable` choice.
+
+### Visible profile label versus three-way digest parity
+
+A detached bundle digest is an integrity checksum, not an authorization. The
+visible export-profile digest could otherwise diverge from the digest-binding
+copy. Both public validators therefore require the visible digest, binding
+copy, and current reviewed profile digest to be identical while preserving the
+closed profile ID/version.
 
 ### Single source-file digest versus implementation manifest
 

@@ -18,6 +18,7 @@ from scripts.canonical_json import (
     strict_loads,
 )
 from scripts.export_public_evidence import (
+    EXPORT_CANDIDATE_MODE,
     TEST_FIXTURE_MODE,
     ExportError,
     _candidate_digest,
@@ -47,6 +48,8 @@ from scripts.exporter_manifest import (
     verify_implementation_manifest,
 )
 from scripts.validate_assurance import (
+    ExportArtifactError,
+    load_export_fixture_catalog,
     load_export_schemas,
     load_schemas,
     validate_export_configuration,
@@ -141,6 +144,27 @@ class EvidenceExportTests(unittest.TestCase):
             export_fixture_candidate(candidate, self.profile, ROOT)
         self.assertEqual(caught.exception.code, code)
         return caught.exception
+
+    def assertBothBundleValidatorsReject(
+        self,
+        bundle: dict,
+        *,
+        mode: str = TEST_FIXTURE_MODE,
+        semantic_code: str | None = None,
+    ) -> None:
+        with self.assertRaises(ExportError) as caught:
+            validate_public_bundle(bundle, ROOT, self.profile, mode=mode)
+        findings = validate_export_bundle(
+            bundle,
+            "mutated-bundle",
+            ROOT,
+            profile=self.profile,
+            mode=mode,
+        )
+        self.assertTrue(findings)
+        if semantic_code is not None:
+            self.assertEqual(caught.exception.code, semantic_code)
+            self.assertIn(semantic_code, {finding.code for finding in findings})
 
     def copy_manifest_inputs(self) -> Path:
         root = self.temp_root / "manifest-root"
@@ -773,6 +797,198 @@ class EvidenceExportTests(unittest.TestCase):
                         "fixture_catalog_digest": catalog_digest,
                     },
                 )
+
+    def test_review_status_surfaces_are_exactly_consistent(self) -> None:
+        fixture = export_fixture_candidate(
+            load_json(INPUT_ROOT / "safe-pass.json"), self.profile, ROOT
+        )
+        candidate = export_candidate(
+            real_candidate(load_json(INPUT_ROOT / "safe-pass.json")),
+            self.profile,
+            ROOT,
+        )
+        validate_fixture_bundle(fixture, ROOT, self.profile)
+        validate_public_bundle(candidate, ROOT, self.profile)
+        self.assertEqual(
+            validate_export_bundle(
+                fixture,
+                "fixture",
+                ROOT,
+                profile=self.profile,
+                mode=TEST_FIXTURE_MODE,
+            ),
+            [],
+        )
+        self.assertEqual(
+            validate_export_bundle(candidate, "candidate", ROOT, profile=self.profile),
+            [],
+        )
+
+        mutations = (
+            ("privacy provenance", "privacy", "provenance", "not-applicable"),
+            (
+                "security provenance",
+                "security-boundary",
+                "provenance",
+                "not-applicable",
+            ),
+            ("ip requirements", "ip", "requirements", "approved"),
+            ("ip report", "ip", "report", "approved"),
+            (
+                "vulnerability requirements",
+                "vulnerability",
+                "requirements",
+                "approved",
+            ),
+            ("vulnerability report", "vulnerability", "report", "approved"),
+        )
+        requirement_fields = {
+            "privacy": "privacy",
+            "security-boundary": "security_boundary",
+            "ip": "ip",
+            "vulnerability": "vulnerability",
+        }
+        report_fields = {
+            "privacy": "privacy_review_marker",
+            "security-boundary": "security_review_marker",
+            "ip": "ip_review_marker",
+            "vulnerability": "vulnerability_review_marker",
+        }
+        for name, scope, surface, value in mutations:
+            mutated = copy.deepcopy(fixture)
+            if surface == "provenance":
+                next(
+                    item
+                    for item in mutated["review_provenance"]
+                    if item["scope"] == scope
+                )["status"] = value
+            elif surface == "requirements":
+                mutated["review_requirements"][requirement_fields[scope]] = value
+            else:
+                mutated["sanitization_report"][report_fields[scope]] = value
+            mutated["bundle_digest"] = bundle_digest(mutated)
+            with self.subTest(name=name):
+                self.assertBothBundleValidatorsReject(mutated)
+
+        candidate_mismatch = copy.deepcopy(candidate)
+        candidate_mismatch["review_requirements"]["ip"] = "approved"
+        candidate_mismatch["bundle_digest"] = bundle_digest(candidate_mismatch)
+        self.assertBothBundleValidatorsReject(
+            candidate_mismatch,
+            mode=EXPORT_CANDIDATE_MODE,
+            semantic_code="review-status",
+        )
+
+    def test_fixture_provenance_binds_one_exact_catalog_entry(self) -> None:
+        bundle = export_fixture_candidate(
+            load_json(INPUT_ROOT / "safe-pass.json"), self.profile, ROOT
+        )
+        validate_fixture_bundle(bundle, ROOT, self.profile)
+
+        unknown = copy.deepcopy(bundle)
+        unknown["fixture_provenance"]["fixture_id"] = "FIXTURE-UNKNOWN-ENTRY"
+        unknown["bundle_digest"] = bundle_digest(unknown)
+        self.assertBothBundleValidatorsReject(
+            unknown, semantic_code="fixture-provenance"
+        )
+
+        another = copy.deepcopy(bundle)
+        another["fixture_provenance"]["fixture_id"] = "FIXTURE-MODEL-CHECK"
+        another["bundle_digest"] = bundle_digest(another)
+        self.assertBothBundleValidatorsReject(
+            another, semantic_code="fixture-provenance"
+        )
+
+        changed_candidate = copy.deepcopy(bundle)
+        changed_candidate["export_candidate_digest"] = "sha256:" + "0" * 64
+        changed_candidate["digest_bindings"]["input_candidate_digest"] = (
+            changed_candidate["export_candidate_digest"]
+        )
+        changed_candidate["bundle_digest"] = bundle_digest(changed_candidate)
+        self.assertBothBundleValidatorsReject(
+            changed_candidate, semantic_code="fixture-provenance"
+        )
+
+        stale_catalog = copy.deepcopy(bundle)
+        stale_catalog["fixture_provenance"]["fixture_catalog_digest"] = (
+            "sha256:" + "f" * 64
+        )
+        stale_catalog["bundle_digest"] = bundle_digest(stale_catalog)
+        self.assertBothBundleValidatorsReject(
+            stale_catalog, semantic_code="fixture-provenance"
+        )
+
+        candidate = export_candidate(
+            real_candidate(load_json(INPUT_ROOT / "safe-pass.json")),
+            self.profile,
+            ROOT,
+        )
+        self.assertIsNone(candidate["fixture_provenance"])
+        validate_public_bundle(candidate, ROOT, self.profile)
+        candidate["fixture_provenance"] = copy.deepcopy(bundle["fixture_provenance"])
+        candidate["bundle_digest"] = bundle_digest(candidate)
+        self.assertBothBundleValidatorsReject(candidate, mode=EXPORT_CANDIDATE_MODE)
+
+        for mutation in ("artifact-status", "duplicate-id"):
+            with self.subTest(catalog=mutation):
+                temp_root = self.copy_manifest_inputs()
+                path = temp_root / TEST_TRUST_PATHS[0]
+                catalog = load_json(path)
+                if mutation == "artifact-status":
+                    catalog["fixtures"][0]["artifact_status"] = "export-candidate"
+                else:
+                    catalog["fixtures"][1]["fixture_id"] = catalog["fixtures"][0][
+                        "fixture_id"
+                    ]
+                path.write_bytes(canonicalize(catalog) + b"\n")
+                with self.assertRaises(ExportArtifactError):
+                    load_export_fixture_catalog(temp_root)
+
+    def test_visible_bound_and_current_profile_digests_match(self) -> None:
+        fixture = export_fixture_candidate(
+            load_json(INPUT_ROOT / "safe-pass.json"), self.profile, ROOT
+        )
+        candidate = export_candidate(
+            real_candidate(load_json(INPUT_ROOT / "safe-pass.json")),
+            self.profile,
+            ROOT,
+        )
+        for bundle, mode in (
+            (fixture, TEST_FIXTURE_MODE),
+            (candidate, EXPORT_CANDIDATE_MODE),
+        ):
+            current = self.profile["profile_digest"]
+            self.assertEqual(bundle["export_profile"]["digest"], current)
+            self.assertEqual(
+                bundle["digest_bindings"]["export_profile_digest"], current
+            )
+            validate_public_bundle(bundle, ROOT, self.profile, mode=mode)
+
+            visible_only = copy.deepcopy(bundle)
+            visible_only["export_profile"]["digest"] = "sha256:" + "e" * 64
+            visible_only["bundle_digest"] = bundle_digest(visible_only)
+            self.assertBothBundleValidatorsReject(
+                visible_only, mode=mode, semantic_code="profile-digest"
+            )
+
+            binding_only = copy.deepcopy(bundle)
+            binding_only["digest_bindings"]["export_profile_digest"] = (
+                "sha256:" + "d" * 64
+            )
+            binding_only["bundle_digest"] = bundle_digest(binding_only)
+            self.assertBothBundleValidatorsReject(
+                binding_only, mode=mode, semantic_code="profile-digest"
+            )
+
+            both_stale = copy.deepcopy(bundle)
+            both_stale["export_profile"]["digest"] = "sha256:" + "c" * 64
+            both_stale["digest_bindings"]["export_profile_digest"] = both_stale[
+                "export_profile"
+            ]["digest"]
+            both_stale["bundle_digest"] = bundle_digest(both_stale)
+            self.assertBothBundleValidatorsReject(
+                both_stale, mode=mode, semantic_code="profile-digest"
+            )
 
     def test_review_subject_covers_every_reviewable_candidate_field(self) -> None:
         base = real_candidate(load_json(INPUT_ROOT / "safe-pass.json"))

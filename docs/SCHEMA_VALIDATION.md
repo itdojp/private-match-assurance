@@ -281,12 +281,14 @@ python scripts/validate_assurance.py \
 
 Default validation treats a bundle as a real `export-candidate`. Synthetic
 validation requires explicit `test-fixture` mode, the exact committed staging
-root, the catalogued candidate digest, the catalog digest bound into the bundle,
-and test-only review and publication markers. The expected bundle remains a
-separate byte-for-byte CI oracle so that the fixture catalog does not create a
-catalog/manifest/bundle digest cycle. Validation also recomputes the complete
-review-subject and exporter implementation bindings. Only committed synthetic
-fixtures are used by public CI. Generated bundles are not uploaded as workflow
-artifacts. See
+root, one unique catalogued fixture ID whose candidate digest matches the
+bundle, the manifest-bound catalog digest, and test-only review/publication
+markers. The expected bundle remains a separate byte-for-byte CI oracle so that
+the fixture catalog does not create a catalog/manifest/bundle digest cycle.
+Validation also requires exact review-status parity across provenance,
+requirements, and sanitization-report markers, plus equality of the visible,
+digest-bound, and current export-profile digests. Both public validators use
+the same semantic binding helper. Only committed synthetic fixtures are used by
+public CI. Generated bundles are not uploaded as workflow artifacts. See
 [`EVIDENCE_EXPORT.md`](EVIDENCE_EXPORT.md) for the trust and publication
 boundary.

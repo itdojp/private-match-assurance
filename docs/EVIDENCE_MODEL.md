@@ -212,12 +212,15 @@ that private-side validation occurred.
 Synthetic processing is a caller-selected, committed-catalog-only test mode;
 candidate input cannot self-select it. Every review scope binds the complete
 reviewable candidate subject, and the public bundle retains safe scope, role,
-status, review-artifact digest, and reviewed-subject digest. Export bundles also
-bind the complete reviewed exporter implementation manifest rather than one
-source file. That manifest also binds the synthetic fixture authority catalog,
-closed configuration Schema, dependency locks, and enforced CPython/JCS
-requirements; its OS/architecture entry is a tested target, not execution
-provenance.
+status, review-artifact digest, and reviewed-subject digest. The status is
+cross-checked against the matching requirement and sanitization marker. A
+test-only bundle resolves its fixture ID to one manifest-bound catalog entry
+whose candidate digest must match, and all bundles require visible/bound/current
+profile-digest parity. Export bundles also bind the complete reviewed exporter
+implementation manifest rather than one source file. That manifest also binds
+the synthetic fixture authority catalog, closed configuration Schema,
+dependency locks, and enforced CPython/JCS requirements; its OS/architecture
+entry is a tested target, not execution provenance.
 
 ## Reproducibility
 

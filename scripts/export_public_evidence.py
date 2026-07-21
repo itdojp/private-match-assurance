@@ -24,7 +24,6 @@ try:
         CanonicalJSONError,
         canonicalize,
         domain_digest,
-        file_digest,
         strict_loads,
     )
     from exporter_manifest import (
@@ -34,7 +33,10 @@ try:
         verify_implementation_manifest,
     )
     from validate_assurance import (
+        ExportArtifactError,
+        load_export_fixture_catalog,
         load_evidence_schema,
+        validate_public_bundle_bindings,
         validate_export_configuration,
         validate_record,
     )
@@ -43,7 +45,6 @@ except ImportError:  # pragma: no cover - package import during unit tests
         CanonicalJSONError,
         canonicalize,
         domain_digest,
-        file_digest,
         strict_loads,
     )
     from scripts.exporter_manifest import (
@@ -53,7 +54,10 @@ except ImportError:  # pragma: no cover - package import during unit tests
         verify_implementation_manifest,
     )
     from scripts.validate_assurance import (
+        ExportArtifactError,
+        load_export_fixture_catalog,
         load_evidence_schema,
+        validate_public_bundle_bindings,
         validate_export_configuration,
         validate_record,
     )
@@ -71,7 +75,6 @@ OUTPUT_FILENAME = "public-evidence-export.v0.1.json"
 EXPORT_CANDIDATE_MODE = "export-candidate"
 TEST_FIXTURE_MODE = "test-fixture"
 FIXTURE_STAGING_ROOT = Path("tests/fixtures/export/input")
-FIXTURE_CATALOG_PATH = Path("tests/fixtures/export/fixture-catalog.v0.1.json")
 REVIEW_SCOPES = {
     "privacy": "privacy",
     "security_boundary": "security-boundary",
@@ -322,26 +325,14 @@ def _load_closed_json(root: Path, relative: Path, schema_name: str, code: str) -
 
 
 def _load_fixture_catalog(root: Path) -> tuple[dict[str, Any], str]:
-    value = _load_closed_json(
-        root,
-        FIXTURE_CATALOG_PATH,
-        "evidence-export-fixture-catalog.v0.1.schema.json",
-        "fixture-catalog",
-    )
-    if not isinstance(value, dict):
-        _reject("fixture-catalog", "$.fixture_catalog", "catalog must be an object")
-    ids: set[str] = set()
-    paths: set[str] = set()
-    for entry in value["fixtures"]:
-        if entry["fixture_id"] in ids or entry["relative_input_path"] in paths:
-            _reject(
-                "fixture-catalog",
-                "$.fixture_catalog",
-                "fixture identifiers and paths must be unique",
-            )
-        ids.add(entry["fixture_id"])
-        paths.add(entry["relative_input_path"])
-    return value, file_digest(canonicalize(value) + b"\n")
+    try:
+        return load_export_fixture_catalog(root)
+    except ExportArtifactError as error:
+        raise ExportError(
+            "fixture-catalog",
+            "$.fixture_catalog",
+            "fixture catalog does not validate",
+        ) from error
 
 
 def _load_implementation_manifest(
@@ -1072,12 +1063,6 @@ def validate_public_bundle(
         )
     if bundle["bundle_digest"] != bundle_digest(bundle):
         _reject("bundle-digest", "$.bundle_digest", "bundle digest does not match")
-    if bundle["digest_bindings"]["export_profile_digest"] != profile["profile_digest"]:
-        _reject(
-            "profile-digest",
-            "$.digest_bindings.export_profile_digest",
-            "bundle profile digest does not match",
-        )
     if (
         bundle["digest_bindings"]["input_candidate_digest"]
         != bundle["export_candidate_digest"]
@@ -1110,25 +1095,17 @@ def validate_public_bundle(
             "$.exporter",
             "bundle does not bind the current complete exporter implementation",
         )
-    fixture_provenance = bundle["fixture_provenance"]
-    trust_digests = {
-        item["path"]: item["digest"] for item in implementation["test_trust_artifacts"]
-    }
-    if mode == TEST_FIXTURE_MODE:
-        if not isinstance(fixture_provenance, dict) or fixture_provenance.get(
-            "fixture_catalog_digest"
-        ) != trust_digests.get(FIXTURE_CATALOG_PATH.as_posix()):
-            _reject(
-                "fixture-provenance",
-                "$.fixture_provenance",
-                "test-only bundle does not bind the authorized fixture catalog",
-            )
-    elif fixture_provenance is not None:
-        _reject(
-            "fixture-provenance",
-            "$.fixture_provenance",
-            "candidate bundle must not claim synthetic fixture provenance",
-        )
+    semantic_findings = validate_public_bundle_bindings(
+        bundle,
+        "$",
+        root,
+        profile,
+        mode,
+        implementation,
+    )
+    if semantic_findings:
+        finding = semantic_findings[0]
+        _reject(finding.code, finding.path, finding.message)
     if bundle["review_subject_digest"] not in {
         item.get("reviewed_subject_digest")
         for item in bundle["review_provenance"]

@@ -71,6 +71,20 @@ BUNDLE_DOMAIN = "private-match-public-evidence-bundle/v0.1"
 EXPORT_CANDIDATE_MODE = "export-candidate"
 TEST_FIXTURE_MODE = "test-fixture"
 REVIEW_SCOPES = {"privacy", "security-boundary", "ip", "vulnerability"}
+REVIEW_STATUS_FIELDS = {
+    "privacy": ("privacy", "privacy_review_marker", {"approved"}),
+    "security-boundary": (
+        "security_boundary",
+        "security_review_marker",
+        {"approved"},
+    ),
+    "ip": ("ip", "ip_review_marker", {"approved", "not-applicable"}),
+    "vulnerability": (
+        "vulnerability",
+        "vulnerability_review_marker",
+        {"approved", "not-applicable"},
+    ),
+}
 EXPORTABLE_EVIDENCE_TYPES = {
     "test",
     "conformance",
@@ -91,6 +105,10 @@ LIFECYCLE_TRANSITIONS = {
     "superseded": set(),
     "withdrawn": set(),
 }
+
+
+class ExportArtifactError(ValueError):
+    """A repository-owned export artifact failed strict local validation."""
 
 
 def _iter_json(root: Path) -> Iterable[Path]:
@@ -139,6 +157,172 @@ def load_export_schemas(root: Path) -> dict[str, Draft202012Validator]:
             schema, format_checker=FormatChecker()
         )
     return validators
+
+
+def load_export_fixture_catalog(root: Path) -> tuple[dict[str, Any], str]:
+    """Strictly load, Schema-check, and uniquely index the fixture catalog."""
+
+    path = root / FIXTURE_CATALOG_PATH
+    try:
+        raw = path.read_bytes()
+        catalog = strict_loads(raw, max_bytes=1_048_576)
+    except (OSError, CanonicalJSONError) as error:
+        raise ExportArtifactError("fixture catalog is not strict JSON") from error
+    validator = load_export_schemas(root)["evidence-export-fixture-catalog"]
+    if list(validator.iter_errors(catalog)):
+        raise ExportArtifactError("fixture catalog does not match its Schema")
+    if not isinstance(catalog, dict):
+        raise ExportArtifactError("fixture catalog must be an object")
+    identifiers: set[str] = set()
+    paths: set[str] = set()
+    for entry in catalog["fixtures"]:
+        identifier = entry["fixture_id"]
+        relative_path = entry["relative_input_path"]
+        if identifier in identifiers or relative_path in paths:
+            raise ExportArtifactError(
+                "fixture catalog identifiers and paths must be unique"
+            )
+        identifiers.add(identifier)
+        paths.add(relative_path)
+    return catalog, file_digest(raw)
+
+
+def validate_public_bundle_bindings(
+    bundle: Any,
+    path: str,
+    root: Path,
+    profile: dict[str, Any],
+    mode: str,
+    manifest: dict[str, Any] | None,
+) -> list[Finding]:
+    """Cross-check public review, fixture, and visible profile bindings."""
+
+    if not isinstance(bundle, dict):
+        return []
+    findings: list[Finding] = []
+
+    profile_material = dict(profile)
+    profile_material.pop("profile_digest", None)
+    expected_profile = domain_digest(PROFILE_DOMAIN, profile_material)
+    visible_profile = bundle.get("export_profile")
+    digest_bindings = bundle.get("digest_bindings")
+    if (
+        profile.get("profile_digest") != expected_profile
+        or not isinstance(visible_profile, dict)
+        or visible_profile.get("digest") != expected_profile
+        or not isinstance(digest_bindings, dict)
+        or digest_bindings.get("export_profile_digest") != expected_profile
+    ):
+        findings.append(
+            Finding(
+                "error",
+                "profile-digest",
+                path,
+                "visible, bound, and current export profile digests must match",
+            )
+        )
+
+    provenance = bundle.get("review_provenance")
+    requirements = bundle.get("review_requirements")
+    report = bundle.get("sanitization_report")
+    by_scope: dict[str, dict[str, Any]] = {}
+    if isinstance(provenance, list):
+        for item in provenance:
+            if isinstance(item, dict) and isinstance(item.get("scope"), str):
+                by_scope.setdefault(item["scope"], item)
+    if not isinstance(requirements, dict) or not isinstance(report, dict):
+        findings.append(
+            Finding(
+                "error",
+                "review-status",
+                path,
+                "review status surfaces are incomplete",
+            )
+        )
+    else:
+        for scope, (
+            requirement_field,
+            report_field,
+            allowed,
+        ) in REVIEW_STATUS_FIELDS.items():
+            item = by_scope.get(scope)
+            values = (
+                item.get("status") if isinstance(item, dict) else None,
+                requirements.get(requirement_field),
+                report.get(report_field),
+            )
+            if values[0] not in allowed or len(set(values)) != 1:
+                findings.append(
+                    Finding(
+                        "error",
+                        "review-status",
+                        f"{path}:review_provenance.{scope}",
+                        "review provenance, requirements, and report status must match",
+                    )
+                )
+
+    fixture = bundle.get("fixture_provenance")
+    if mode == TEST_FIXTURE_MODE:
+        try:
+            catalog, catalog_digest = load_export_fixture_catalog(root)
+        except ExportArtifactError:
+            findings.append(
+                Finding(
+                    "error",
+                    "fixture-provenance",
+                    path,
+                    "the authorized fixture catalog does not validate",
+                )
+            )
+        else:
+            trust_entries = (
+                [
+                    entry
+                    for entry in manifest.get("test_trust_artifacts", [])
+                    if isinstance(entry, dict)
+                    and entry.get("path") == FIXTURE_CATALOG_PATH
+                ]
+                if isinstance(manifest, dict)
+                else []
+            )
+            fixture_id = (
+                fixture.get("fixture_id") if isinstance(fixture, dict) else None
+            )
+            matches = [
+                entry
+                for entry in catalog["fixtures"]
+                if entry.get("fixture_id") == fixture_id
+            ]
+            valid_entry = matches[0] if len(matches) == 1 else None
+            if (
+                bundle.get("artifact_status") != "test-only"
+                or not isinstance(fixture, dict)
+                or fixture.get("fixture_catalog_digest") != catalog_digest
+                or len(trust_entries) != 1
+                or trust_entries[0].get("digest") != catalog_digest
+                or valid_entry is None
+                or valid_entry.get("artifact_status") != "test-only"
+                or valid_entry.get("candidate_digest")
+                != bundle.get("export_candidate_digest")
+            ):
+                findings.append(
+                    Finding(
+                        "error",
+                        "fixture-provenance",
+                        path,
+                        "test bundle does not bind one authorized catalog entry",
+                    )
+                )
+    elif fixture is not None:
+        findings.append(
+            Finding(
+                "error",
+                "fixture-provenance",
+                path,
+                "candidate bundle must not claim synthetic fixture provenance",
+            )
+        )
+    return findings
 
 
 def validate_export_configuration(
@@ -432,28 +616,7 @@ def validate_export_bundle(
         profile_material = dict(profile)
         profile_material.pop("profile_digest", None)
         expected_profile = domain_digest(PROFILE_DOMAIN, profile_material)
-        if profile.get("profile_digest") != expected_profile:
-            findings.append(
-                Finding(
-                    "error",
-                    "export-profile-digest",
-                    path,
-                    "profile digest does not match",
-                )
-            )
-        bindings = bundle.get("digest_bindings")
-        if (
-            isinstance(bindings, dict)
-            and bindings.get("export_profile_digest") != expected_profile
-        ):
-            findings.append(
-                Finding(
-                    "error",
-                    "export-profile-binding",
-                    path,
-                    "bundle profile binding does not match",
-                )
-            )
+        verified_manifest: dict[str, Any] | None = None
         manifest_path = root / MANIFEST_PATH
         try:
             manifest = load_json(manifest_path)
@@ -474,6 +637,7 @@ def validate_export_bundle(
                 )
             )
         else:
+            verified_manifest = manifest
             exporter = bundle.get("exporter")
             bindings = bundle.get("digest_bindings")
             if (
@@ -494,33 +658,16 @@ def validate_export_bundle(
                         "bundle does not bind the complete current exporter implementation",
                     )
                 )
-            trust_digests = {
-                item.get("path"): item.get("digest")
-                for item in manifest.get("test_trust_artifacts", [])
-                if isinstance(item, dict)
-            }
-            fixture = bundle.get("fixture_provenance")
-            if mode == TEST_FIXTURE_MODE:
-                if not isinstance(fixture, dict) or fixture.get(
-                    "fixture_catalog_digest"
-                ) != trust_digests.get(FIXTURE_CATALOG_PATH):
-                    findings.append(
-                        Finding(
-                            "error",
-                            "export-fixture-provenance",
-                            path,
-                            "test bundle does not bind the authorized fixture catalog",
-                        )
-                    )
-            elif fixture is not None:
-                findings.append(
-                    Finding(
-                        "error",
-                        "export-fixture-provenance",
-                        path,
-                        "candidate bundle must not claim synthetic fixture provenance",
-                    )
-                )
+        findings.extend(
+            validate_public_bundle_bindings(
+                bundle,
+                path,
+                root,
+                profile,
+                mode,
+                verified_manifest,
+            )
+        )
 
     return findings
 

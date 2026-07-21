@@ -334,7 +334,27 @@
           "reviewed_subject_digest": {
             "$ref": "#/$defs/digest"
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {"scope": {"const": "privacy"}},
+              "required": ["scope"]
+            },
+            "then": {
+              "properties": {"status": {"const": "approved"}}
+            }
+          },
+          {
+            "if": {
+              "properties": {"scope": {"const": "security-boundary"}},
+              "required": ["scope"]
+            },
+            "then": {
+              "properties": {"status": {"const": "approved"}}
+            }
+          }
+        ]
       }
     },
     "review_requirements": {

@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+"""Run the exact-pinned ae-framework integration on one explicit package."""
+
+from __future__ import annotations
+
+import argparse
+import os
+from pathlib import Path
+import shutil
+import sys
+
+try:
+    from ae_assurance_common import (
+        AssuranceIntegrationError,
+        canonical_json_bytes,
+        read_strict_json,
+        resolve_regular_file,
+        validate_relative_path,
+    )
+    from ae_assurance_policy import (
+        FIXTURE_CATALOG_PATH,
+        PROFILE_PATH,
+        verify_fixture_catalog,
+    )
+    from ae_framework_adapter import build_assurance_package
+    from canonical_json import file_digest
+    from render_ae_assurance_report import render_markdown
+except ImportError:  # pragma: no cover
+    from scripts.ae_assurance_common import (
+        AssuranceIntegrationError,
+        canonical_json_bytes,
+        read_strict_json,
+        resolve_regular_file,
+        validate_relative_path,
+    )
+    from scripts.ae_assurance_policy import (
+        FIXTURE_CATALOG_PATH,
+        PROFILE_PATH,
+        verify_fixture_catalog,
+    )
+    from scripts.ae_framework_adapter import build_assurance_package
+    from scripts.canonical_json import file_digest
+    from scripts.render_ae_assurance_report import render_markdown
+
+
+JSON_NAME = "private-match-assurance-package.v0.1.json"
+MARKDOWN_NAME = "private-match-assurance-package.v0.1.md"
+
+
+def _root_path(value: str, label: str, *, must_exist: bool) -> Path:
+    path = Path(value)
+    try:
+        probe = path if path.exists() else path.parent
+        if any(item.is_symlink() for item in (probe, *probe.parents)):
+            raise AssuranceIntegrationError(f"{label} must not be a symlink")
+        resolved = path.resolve(strict=must_exist)
+    except OSError as error:
+        raise AssuranceIntegrationError(f"{label} is unavailable") from error
+    if must_exist and not resolved.is_dir():
+        raise AssuranceIntegrationError(f"{label} is not a directory")
+    return resolved
+
+
+def _fixture_entry(root: Path, input_root: Path, relative: str) -> dict:
+    catalog = read_strict_json(resolve_regular_file(root, FIXTURE_CATALOG_PATH))
+    if not isinstance(catalog, dict):
+        raise AssuranceIntegrationError("fixture catalog is invalid")
+    verify_fixture_catalog(catalog)
+    fixture_root = (root / "tests/fixtures/ae-framework").resolve()
+    if input_root != fixture_root:
+        raise AssuranceIntegrationError(
+            "fixture input root does not match the catalog root"
+        )
+    matches = [item for item in catalog["fixtures"] if item["input_path"] == relative]
+    if len(matches) != 1:
+        raise AssuranceIntegrationError("input is not a catalogued fixture")
+    return matches[0]
+
+
+def run_one(
+    *,
+    root: Path,
+    profile_path: str,
+    input_root: Path,
+    relative_input: str,
+    output_root: Path,
+    mode: str,
+) -> tuple[bytes, bytes]:
+    if profile_path != PROFILE_PATH:
+        raise AssuranceIntegrationError(
+            "integration profile path is not the reviewed profile"
+        )
+    validate_relative_path(relative_input)
+    input_path = resolve_regular_file(input_root, relative_input)
+    raw = input_path.read_bytes()
+    producer = read_strict_json(input_path)
+    if not isinstance(producer, dict) or producer.get("mode") != mode:
+        raise AssuranceIntegrationError(
+            "trusted mode does not match the producer package"
+        )
+    if mode == "fixture-test":
+        fixture = _fixture_entry(root, input_root, relative_input)
+        if fixture["input_digest"] != file_digest(raw):
+            raise AssuranceIntegrationError("fixture input digest does not match")
+
+    if output_root.exists() or output_root.is_symlink():
+        raise AssuranceIntegrationError("final output root must not already exist")
+    parent = output_root.parent
+    if parent.is_symlink() or not parent.is_dir():
+        raise AssuranceIntegrationError("output parent is unavailable")
+    staging = parent / f".{output_root.name}.partial-{os.getpid()}"
+    if staging.exists() or staging.is_symlink():
+        raise AssuranceIntegrationError("staging output root already exists")
+    staging.mkdir(mode=0o700)
+    try:
+        package = build_assurance_package(root, producer, staging)
+        try:
+            from validate_ae_assurance import validate_package
+        except ImportError:  # pragma: no cover
+            from scripts.validate_ae_assurance import validate_package
+
+        validate_package(root, package)
+        json_bytes = canonical_json_bytes(package)
+        markdown_bytes = render_markdown(package).encode("utf-8")
+        json_path = staging / JSON_NAME
+        md_path = staging / MARKDOWN_NAME
+        json_path.write_bytes(json_bytes)
+        md_path.write_bytes(markdown_bytes)
+        for extra in list(staging.iterdir()):
+            if extra.name not in {JSON_NAME, MARKDOWN_NAME}:
+                if extra.is_dir() and not extra.is_symlink():
+                    shutil.rmtree(extra)
+                else:
+                    extra.unlink()
+        with json_path.open("rb") as handle:
+            os.fsync(handle.fileno())
+        with md_path.open("rb") as handle:
+            os.fsync(handle.fileno())
+        dir_fd = os.open(staging, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+        os.rename(staging, output_root)
+        return json_bytes, markdown_bytes
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", required=True)
+    parser.add_argument("--input-root", required=True)
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output-root", required=True)
+    parser.add_argument(
+        "--mode", required=True, choices=("fixture-test", "private-candidate")
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    root = Path(__file__).resolve().parents[1]
+    try:
+        input_root = _root_path(args.input_root, "input root", must_exist=True)
+        output_root = _root_path(args.output_root, "output root", must_exist=False)
+        run_one(
+            root=root,
+            profile_path=args.profile,
+            input_root=input_root,
+            relative_input=args.input,
+            output_root=output_root,
+            mode=args.mode,
+        )
+    except Exception:
+        print("ae Assurance execution failed: contract violation", file=sys.stderr)
+        return 2
+    print("ae Assurance execution completed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

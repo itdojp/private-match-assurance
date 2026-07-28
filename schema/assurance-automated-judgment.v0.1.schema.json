@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/assurance-automated-judgment.v0.1.schema.json",
+  "title": "Automated Assurance judgment v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_id",
+    "policy_version",
+    "state",
+    "required_gate_results",
+    "optional_gate_results",
+    "status_counts",
+    "rationale_codes",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "policy_id": {
+      "const": "private-match-assurance-automated-policy"
+    },
+    "policy_version": {
+      "const": "0.1"
+    },
+    "state": {
+      "enum": [
+        "satisfied",
+        "blocked",
+        "not-evaluated"
+      ]
+    },
+    "required_gate_results": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tool_id",
+          "requirement",
+          "status",
+          "gate_state",
+          "limitation"
+        ],
+        "properties": {
+          "tool_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requirement": {
+            "const": "required"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail",
+              "skip",
+              "unsupported",
+              "timeout",
+              "tool-error"
+            ]
+          },
+          "gate_state": {
+            "enum": [
+              "satisfied",
+              "blocked"
+            ]
+          },
+          "limitation": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "maxItems": 2
+    },
+    "optional_gate_results": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tool_id",
+          "requirement",
+          "status",
+          "gate_state",
+          "limitation"
+        ],
+        "properties": {
+          "tool_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requirement": {
+            "const": "optional"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail",
+              "skip",
+              "unsupported",
+              "timeout",
+              "tool-error"
+            ]
+          },
+          "gate_state": {
+            "enum": [
+              "satisfied",
+              "visible-nonblocking"
+            ]
+          },
+          "limitation": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "maxItems": 3
+    },
+    "status_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pass",
+        "fail",
+        "skip",
+        "unsupported",
+        "timeout",
+        "tool-error"
+      ],
+      "properties": {
+        "pass": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fail": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skip": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unsupported": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tool-error": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "rationale_codes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "description": "Automated gate result over supplied Evidence; satisfied does not imply human approval, publication approval, proof, or certification."
+}

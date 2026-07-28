@@ -1,0 +1,409 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/ae-framework-integration-profile.v0.1.schema.json",
+  "title": "Private Match ae-framework integration profile v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "profile_version",
+    "artifact_status",
+    "ae_framework_authority",
+    "assurance_policy",
+    "accepted_evidence",
+    "accepted_producer_types",
+    "required_check_ids",
+    "optional_check_ids",
+    "producer_status_mapping",
+    "automated_gate_policy",
+    "human_approval_policy",
+    "tool_absence_behavior",
+    "report_contract",
+    "reproducibility_contract",
+    "fixture_mode_contract",
+    "path_execution_contract",
+    "private_public_boundary",
+    "limitations",
+    "profile_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "profile_id": {
+      "const": "private-match-ae-assurance"
+    },
+    "profile_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "const": "draft"
+    },
+    "ae_framework_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pin_path",
+        "pin_digest"
+      ],
+      "properties": {
+        "pin_path": {
+          "const": "config/ae-framework-pin.v0.1.json"
+        },
+        "pin_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "assurance_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "const": "private-match-assurance-automated-policy"
+        },
+        "version": {
+          "const": "0.1"
+        }
+      }
+    },
+    "accepted_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_id",
+        "version"
+      ],
+      "properties": {
+        "schema_id": {
+          "const": "https://itdo.jp/schemas/private-match/assurance/evidence-item-0.1.json"
+        },
+        "version": {
+          "const": "0.1"
+        }
+      }
+    },
+    "accepted_producer_types": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "ci",
+          "formal-tool",
+          "test-runner",
+          "security-tool",
+          "human-review"
+        ]
+      }
+    },
+    "required_check_ids": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "optional_check_ids": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "producer_status_mapping": {
+      "type": "array",
+      "minItems": 30,
+      "maxItems": 30,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "raw_producer_status",
+          "normalized_evidence_status",
+          "producer_type",
+          "tool_id",
+          "rationale",
+          "required_limitation"
+        ],
+        "properties": {
+          "raw_producer_status": {
+            "enum": [
+              "pass",
+              "fail",
+              "skip",
+              "unsupported",
+              "timeout",
+              "tool-error"
+            ]
+          },
+          "normalized_evidence_status": {
+            "enum": [
+              "pass",
+              "fail",
+              "skip",
+              "unsupported",
+              "timeout",
+              "tool-error"
+            ]
+          },
+          "producer_type": {
+            "enum": [
+              "ci",
+              "formal-tool",
+              "test-runner",
+              "security-tool",
+              "human-review"
+            ]
+          },
+          "tool_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1
+          },
+          "required_limitation": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "automated_gate_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "states",
+        "satisfied_rule",
+        "blocked_rule",
+        "not_evaluated_rule"
+      ],
+      "properties": {
+        "states": {
+          "const": [
+            "satisfied",
+            "blocked",
+            "not-evaluated"
+          ]
+        },
+        "satisfied_rule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "blocked_rule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "not_evaluated_rule": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "human_approval_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "states",
+        "automation_can_approve",
+        "fixture_state",
+        "private_candidate_state",
+        "binding"
+      ],
+      "properties": {
+        "states": {
+          "const": [
+            "approved",
+            "rejected",
+            "required-not-provided",
+            "not-applicable",
+            "not-applicable-test-only"
+          ]
+        },
+        "automation_can_approve": {
+          "const": false
+        },
+        "fixture_state": {
+          "enum": [
+            "not-applicable-test-only",
+            "required-not-provided"
+          ]
+        },
+        "private_candidate_state": {
+          "const": "required-not-provided"
+        },
+        "binding": {
+          "const": "assurance_content_digest"
+        }
+      }
+    },
+    "tool_absence_behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "optional"
+      ],
+      "properties": {
+        "required": {
+          "const": "visible-and-blocked"
+        },
+        "optional": {
+          "const": "visible-and-nonblocking-unless-profile-requires"
+        }
+      }
+    },
+    "report_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "json_authority",
+        "markdown_source",
+        "native_summary_handling"
+      ],
+      "properties": {
+        "json_authority": {
+          "const": true
+        },
+        "markdown_source": {
+          "const": "validated-json-only"
+        },
+        "native_summary_handling": {
+          "const": "validated-path-free-projection"
+        }
+      }
+    },
+    "reproducibility_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deterministic",
+        "timestamp_source",
+        "network"
+      ],
+      "properties": {
+        "deterministic": {
+          "const": true
+        },
+        "timestamp_source": {
+          "const": "producer-package"
+        },
+        "network": {
+          "const": "forbidden"
+        }
+      }
+    },
+    "fixture_mode_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "catalog_required",
+        "artifact_status",
+        "live_approval_forbidden"
+      ],
+      "properties": {
+        "catalog_required": {
+          "const": true
+        },
+        "artifact_status": {
+          "const": "test-only"
+        },
+        "live_approval_forbidden": {
+          "const": true
+        }
+      }
+    },
+    "path_execution_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_input_only",
+        "symlink_policy",
+        "shell",
+        "arbitrary_arguments",
+        "subprocess_timeout_seconds",
+        "stdout_stderr_max_bytes"
+      ],
+      "properties": {
+        "relative_input_only": {
+          "const": true
+        },
+        "symlink_policy": {
+          "const": "reject"
+        },
+        "shell": {
+          "const": false
+        },
+        "arbitrary_arguments": {
+          "const": false
+        },
+        "subprocess_timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "stdout_stderr_max_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 1048576
+        }
+      }
+    },
+    "private_public_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "public_export_invoked",
+        "public_export_eligible",
+        "max_lifecycle",
+        "publication_approval"
+      ],
+      "properties": {
+        "public_export_invoked": {
+          "const": false
+        },
+        "public_export_eligible": {
+          "const": false
+        },
+        "max_lifecycle": {
+          "enum": [
+            "collected",
+            "validated",
+            "sanitized"
+          ]
+        },
+        "publication_approval": {
+          "const": "not-created"
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "profile_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "description": "Defines deterministic offline Evidence organization without creating facts, security proof, certification, human approval, publication approval, pilot readiness, or production readiness."
+}

@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/ae-assurance-fixture-catalog.v0.1.schema.json",
+  "title": "ae Assurance synthetic fixture catalog v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "fixtures",
+    "catalog_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "const": "test-only"
+    },
+    "fixtures": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fixture_id",
+          "mode",
+          "input_path",
+          "input_digest",
+          "expected_json_path",
+          "expected_json_digest",
+          "expected_markdown_path",
+          "expected_markdown_digest",
+          "expected_status_counts",
+          "expected_automated_judgment",
+          "expected_human_approval_state",
+          "artifact_status"
+        ],
+        "properties": {
+          "fixture_id": {
+            "type": "string",
+            "pattern": "^PMAE-FIXTURE-[A-Z0-9-]+-V0-1$"
+          },
+          "mode": {
+            "const": "fixture-test"
+          },
+          "input_path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)[A-Za-z0-9._/-]+$",
+            "minLength": 1
+          },
+          "input_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "expected_json_path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)[A-Za-z0-9._/-]+$",
+            "minLength": 1
+          },
+          "expected_json_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "expected_markdown_path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)[A-Za-z0-9._/-]+$",
+            "minLength": 1
+          },
+          "expected_markdown_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "expected_status_counts": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "pass",
+              "fail",
+              "skip",
+              "unsupported",
+              "timeout",
+              "tool-error"
+            ],
+            "properties": {
+              "pass": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "fail": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "skip": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "unsupported": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "timeout": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tool-error": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "expected_automated_judgment": {
+            "enum": [
+              "satisfied",
+              "blocked",
+              "not-evaluated"
+            ]
+          },
+          "expected_human_approval_state": {
+            "enum": [
+              "required-not-provided",
+              "not-applicable-test-only"
+            ]
+          },
+          "artifact_status": {
+            "const": "test-only"
+          }
+        }
+      }
+    },
+    "catalog_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "description": "Closed public synthetic fixture authority; fixture mode cannot create live approval or publication eligibility."
+}

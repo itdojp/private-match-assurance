@@ -1,5 +1,6 @@
 __pycache__/
 *.py[cod]
 .venv/
+node_modules/
 artifacts/
 .codex-local/

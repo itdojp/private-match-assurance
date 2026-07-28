@@ -67,6 +67,13 @@ Exit criteria:
 - a deterministic fixture report is generated
 - missing tools and skipped checks remain visible
 
+Draft v0.1 artifacts are defined in
+[`docs/AE_FRAMEWORK_INTEGRATION.md`](docs/AE_FRAMEWORK_INTEGRATION.md). They
+pin ae-framework commit `bba9b6846608359b87ed5393cb208e321f3ba8af`, preserve
+all six Evidence statuses, and separate automated judgment from human
+approval. Live Product Evidence, publication, and production-readiness claims
+remain outside A3.
+
 ## A4 — Signed assurance release bundle
 
 - manifest signing

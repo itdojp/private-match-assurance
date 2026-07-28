@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/ae-framework-pin.v0.1.schema.json",
+  "title": "Private Match ae-framework authority pin v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "repository",
+    "commit",
+    "package",
+    "entrypoint",
+    "source_manifest",
+    "input_schema_ids",
+    "output_contract_ids",
+    "tested_runtime",
+    "license",
+    "limitations",
+    "pin_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "const": "draft"
+    },
+    "repository": {
+      "const": "itdojp/ae-framework"
+    },
+    "commit": {
+      "const": "bba9b6846608359b87ed5393cb208e321f3ba8af"
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "const": "ae-framework"
+        },
+        "version": {
+          "const": "1.0.0"
+        }
+      }
+    },
+    "entrypoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "path",
+        "invocation_contract"
+      ],
+      "properties": {
+        "type": {
+          "const": "vendored-reviewed-subset"
+        },
+        "path": {
+          "const": "vendor/ae-framework/scripts/assurance/aggregate-lanes.mjs"
+        },
+        "invocation_contract": {
+          "const": "private-match-ae-fixed-cli/0.1"
+        }
+      }
+    },
+    "source_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "file_digest",
+        "source_tree_digest",
+        "manifest_digest"
+      ],
+      "properties": {
+        "path": {
+          "const": "vendor/ae-framework/source-manifest.v0.1.json"
+        },
+        "file_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "source_tree_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "manifest_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "input_schema_ids": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uri"
+      }
+    },
+    "output_contract_ids": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "tested_runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "python",
+        "operating_system",
+        "architecture"
+      ],
+      "properties": {
+        "node": {
+          "const": "22.22.2"
+        },
+        "python": {
+          "const": "3.12"
+        },
+        "operating_system": {
+          "const": "Ubuntu 24.04"
+        },
+        "architecture": {
+          "const": "x86_64"
+        }
+      }
+    },
+    "license": {
+      "const": "Apache-2.0"
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "pin_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "description": "Pins one reviewed ae-framework source closure; the framework organizes supplied Evidence and is not a proof or certification authority."
+}

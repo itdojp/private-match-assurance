@@ -61,6 +61,14 @@ shapes are closed per Evidence type, and the implementation binding covers the
 fixture trust catalog plus enforced CPython/JCS requirements; the listed OS
 target is not execution provenance.
 
+The Draft [ae-framework integration profile](docs/AE_FRAMEWORK_INTEGRATION.md)
+is a separate, private/internal Assurance processing boundary. It pins an
+unmodified reviewed ae-framework source closure, preserves all six Evidence
+statuses, generates deterministic JSON-authority/Markdown reports from public
+synthetic fixtures, and keeps automated judgment structurally separate from
+human approval. It does not invoke the public exporter, process live Product
+Evidence, certify the Product, or authorize publication.
+
 ## Related repositories
 
 - `itdojp/private-match-protocol` — public protocol specifications and conformance assets

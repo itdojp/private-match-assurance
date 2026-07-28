@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/assurance-human-approval.v0.1.schema.json",
+  "title": "Human approval boundary v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "state",
+    "reviewer_role",
+    "reviewer_identity_verified",
+    "bound_assurance_content_digest",
+    "generated_by_automation",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "state": {
+      "enum": [
+        "approved",
+        "rejected",
+        "required-not-provided",
+        "not-applicable",
+        "not-applicable-test-only"
+      ]
+    },
+    "reviewer_role": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reviewer_identity_verified": {
+      "type": "boolean"
+    },
+    "bound_assurance_content_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "generated_by_automation": {
+      "const": false
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "not-applicable-test-only"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reviewer_role": {
+            "const": "synthetic-reviewer"
+          },
+          "reviewer_identity_verified": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "required-not-provided",
+              "not-applicable"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reviewer_role": {
+            "type": "null"
+          },
+          "reviewer_identity_verified": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "approved",
+              "rejected"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reviewer_role": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reviewer_identity_verified": {
+            "const": true
+          },
+          "generated_by_automation": {
+            "const": false
+          }
+        }
+      }
+    }
+  ],
+  "description": "Human approval provenance is separate from automation; CI, agents, fixtures, and ae-framework cannot generate a live approval."
+}

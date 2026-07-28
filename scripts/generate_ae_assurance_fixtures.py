@@ -24,7 +24,8 @@ try:
         verify_fixture_catalog,
     )
     from canonical_json import domain_digest, file_digest
-    from run_ae_assurance import JSON_NAME, MARKDOWN_NAME, run_one
+    from ae_assurance_output_set import JSON_NAME, MARKDOWN_NAME, OUTPUT_SET_NAME
+    from run_ae_assurance import run_one
 except ImportError:  # pragma: no cover
     from scripts.ae_assurance_common import (
         STATUS_VALUES,
@@ -42,7 +43,12 @@ except ImportError:  # pragma: no cover
         verify_fixture_catalog,
     )
     from scripts.canonical_json import domain_digest, file_digest
-    from scripts.run_ae_assurance import JSON_NAME, MARKDOWN_NAME, run_one
+    from scripts.ae_assurance_output_set import (
+        JSON_NAME,
+        MARKDOWN_NAME,
+        OUTPUT_SET_NAME,
+    )
+    from scripts.run_ae_assurance import run_one
 
 
 FIXTURE_ROOT = Path("tests/fixtures/ae-framework")
@@ -180,6 +186,12 @@ def _build_input(
         "mode": "fixture-test",
         "created_at": "2030-01-01T00:01:00Z",
         "source_revision_digest": _synthetic_digest(f"{slug}:source"),
+        "subject": {
+            "type": "source-revision",
+            "identifier": "synthetic-private-match-product",
+            "version": "0.1",
+            "digest": _synthetic_digest(f"{slug}:source"),
+        },
         "records": records,
         "limitations": [
             "All identifiers and digests are public synthetic fixture values.",
@@ -201,6 +213,7 @@ def _counts(statuses: dict[str, str]) -> dict[str, int]:
 
 def write_fixtures(root: Path) -> None:
     fixture_root = root / FIXTURE_ROOT
+    shutil.rmtree(fixture_root / "expected", ignore_errors=True)
     (fixture_root / "input").mkdir(parents=True, exist_ok=True)
     (fixture_root / "expected").mkdir(parents=True, exist_ok=True)
     inventory = read_strict_json(resolve_regular_file(root, TOOL_INVENTORY_PATH))
@@ -217,12 +230,14 @@ def write_fixtures(root: Path) -> None:
                 "mode": "fixture-test",
                 "input_path": input_relative,
                 "input_digest": file_digest(input_path.read_bytes()),
-                "expected_json_path": f"expected/{slug}.json",
+                "expected_json_path": f"expected/{slug}/{JSON_NAME}",
                 "expected_json_digest": "sha256:" + "0" * 64,
-                "expected_markdown_path": f"expected/{slug}.md",
+                "expected_markdown_path": f"expected/{slug}/{MARKDOWN_NAME}",
                 "expected_markdown_digest": "sha256:" + "0" * 64,
+                "expected_output_set_path": f"expected/{slug}/{OUTPUT_SET_NAME}",
+                "expected_output_set_digest": "sha256:" + "0" * 64,
                 "expected_status_counts": _counts(statuses),
-                "expected_automated_judgment": "satisfied"
+                "expected_automated_judgment": "satisfied-with-warnings"
                 if all(
                     statuses[tool] == "pass"
                     for tool in (
@@ -249,21 +264,28 @@ def write_fixtures(root: Path) -> None:
     temp_root.mkdir(parents=True)
     for entry in entries:
         slug = Path(entry["input_path"]).stem
-        output = temp_root / slug
         run_one(
             root=root,
             profile_path=PROFILE_PATH,
             input_root=fixture_root.resolve(),
             relative_input=entry["input_path"],
-            output_root=output,
+            output_root=temp_root,
+            relative_output=slug,
             mode="fixture-test",
         )
+        output = temp_root / slug
         json_target = fixture_root / entry["expected_json_path"]
         md_target = fixture_root / entry["expected_markdown_path"]
+        output_set_target = fixture_root / entry["expected_output_set_path"]
+        json_target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(output / JSON_NAME, json_target)
         shutil.copyfile(output / MARKDOWN_NAME, md_target)
+        shutil.copyfile(output / OUTPUT_SET_NAME, output_set_target)
         entry["expected_json_digest"] = file_digest(json_target.read_bytes())
         entry["expected_markdown_digest"] = file_digest(md_target.read_bytes())
+        entry["expected_output_set_digest"] = file_digest(
+            output_set_target.read_bytes()
+        )
     shutil.rmtree(temp_root)
     catalog["catalog_digest"] = artifact_digest(
         FIXTURE_CATALOG_DOMAIN, catalog, "catalog_digest"
@@ -282,30 +304,43 @@ def check_fixtures(root: Path) -> None:
         for entry in catalog["fixtures"]:
             outputs = []
             for iteration in (1, 2):
-                output = temp_root / f"{entry['fixture_id']}-{iteration}"
+                relative_output = f"{entry['fixture_id']}-{iteration}"
                 run_one(
                     root=root,
                     profile_path=PROFILE_PATH,
                     input_root=fixture_root,
                     relative_input=entry["input_path"],
-                    output_root=output,
+                    output_root=temp_root,
+                    relative_output=relative_output,
                     mode="fixture-test",
                 )
-                outputs.append((output / JSON_NAME, output / MARKDOWN_NAME))
+                output = temp_root / relative_output
+                outputs.append(
+                    (
+                        output / JSON_NAME,
+                        output / MARKDOWN_NAME,
+                        output / OUTPUT_SET_NAME,
+                    )
+                )
             expected_json = resolve_regular_file(
                 fixture_root, entry["expected_json_path"]
             ).read_bytes()
             expected_md = resolve_regular_file(
                 fixture_root, entry["expected_markdown_path"]
             ).read_bytes()
+            expected_output_set = resolve_regular_file(
+                fixture_root, entry["expected_output_set_path"]
+            ).read_bytes()
             if (
                 outputs[0][0].read_bytes() != outputs[1][0].read_bytes()
                 or outputs[0][1].read_bytes() != outputs[1][1].read_bytes()
+                or outputs[0][2].read_bytes() != outputs[1][2].read_bytes()
             ):
                 raise ValueError("fixture execution is not byte-identical")
             if (
                 outputs[0][0].read_bytes() != expected_json
                 or outputs[0][1].read_bytes() != expected_md
+                or outputs[0][2].read_bytes() != expected_output_set
             ):
                 raise ValueError("fixture expected output is stale")
     finally:

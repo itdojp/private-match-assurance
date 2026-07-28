@@ -173,10 +173,13 @@ Only `pass` supports a positive statement about that specific check. Other statu
 The Draft ae-framework integration preserves this exact vocabulary for every
 producer and external tool. It does not collapse or promote statuses: in
 particular, `skip` and `unsupported` do not become `pass`, while `timeout` and
-`tool-error` do not become `fail`. Required non-pass checks block the automated
-judgment; optional non-pass checks remain visible under the profile policy.
-The resulting automated judgment is not an Evidence status and is
-structurally separate from human approval.
+`tool-error` do not become `fail`. Required non-pass checks block the producer
+gate; optional non-pass checks remain visible under the profile policy. Native
+ae-framework claims and warnings form a second judgment surface. The combined
+result may be `satisfied-with-warnings`, but it never rewrites an Evidence
+status. Automated judgments are not Evidence statuses and remain structurally
+separate from the current machine-generated no-decision human approval
+boundary.
 
 ## Lifecycle semantics
 

@@ -16,6 +16,7 @@ try:
         load_schema,
         read_strict_json,
         resolve_regular_file,
+        validate_relative_path,
         validate_schema_instance,
     )
     from ae_framework_manifest import (
@@ -33,6 +34,7 @@ except ImportError:  # pragma: no cover
         load_schema,
         read_strict_json,
         resolve_regular_file,
+        validate_relative_path,
         validate_schema_instance,
     )
     from scripts.ae_framework_manifest import (
@@ -60,6 +62,21 @@ JSON_REPORT_DOMAIN = "private-match-ae-assurance-json-report/v0.1"
 MARKDOWN_REPORT_DOMAIN = "private-match-ae-assurance-markdown-report/v0.1"
 NATIVE_PROJECTION_DOMAIN = "private-match-ae-native-summary-projection/v0.1"
 EVIDENCE_RECORD_DOMAIN = "private-match-ae-evidence-record/v0.1"
+OUTPUT_SET_DOMAIN = "private-match-ae-assurance-output-set/v0.1"
+
+AE_NATIVE_WARNING_CODES = (
+    "all-evidence-derived-from-source",
+    "same-generator-lineage",
+    "missing-spec-derived-evidence",
+    "unresolved-critical-counterexample",
+    "insufficient-independent-lanes",
+    "context-pack-profile-mismatch",
+    "unknown-claim-ref",
+    "unlinked-counterexample",
+    "unrecognized-evidence-claim",
+    "assumption-validation-required",
+    "untrusted-formal-summary",
+)
 
 SCHEMA_PATHS = {
     "pin": "schema/ae-framework-pin.v0.1.schema.json",
@@ -68,10 +85,13 @@ SCHEMA_PATHS = {
     "tools": "schema/ae-assurance-tool-inventory.v0.1.schema.json",
     "producer": "schema/private-match-producer-package.v0.1.schema.json",
     "automated": "schema/assurance-automated-judgment.v0.1.schema.json",
+    "producer_gate": "schema/assurance-producer-gate-judgment.v0.1.schema.json",
+    "native_judgment": "schema/ae-native-judgment.v0.1.schema.json",
     "approval": "schema/assurance-human-approval.v0.1.schema.json",
     "package": "schema/private-match-assurance-package.v0.1.schema.json",
     "catalog": "schema/ae-assurance-fixture-catalog.v0.1.schema.json",
     "implementation": "schema/ae-assurance-runner-implementation.v0.1.schema.json",
+    "output_set": "schema/ae-assurance-output-set.v0.1.schema.json",
     "evidence": "schema/evidence-item.schema.json",
 }
 
@@ -229,6 +249,15 @@ def load_authority(root: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str
         raise AssuranceIntegrationError(
             "profile tool requirements do not match inventory"
         )
+    native_policy = profile["native_ae_judgment_policy"]
+    blocking = native_policy["blocking_warning_codes"]
+    visible = native_policy["visible_nonblocking_warning_codes"]
+    if (
+        set(blocking) & set(visible)
+        or (set(blocking) | set(visible)) != set(AE_NATIVE_WARNING_CODES)
+        or native_policy["unknown_warning_behavior"] != "fail-closed"
+    ):
+        raise AssuranceIntegrationError("native ae warning policy is not closed")
     return pin, inventory, profile
 
 
@@ -256,9 +285,17 @@ def verify_fixture_catalog(value: dict[str, Any]) -> None:
     ids: set[str] = set()
     paths: set[str] = set()
     for fixture in value["fixtures"]:
-        if fixture["fixture_id"] in ids or fixture["input_path"] in paths:
+        fixture_paths = [
+            fixture["input_path"],
+            fixture["expected_json_path"],
+            fixture["expected_markdown_path"],
+            fixture["expected_output_set_path"],
+        ]
+        if fixture["fixture_id"] in ids or any(path in paths for path in fixture_paths):
             raise AssuranceIntegrationError(
                 "fixture catalog contains duplicate bindings"
             )
         ids.add(fixture["fixture_id"])
-        paths.add(fixture["input_path"])
+        for path in fixture_paths:
+            validate_relative_path(path)
+            paths.add(path)

@@ -91,6 +91,13 @@ PRIVATE_TEXT_PATTERNS = (
     re.compile(r"\b(?:localhost|[A-Za-z0-9-]+\.internal)\b", re.IGNORECASE),
     re.compile(r"\bcustomer(?:[_ -]?(?:id|identifier))?\s*[:=]\s*\S+", re.IGNORECASE),
     re.compile(r"\b(?:password|credential|secret|token)\s*[:=]\s*\S+", re.IGNORECASE),
+    re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE),
+    re.compile(r"(?:\+\d{8,15}|\b\d{2,4}[- )]\d{2,4}[- ]\d{3,4}\b)"),
+    re.compile(
+        r"\b(?:tenant|account|organization|org|user)(?:[_ -]?(?:id|identifier))?\s*[:=]\s*\S+",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b(?:github\.com|gitlab\.com)/[^/\s]+/[^/\s]+", re.IGNORECASE),
 )
 PROHIBITED_CLAIM_PATTERNS = (
     re.compile(
@@ -115,6 +122,30 @@ TYPE_TO_NATIVE = {
     "formal-tool": ("model", "model-check", "model-derived"),
     "security-tool": ("adversarial", "fuzz", "source-derived"),
     "human-review": ("spec", "schema", "manual"),
+}
+PRODUCER_IDS = {
+    "fixture-test": {
+        producer_type: f"synthetic-{producer_type}-producer"
+        for producer_type in TYPE_TO_EVIDENCE
+    },
+    "private-candidate": {
+        producer_type: f"private-match-product-{producer_type}"
+        for producer_type in TYPE_TO_EVIDENCE
+    },
+}
+MODE_LIMITATION = {
+    "fixture-test": "Public synthetic fixture only; no private Product execution is represented.",
+    "private-candidate": "Private candidate metadata only; no raw Product data is represented.",
+}
+MODE_PACKAGE_LIMITATIONS = {
+    "fixture-test": [
+        "All identifiers and digests are public synthetic fixture values.",
+        "The package is not eligible for public export or live approval.",
+    ],
+    "private-candidate": [
+        "All identifiers are closed role IDs and digests bind the private candidate source revision.",
+        "The package is retained privately and is not eligible for public export or live approval.",
+    ],
 }
 
 
@@ -172,6 +203,29 @@ def validate_producer_package(
         raise AssuranceIntegrationError(
             "test-only Evidence cannot become a private candidate"
         )
+    expected_subject = {
+        "type": "source-revision",
+        "identifier": (
+            "synthetic-private-match-product"
+            if package["mode"] == "fixture-test"
+            else "private-match-product"
+        ),
+        "version": "0.1",
+        "digest": package["source_revision_digest"],
+    }
+    if package["subject"] != expected_subject:
+        raise AssuranceIntegrationError("producer subject provenance does not match")
+    expected_package_id = (
+        None
+        if package["mode"] == "fixture-test"
+        else "PMAE-PRODUCER-PRIVATE-CANDIDATE-V0-1"
+    )
+    if expected_package_id is not None and package["package_id"] != expected_package_id:
+        raise AssuranceIntegrationError(
+            "private candidate package identity is not closed"
+        )
+    if package["limitations"] != MODE_PACKAGE_LIMITATIONS[package["mode"]]:
+        raise AssuranceIntegrationError("producer package limitations are not closed")
     tool_by_id = {tool["tool_id"]: tool for tool in inventory["tools"]}
     records = {record["tool_id"]: record for record in package["records"]}
     if set(records) != set(tool_by_id):
@@ -180,12 +234,11 @@ def validate_producer_package(
         )
     for tool_id, tool in tool_by_id.items():
         record = records[tool_id]
-        if package["mode"] == "fixture-test" and not record["producer_id"].startswith(
-            "synthetic-"
+        if (
+            record["producer_id"]
+            != PRODUCER_IDS[package["mode"]][record["producer_type"]]
         ):
-            raise AssuranceIntegrationError(
-                "fixture producer identity is not synthetic"
-            )
+            raise AssuranceIntegrationError("producer identity is not a closed role ID")
         if (
             record["producer_type"] != tool["producer_type"]
             or record["tool_version"] != tool["version"]
@@ -202,8 +255,16 @@ def validate_producer_package(
         )
         if mapping is None or mapping["normalized_evidence_status"] != record["status"]:
             raise AssuranceIntegrationError("producer status mapping is unavailable")
-        if mapping["required_limitation"] not in record["limitations"]:
-            raise AssuranceIntegrationError("producer status limitation is missing")
+        if record["limitations"] != [
+            mapping["required_limitation"],
+            MODE_LIMITATION[package["mode"]],
+        ]:
+            raise AssuranceIntegrationError("producer limitations are not closed")
+        expected_summary = (
+            "Synthetic" if package["mode"] == "fixture-test" else "Private candidate"
+        ) + f" {record['producer_type']} status record."
+        if record["summary"] != expected_summary:
+            raise AssuranceIntegrationError("producer summary is not a closed value")
         if _parse_time(record["completed_at"]) < _parse_time(record["started_at"]):
             raise AssuranceIntegrationError("producer timestamps are not ordered")
     if profile["accepted_producer_types"] != [
@@ -217,7 +278,11 @@ def validate_producer_package(
 
 
 def _evidence_record(
-    record: dict[str, Any], package_digest: str, *, required: bool
+    record: dict[str, Any],
+    package_digest: str,
+    subject: dict[str, Any],
+    *,
+    required: bool,
 ) -> dict[str, Any]:
     status = record["status"]
     ran = status not in {"skip", "unsupported"}
@@ -228,6 +293,7 @@ def _evidence_record(
         "protocol_case_digest": record["protocol_case_digest"],
         "protocol_input_digest": record["protocol_input_digest"],
         "test_only": record["test_only"],
+        "retention_classification": record["retention_classification"],
         "public_export_eligibility": False,
     }
     evidence_type = TYPE_TO_EVIDENCE[record["producer_type"]]
@@ -260,12 +326,7 @@ def _evidence_record(
                 "review_digest": package_digest,
             },
         ],
-        "subject": {
-            "type": "source-revision",
-            "identifier": "synthetic-private-match-product",
-            "version": "0.1",
-            "digest": record["source_revision_digest"],
-        },
+        "subject": copy.deepcopy(subject),
         "input_digests": [
             record["protocol_suite_digest"],
             record["protocol_case_digest"],
@@ -534,6 +595,106 @@ def _gate_results(
     return required, optional
 
 
+def _producer_gate_judgment(
+    required: list[dict[str, Any]],
+    optional: list[dict[str, Any]],
+    counts: dict[str, int],
+) -> dict[str, Any]:
+    state = (
+        "satisfied" if all(item["status"] == "pass" for item in required) else "blocked"
+    )
+    return {
+        "schema_version": "0.1",
+        "state": state,
+        "required_gate_results": required,
+        "optional_gate_results": optional,
+        "status_counts": counts,
+        "rationale_codes": [
+            "ALL-REQUIRED-PASS" if state == "satisfied" else "REQUIRED-NONPASS-BLOCKS"
+        ],
+        "limitations": [
+            "Producer-gate judgment is limited to supplied validated Evidence statuses.",
+            "Optional non-pass statuses remain visible and are not promoted.",
+        ],
+    }
+
+
+def derive_native_judgment(
+    native_projection: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, Any]:
+    """Evaluate the native summary against the closed reviewed warning policy."""
+
+    policy = profile["native_ae_judgment_policy"]
+    blocking = set(policy["blocking_warning_codes"])
+    visible = set(policy["visible_nonblocking_warning_codes"])
+    observed_codes = set(native_projection["warning_codes"])
+    for claim in native_projection["claims"]:
+        observed_codes.update(claim["warning_codes"])
+    unknown = observed_codes - blocking - visible
+    if unknown:
+        raise AssuranceIntegrationError("native ae warning code is not reviewed")
+    has_missing_required = any(
+        claim["missing_lanes"] or claim["missing_evidence_kinds"]
+        for claim in native_projection["claims"]
+    )
+    if has_missing_required or observed_codes & blocking:
+        state = "blocked"
+        treatment = "blocking"
+        rationale = ["NATIVE-REQUIRED-SURFACE-BLOCKED"]
+    elif observed_codes:
+        state = "warning"
+        treatment = "visible-nonblocking"
+        rationale = ["NATIVE-WARNING-REVIEWED-NONBLOCKING"]
+    elif all(claim["status"] == "satisfied" for claim in native_projection["claims"]):
+        state = "satisfied"
+        treatment = "not-applicable"
+        rationale = ["NATIVE-CLAIMS-SATISFIED"]
+    else:
+        raise AssuranceIntegrationError("native ae judgment is not determinable")
+    return {
+        "schema_version": "0.1",
+        "state": state,
+        "claim_results": copy.deepcopy(native_projection["claims"]),
+        "warning_codes": sorted(observed_codes),
+        "policy_treatment": treatment,
+        "rationale_codes": rationale,
+        "limitations": [
+            "Native ae judgment organizes supplied lanes and does not prove correctness.",
+            "Unknown native warnings fail closed instead of becoming satisfied.",
+        ],
+    }
+
+
+def _combined_automated_judgment(
+    producer_gate: dict[str, Any], native_judgment: dict[str, Any]
+) -> dict[str, Any]:
+    if producer_gate["state"] == "blocked" or native_judgment["state"] == "blocked":
+        state = "blocked"
+        rationale = "PRODUCER-OR-NATIVE-BLOCKED"
+    elif native_judgment["state"] == "warning":
+        state = "satisfied-with-warnings"
+        rationale = "REVIEWED-NATIVE-WARNING-VISIBLE"
+    elif native_judgment["state"] == "satisfied":
+        state = "satisfied"
+        rationale = "PRODUCER-AND-NATIVE-SATISFIED"
+    else:
+        state = "not-evaluated"
+        rationale = "NATIVE-JUDGMENT-NOT-EVALUATED"
+    return {
+        "schema_version": "0.1",
+        "policy_id": "private-match-assurance-automated-policy",
+        "policy_version": "0.1",
+        "state": state,
+        "producer_gate_state": producer_gate["state"],
+        "native_ae_state": native_judgment["state"],
+        "rationale_codes": [rationale],
+        "limitations": [
+            "Combined automated judgment is limited to the two declared judgment surfaces.",
+            "Automated satisfaction is not human approval or publication approval.",
+        ],
+    }
+
+
 def build_assurance_package(
     root: Path, producer_package: dict[str, Any], staging: Path
 ) -> dict[str, Any]:
@@ -552,6 +713,7 @@ def build_assurance_package(
         _evidence_record(
             record,
             producer_digest,
+            normalized_producer_package["subject"],
             required=tools_by_id[record["tool_id"]]["requirement"] == "required",
         )
         for record in ordered_records
@@ -565,27 +727,9 @@ def build_assurance_package(
     counts = {status: 0 for status in STATUS_VALUES}
     for record in ordered_records:
         counts[record["status"]] += 1
-    automated_state = (
-        "satisfied" if all(item["status"] == "pass" for item in required) else "blocked"
-    )
-    automated = {
-        "schema_version": "0.1",
-        "policy_id": "private-match-assurance-automated-policy",
-        "policy_version": "0.1",
-        "state": automated_state,
-        "required_gate_results": required,
-        "optional_gate_results": optional,
-        "status_counts": counts,
-        "rationale_codes": [
-            "ALL-REQUIRED-PASS"
-            if automated_state == "satisfied"
-            else "REQUIRED-NONPASS-BLOCKS"
-        ],
-        "limitations": [
-            "Automated judgment is limited to the supplied validated Evidence contracts.",
-            "Automated satisfaction is not human approval or publication approval.",
-        ],
-    }
+    producer_gate = _producer_gate_judgment(required, optional, counts)
+    native_judgment = derive_native_judgment(native_projection, profile)
+    automated = _combined_automated_judgment(producer_gate, native_judgment)
     evidence_refs = [
         {
             "evidence_id": record["id"],
@@ -645,6 +789,8 @@ def build_assurance_package(
         "producer_inventory": producer_inventory,
         "external_tool_inventory": external_tools,
         "native_ae_summary_projection": native_projection,
+        "native_ae_judgment": native_judgment,
+        "producer_gate_judgment": producer_gate,
         "automated_judgment": automated,
         "required_gate_results": required,
         "optional_gate_results": optional,
@@ -653,8 +799,16 @@ def build_assurance_package(
             "ae-framework organizes supplied Evidence and is not an oracle of truth.",
             "This package is neither a security proof nor certification.",
             "Automated satisfaction is not human approval or publication approval.",
-            "Synthetic fixtures do not establish Product or Protocol correctness.",
-            "No live Product Evidence, private input, or public export is included.",
+            (
+                "Synthetic fixtures do not establish Product or Protocol correctness."
+                if producer_package["mode"] == "fixture-test"
+                else "Private-candidate digest metadata does not establish Product or Protocol correctness."
+            ),
+            (
+                "No live Product Evidence, private input, or public export is included."
+                if producer_package["mode"] == "fixture-test"
+                else "No raw Product Evidence, private input, or public export is included."
+            ),
             "Native ae-framework warnings remain visible and do not rewrite producer statuses.",
         ],
         "lifecycle_boundary": {
@@ -675,7 +829,9 @@ def build_assurance_package(
         else None,
         "reviewer_identity_verified": False,
         "bound_assurance_content_digest": content_digest,
-        "generated_by_automation": False,
+        "boundary_artifact_generated_by_automation": True,
+        "approval_decision_generated_by_automation": False,
+        "approval_decision_present": False,
         "limitations": [
             "No real reviewer identity or authority is asserted.",
             "Automation and ae-framework cannot create human approval.",
@@ -688,13 +844,15 @@ def build_assurance_package(
     }
     report_material = copy.deepcopy(package)
     package["report_digests"] = {
-        "json_semantic_digest": domain_digest(JSON_REPORT_DOMAIN, report_material),
-        "markdown_semantic_digest": domain_digest(
-            MARKDOWN_REPORT_DOMAIN, report_material
-        ),
+        "json_model_digest": domain_digest(JSON_REPORT_DOMAIN, report_material),
+        "markdown_model_digest": domain_digest(MARKDOWN_REPORT_DOMAIN, report_material),
     }
     package["package_digest"] = domain_digest(ASSURANCE_PACKAGE_DOMAIN, package)
     validate_schema_instance(package, schemas["package"], registry=registry)
     validate_schema_instance(automated, schemas["automated"], registry=registry)
+    validate_schema_instance(producer_gate, schemas["producer_gate"], registry=registry)
+    validate_schema_instance(
+        native_judgment, schemas["native_judgment"], registry=registry
+    )
     validate_schema_instance(approval, schemas["approval"], registry=registry)
     return package

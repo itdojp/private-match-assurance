@@ -15,6 +15,8 @@ try:
         canonical_json_bytes,
         read_strict_json,
         resolve_regular_file,
+        resolve_new_directory,
+        resolve_trusted_directory,
         validate_relative_path,
     )
     from ae_assurance_policy import (
@@ -23,6 +25,13 @@ try:
         verify_fixture_catalog,
     )
     from ae_framework_adapter import build_assurance_package
+    from ae_assurance_output_set import (
+        JSON_NAME,
+        MARKDOWN_NAME,
+        OUTPUT_SET_NAME,
+        build_output_set,
+        validate_output_directory,
+    )
     from canonical_json import file_digest
     from render_ae_assurance_report import render_markdown
 except ImportError:  # pragma: no cover
@@ -31,6 +40,8 @@ except ImportError:  # pragma: no cover
         canonical_json_bytes,
         read_strict_json,
         resolve_regular_file,
+        resolve_new_directory,
+        resolve_trusted_directory,
         validate_relative_path,
     )
     from scripts.ae_assurance_policy import (
@@ -39,25 +50,25 @@ except ImportError:  # pragma: no cover
         verify_fixture_catalog,
     )
     from scripts.ae_framework_adapter import build_assurance_package
+    from scripts.ae_assurance_output_set import (
+        JSON_NAME,
+        MARKDOWN_NAME,
+        OUTPUT_SET_NAME,
+        build_output_set,
+        validate_output_directory,
+    )
     from scripts.canonical_json import file_digest
     from scripts.render_ae_assurance_report import render_markdown
 
 
-JSON_NAME = "private-match-assurance-package.v0.1.json"
-MARKDOWN_NAME = "private-match-assurance-package.v0.1.md"
-
-
-def _root_path(value: str, label: str, *, must_exist: bool) -> Path:
+def _root_path(value: str, label: str) -> Path:
     path = Path(value)
     try:
-        probe = path if path.exists() else path.parent
-        if any(item.is_symlink() for item in (probe, *probe.parents)):
+        if any(item.is_symlink() for item in (path, *path.parents)):
             raise AssuranceIntegrationError(f"{label} must not be a symlink")
-        resolved = path.resolve(strict=must_exist)
+        resolved = resolve_trusted_directory(path)
     except OSError as error:
         raise AssuranceIntegrationError(f"{label} is unavailable") from error
-    if must_exist and not resolved.is_dir():
-        raise AssuranceIntegrationError(f"{label} is not a directory")
     return resolved
 
 
@@ -84,8 +95,9 @@ def run_one(
     input_root: Path,
     relative_input: str,
     output_root: Path,
+    relative_output: str,
     mode: str,
-) -> tuple[bytes, bytes]:
+) -> tuple[bytes, bytes, bytes]:
     if profile_path != PROFILE_PATH:
         raise AssuranceIntegrationError(
             "integration profile path is not the reviewed profile"
@@ -103,12 +115,9 @@ def run_one(
         if fixture["input_digest"] != file_digest(raw):
             raise AssuranceIntegrationError("fixture input digest does not match")
 
-    if output_root.exists() or output_root.is_symlink():
-        raise AssuranceIntegrationError("final output root must not already exist")
-    parent = output_root.parent
-    if parent.is_symlink() or not parent.is_dir():
-        raise AssuranceIntegrationError("output parent is unavailable")
-    staging = parent / f".{output_root.name}.partial-{os.getpid()}"
+    final_output = resolve_new_directory(output_root, relative_output)
+    parent = final_output.parent
+    staging = parent / f".{final_output.name}.partial-{os.getpid()}"
     if staging.exists() or staging.is_symlink():
         raise AssuranceIntegrationError("staging output root already exists")
     staging.mkdir(mode=0o700)
@@ -122,27 +131,31 @@ def run_one(
         validate_package(root, package)
         json_bytes = canonical_json_bytes(package)
         markdown_bytes = render_markdown(package).encode("utf-8")
+        output_set = build_output_set(root, package, json_bytes, markdown_bytes)
+        output_set_bytes = canonical_json_bytes(output_set)
         json_path = staging / JSON_NAME
         md_path = staging / MARKDOWN_NAME
+        output_set_path = staging / OUTPUT_SET_NAME
         json_path.write_bytes(json_bytes)
         md_path.write_bytes(markdown_bytes)
+        output_set_path.write_bytes(output_set_bytes)
         for extra in list(staging.iterdir()):
-            if extra.name not in {JSON_NAME, MARKDOWN_NAME}:
+            if extra.name not in {JSON_NAME, MARKDOWN_NAME, OUTPUT_SET_NAME}:
                 if extra.is_dir() and not extra.is_symlink():
                     shutil.rmtree(extra)
                 else:
                     extra.unlink()
-        with json_path.open("rb") as handle:
-            os.fsync(handle.fileno())
-        with md_path.open("rb") as handle:
-            os.fsync(handle.fileno())
+        validate_output_directory(root, staging)
+        for path in (json_path, md_path, output_set_path):
+            with path.open("rb") as handle:
+                os.fsync(handle.fileno())
         dir_fd = os.open(staging, os.O_RDONLY)
         try:
             os.fsync(dir_fd)
         finally:
             os.close(dir_fd)
-        os.rename(staging, output_root)
-        return json_bytes, markdown_bytes
+        os.rename(staging, final_output)
+        return json_bytes, markdown_bytes, output_set_bytes
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
         raise
@@ -154,6 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-root", required=True)
     parser.add_argument("--input", required=True)
     parser.add_argument("--output-root", required=True)
+    parser.add_argument("--output", required=True)
     parser.add_argument(
         "--mode", required=True, choices=("fixture-test", "private-candidate")
     )
@@ -164,14 +178,15 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     root = Path(__file__).resolve().parents[1]
     try:
-        input_root = _root_path(args.input_root, "input root", must_exist=True)
-        output_root = _root_path(args.output_root, "output root", must_exist=False)
+        input_root = _root_path(args.input_root, "input root")
+        output_root = _root_path(args.output_root, "output root")
         run_one(
             root=root,
             profile_path=args.profile,
             input_root=input_root,
             relative_input=args.input,
             output_root=output_root,
+            relative_output=args.output,
             mode=args.mode,
         )
     except Exception:

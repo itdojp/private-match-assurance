@@ -23,6 +23,12 @@ try:
         adapter_source_digest,
         verify_manifest,
     )
+    from ae_assurance_output_set import validate_output_directory
+    from ae_framework_adapter import (
+        _combined_automated_judgment,
+        _producer_gate_judgment,
+        derive_native_judgment,
+    )
     from ae_assurance_policy import (
         ASSURANCE_CONTENT_DOMAIN,
         ASSURANCE_PACKAGE_DOMAIN,
@@ -52,6 +58,12 @@ except ImportError:  # pragma: no cover
         adapter_source_digest,
         verify_manifest,
     )
+    from scripts.ae_assurance_output_set import validate_output_directory
+    from scripts.ae_framework_adapter import (
+        _combined_automated_judgment,
+        _producer_gate_judgment,
+        derive_native_judgment,
+    )
     from scripts.ae_assurance_policy import (
         ASSURANCE_CONTENT_DOMAIN,
         ASSURANCE_PACKAGE_DOMAIN,
@@ -74,8 +86,12 @@ FIXTURE_ROOT = Path("tests/fixtures/ae-framework")
 def validate_judgment_approval_boundary(
     automated_state: str, approval_state: str
 ) -> None:
-    if automated_state == "blocked" and approval_state == "approved":
-        raise AssuranceIntegrationError("human approval cannot override a blocked gate")
+    if approval_state not in {"required-not-provided", "not-applicable-test-only"}:
+        raise AssuranceIntegrationError(
+            "current runner cannot represent a live approval"
+        )
+    if automated_state == "blocked" and approval_state == "required-not-provided":
+        return
 
 
 def validate_package(root: Path, package: dict[str, Any]) -> None:
@@ -87,6 +103,12 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
         validate_schema_instance(evidence, schemas["evidence"], registry=registry)
     validate_schema_instance(
         package["automated_judgment"], schemas["automated"], registry=registry
+    )
+    validate_schema_instance(
+        package["producer_gate_judgment"], schemas["producer_gate"], registry=registry
+    )
+    validate_schema_instance(
+        package["native_ae_judgment"], schemas["native_judgment"], registry=registry
     )
     validate_schema_instance(
         package["human_approval"], schemas["approval"], registry=registry
@@ -171,6 +193,35 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
             or not isinstance(producer_version, str)
         ):
             raise AssuranceIntegrationError("Evidence tool binding does not match")
+        expected_subject_identifier = (
+            "synthetic-private-match-product"
+            if package["execution_mode"] == "fixture-test"
+            else "private-match-product"
+        )
+        if record["subject"]["identifier"] != expected_subject_identifier:
+            raise AssuranceIntegrationError(
+                "Evidence subject provenance does not match"
+            )
+        if package["execution_mode"] == "fixture-test" and (
+            configuration.get("test_only") is not True
+            or configuration.get("retention_classification")
+            != "synthetic-public-fixture"
+        ):
+            raise AssuranceIntegrationError(
+                "fixture Evidence provenance does not match"
+            )
+        if package["execution_mode"] == "private-candidate" and (
+            configuration.get("test_only") is not False
+            or configuration.get("retention_classification")
+            != "private-assurance-retained"
+            or record["subject"]["identifier"] == "synthetic-private-match-product"
+            or record["producer"]["identity"] == "synthetic-reviewer"
+            or "Public synthetic fixture only" in str(record)
+            or "synthetic-public-fixture" in str(record)
+        ):
+            raise AssuranceIntegrationError(
+                "private candidate provenance does not match"
+            )
         expected_producers.append(
             {
                 "evidence_id": record["id"],
@@ -186,24 +237,17 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
         raise AssuranceIntegrationError(
             "Evidence reference or status count does not match"
         )
-    if counts != package["automated_judgment"]["status_counts"]:
-        raise AssuranceIntegrationError("automated judgment status counts do not match")
+    if counts != package["producer_gate_judgment"]["status_counts"]:
+        raise AssuranceIntegrationError("producer gate status counts do not match")
     if package["producer_inventory"] != expected_producers:
         raise AssuranceIntegrationError("producer inventory does not match Evidence")
     required = package["required_gate_results"]
     optional = package["optional_gate_results"]
     if (
-        required != package["automated_judgment"]["required_gate_results"]
-        or optional != package["automated_judgment"]["optional_gate_results"]
+        required != package["producer_gate_judgment"]["required_gate_results"]
+        or optional != package["producer_gate_judgment"]["optional_gate_results"]
     ):
         raise AssuranceIntegrationError("gate result surfaces do not match")
-    expected_state = (
-        "satisfied" if all(item["status"] == "pass" for item in required) else "blocked"
-    )
-    if package["automated_judgment"]["state"] != expected_state:
-        raise AssuranceIntegrationError(
-            "automated judgment does not match required gates"
-        )
     evidence_status_by_tool = {
         record["tool"]["name"]: record["status"]
         for record in package["evidence_records"]
@@ -238,6 +282,19 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
         ).append(gate)
     if required != expected_required or optional != expected_optional:
         raise AssuranceIntegrationError("gate results do not match Evidence and policy")
+    expected_producer_gate = _producer_gate_judgment(required, optional, counts)
+    if package["producer_gate_judgment"] != expected_producer_gate:
+        raise AssuranceIntegrationError("producer gate judgment does not match")
+    expected_native = derive_native_judgment(
+        package["native_ae_summary_projection"], profile
+    )
+    if package["native_ae_judgment"] != expected_native:
+        raise AssuranceIntegrationError("native ae judgment does not match policy")
+    expected_automated = _combined_automated_judgment(
+        expected_producer_gate, expected_native
+    )
+    if package["automated_judgment"] != expected_automated:
+        raise AssuranceIntegrationError("combined automated judgment does not match")
     content_material = copy.deepcopy(package)
     for field in (
         "human_approval",
@@ -259,32 +316,38 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
     validate_judgment_approval_boundary(
         package["automated_judgment"]["state"], approval["state"]
     )
-    if package["execution_mode"] == "fixture-test" and (
-        package["artifact_status"] != "test-only"
-        or approval["state"]
-        not in {
-            "not-applicable-test-only",
-            "required-not-provided",
-        }
-    ):
-        raise AssuranceIntegrationError("test-only package fabricated a live approval")
-    if package["execution_mode"] == "private-candidate" and any(
-        record.get("configuration", {}).get("test_only") is True
-        for record in package["evidence_records"]
-    ):
-        raise AssuranceIntegrationError(
-            "test-only Evidence cannot become a live candidate"
-        )
+    expected_approval = {
+        "schema_version": "0.1",
+        "state": (
+            "not-applicable-test-only"
+            if package["execution_mode"] == "fixture-test"
+            else "required-not-provided"
+        ),
+        "reviewer_role": (
+            "synthetic-reviewer"
+            if package["execution_mode"] == "fixture-test"
+            else None
+        ),
+        "reviewer_identity_verified": False,
+        "bound_assurance_content_digest": package["assurance_content_digest"],
+        "boundary_artifact_generated_by_automation": True,
+        "approval_decision_generated_by_automation": False,
+        "approval_decision_present": False,
+        "limitations": [
+            "No real reviewer identity or authority is asserted.",
+            "Automation and ae-framework cannot create human approval.",
+        ],
+    }
+    if approval != expected_approval:
+        raise AssuranceIntegrationError("human approval boundary does not match mode")
     report_material = copy.deepcopy(package)
     report_material.pop("report_digests", None)
     report_material.pop("package_digest", None)
     if package["report_digests"] != {
-        "json_semantic_digest": domain_digest(JSON_REPORT_DOMAIN, report_material),
-        "markdown_semantic_digest": domain_digest(
-            MARKDOWN_REPORT_DOMAIN, report_material
-        ),
+        "json_model_digest": domain_digest(JSON_REPORT_DOMAIN, report_material),
+        "markdown_model_digest": domain_digest(MARKDOWN_REPORT_DOMAIN, report_material),
     }:
-        raise AssuranceIntegrationError("report semantic digests do not match")
+        raise AssuranceIntegrationError("report model digests do not match")
     package_material = copy.deepcopy(package)
     package_material.pop("package_digest", None)
     if package["package_digest"] != domain_digest(
@@ -329,6 +392,10 @@ def validate_repository(root: Path) -> None:
             (fixture["input_path"], fixture["input_digest"]),
             (fixture["expected_json_path"], fixture["expected_json_digest"]),
             (fixture["expected_markdown_path"], fixture["expected_markdown_digest"]),
+            (
+                fixture["expected_output_set_path"],
+                fixture["expected_output_set_digest"],
+            ),
         )
         for relative, digest in bindings:
             repository_relative = f"{FIXTURE_ROOT.as_posix()}/{relative}"
@@ -358,6 +425,10 @@ def validate_repository(root: Path) -> None:
             raise AssuranceIntegrationError(
                 "expected Markdown is not generated from JSON"
             )
+        output_set_path = resolve_regular_file(
+            fixture_root, fixture["expected_output_set_path"]
+        )
+        validate_output_directory(root, output_set_path.parent)
     actual_paths: set[str] = set()
     for path in fixture_root.rglob("*"):
         relative = path.relative_to(root).as_posix()

@@ -4,6 +4,7 @@ import copy
 import io
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,7 @@ from scripts.ae_assurance_common import (
     build_schema_registry,
     read_strict_json,
     resolve_regular_file,
+    resolve_new_directory,
     validate_relative_path,
     validate_schema_instance,
 )
@@ -23,6 +25,14 @@ from scripts.ae_assurance_implementation import (
     adapter_source_digest,
     build_manifest,
     verify_manifest,
+    renderer_source_digest,
+)
+from scripts.ae_assurance_output_set import (
+    JSON_NAME,
+    MARKDOWN_NAME,
+    OUTPUT_SET_NAME,
+    build_output_set,
+    validate_output_directory,
 )
 from scripts.ae_assurance_policy import (
     ASSURANCE_CONTENT_DOMAIN,
@@ -30,6 +40,7 @@ from scripts.ae_assurance_policy import (
     FIXTURE_CATALOG_PATH,
     JSON_REPORT_DOMAIN,
     MARKDOWN_REPORT_DOMAIN,
+    OUTPUT_SET_DOMAIN,
     PIN_DOMAIN,
     PRODUCER_PACKAGE_DOMAIN,
     PROFILE_DOMAIN,
@@ -43,6 +54,7 @@ from scripts.ae_framework_adapter import (
     _run_native,
     build_assurance_package,
     validate_producer_package,
+    derive_native_judgment,
 )
 from scripts.ae_framework_manifest import (
     SOURCE_COMMIT,
@@ -177,7 +189,7 @@ class AeAssuranceFixtureTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.catalog = read_strict_json(ROOT / FIXTURE_CATALOG_PATH)
         cls.packages = {
-            Path(item["expected_json_path"]).stem: read_strict_json(
+            Path(item["expected_json_path"]).parent.name: read_strict_json(
                 FIXTURE_ROOT / item["expected_json_path"], max_bytes=2_097_152
             )
             for item in cls.catalog["fixtures"]
@@ -202,7 +214,10 @@ class AeAssuranceFixtureTests(unittest.TestCase):
     def test_success_and_optional_absence_are_satisfied_without_approval(self) -> None:
         for name in ("success", "optional-unavailable"):
             package = self.packages[name]
-            self.assertEqual(package["automated_judgment"]["state"], "satisfied")
+            self.assertEqual(
+                package["automated_judgment"]["state"],
+                "satisfied-with-warnings",
+            )
             self.assertEqual(
                 package["human_approval"]["state"], "not-applicable-test-only"
             )
@@ -254,12 +269,30 @@ class AeAssuranceFixtureTests(unittest.TestCase):
     def test_markdown_is_generated_from_json_and_states_boundaries(self) -> None:
         package = self.packages["success"]
         markdown = render_markdown(package)
-        self.assertEqual(markdown, (FIXTURE_ROOT / "expected/success.md").read_text())
+        self.assertEqual(
+            markdown,
+            (FIXTURE_ROOT / "expected/success" / MARKDOWN_NAME).read_text(),
+        )
         for status in ("pass", "fail", "skip", "unsupported", "timeout", "tool-error"):
             self.assertIn(f"| {status} |", markdown)
         self.assertIn("not a security proof oracle", markdown)
         self.assertIn("not a certification authority", markdown)
         self.assertIn("not human approval or publication approval", markdown)
+        self.assertIn("## Native ae-framework judgment", markdown)
+        self.assertIn("missing-spec-derived-evidence", markdown)
+        self.assertIn("visible-nonblocking", markdown)
+
+    def test_native_warning_is_explicitly_policy_evaluated(self) -> None:
+        package = self.packages["success"]
+        self.assertEqual(package["producer_gate_judgment"]["state"], "satisfied")
+        self.assertEqual(package["native_ae_judgment"]["state"], "warning")
+        self.assertEqual(
+            package["automated_judgment"]["state"], "satisfied-with-warnings"
+        )
+        self.assertEqual(
+            package["native_ae_judgment"]["warning_codes"],
+            ["missing-spec-derived-evidence"],
+        )
 
     def test_report_semantic_and_package_digests_validate(self) -> None:
         for package in self.packages.values():
@@ -287,7 +320,7 @@ class AeAssuranceNegativeTests(unittest.TestCase):
         self.success_path = FIXTURE_ROOT / "input/success.json"
         self.success = read_strict_json(self.success_path)
         self.success_expected = read_strict_json(
-            FIXTURE_ROOT / "expected/success.json", max_bytes=2_097_152
+            FIXTURE_ROOT / "expected/success" / JSON_NAME, max_bytes=2_097_152
         )
 
     def _producer(self, mutate) -> dict:
@@ -298,8 +331,41 @@ class AeAssuranceNegativeTests(unittest.TestCase):
         )
         return value
 
-    def _result(self, mutate) -> dict:
-        value = copy.deepcopy(self.success_expected)
+    def _private_candidate(self) -> dict:
+        value = copy.deepcopy(self.success)
+        value.update(
+            {
+                "package_id": "PMAE-PRODUCER-PRIVATE-CANDIDATE-V0-1",
+                "mode": "private-candidate",
+                "artifact_status": "private-candidate",
+                "subject": {
+                    "type": "source-revision",
+                    "identifier": "private-match-product",
+                    "version": "0.1",
+                    "digest": value["source_revision_digest"],
+                },
+                "limitations": [
+                    "All identifiers are closed role IDs and digests bind the private candidate source revision.",
+                    "The package is retained privately and is not eligible for public export or live approval.",
+                ],
+            }
+        )
+        for record in value["records"]:
+            producer_type = record["producer_type"]
+            record["producer_id"] = f"private-match-product-{producer_type}"
+            record["test_only"] = False
+            record["retention_classification"] = "private-assurance-retained"
+            record["summary"] = f"Private candidate {producer_type} status record."
+            record["limitations"][1] = (
+                "Private candidate metadata only; no raw Product data is represented."
+            )
+        value["package_digest"] = artifact_digest(
+            PRODUCER_PACKAGE_DOMAIN, value, "package_digest"
+        )
+        return value
+
+    def _result(self, mutate, source: dict | None = None) -> dict:
+        value = copy.deepcopy(source if source is not None else self.success_expected)
         mutate(value)
         content = copy.deepcopy(value)
         for field in (
@@ -321,15 +387,15 @@ class AeAssuranceNegativeTests(unittest.TestCase):
         report.pop("report_digests", None)
         report.pop("package_digest", None)
         value["report_digests"] = {
-            "json_semantic_digest": artifact_digest(
+            "json_model_digest": artifact_digest(
                 JSON_REPORT_DOMAIN,
-                {**report, "json_semantic_digest": "unused"},
-                "json_semantic_digest",
+                {**report, "json_model_digest": "unused"},
+                "json_model_digest",
             ),
-            "markdown_semantic_digest": artifact_digest(
+            "markdown_model_digest": artifact_digest(
                 MARKDOWN_REPORT_DOMAIN,
-                {**report, "markdown_semantic_digest": "unused"},
-                "markdown_semantic_digest",
+                {**report, "markdown_model_digest": "unused"},
+                "markdown_model_digest",
             ),
         }
         value["package_digest"] = artifact_digest(
@@ -436,7 +502,8 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                     profile_path="profiles/private-match-ae-assurance.v0.1.json",
                     input_root=input_root,
                     relative_input="success.json",
-                    output_root=input_root / "out",
+                    output_root=input_root,
+                    relative_output="result",
                     mode="fixture-test",
                 )
 
@@ -477,6 +544,22 @@ class AeAssuranceNegativeTests(unittest.TestCase):
             ),
             lambda value: value["records"][0].__setitem__(
                 "summary", "credential=synthetic-secret"
+            ),
+            lambda value: value["records"][0].__setitem__(
+                "summary", "person@example.com"
+            ),
+            lambda value: value["records"][0].__setitem__("summary", "+819012345678"),
+            lambda value: value["records"][0].__setitem__(
+                "summary", "tenant_id=TENANT-123"
+            ),
+            lambda value: value["records"][0].__setitem__(
+                "summary", "account_identifier=ACCOUNT-123"
+            ),
+            lambda value: value["records"][0].__setitem__(
+                "summary", "github.com/private-org/private-repository"
+            ),
+            lambda value: value["records"][0].__setitem__(
+                "producer_id", "customer-id=CUST-123"
             ),
             lambda value: value["records"][0].__setitem__(
                 "summary", "ae-framework certifies the Product"
@@ -551,6 +634,8 @@ class AeAssuranceNegativeTests(unittest.TestCase):
             "x.json",
             "--output-root",
             "y",
+            "--output",
+            "result",
             "--mode",
             "fixture-test",
         ]
@@ -668,6 +753,68 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 with self.assertRaises(AssuranceIntegrationError):
                     _run_native(ROOT, self.success, self.profile, Path(temp))
 
+    def test_native_warning_policy_blocks_and_unknown_codes_fail_closed(self) -> None:
+        projection = copy.deepcopy(
+            self.success_expected["native_ae_summary_projection"]
+        )
+        blocking_profile = copy.deepcopy(self.profile)
+        blocking_profile["native_ae_judgment_policy"][
+            "visible_nonblocking_warning_codes"
+        ] = []
+        blocking_profile["native_ae_judgment_policy"]["blocking_warning_codes"].append(
+            "missing-spec-derived-evidence"
+        )
+        self.assertEqual(
+            derive_native_judgment(projection, blocking_profile)["state"], "blocked"
+        )
+        projection["warning_codes"] = ["unreviewed-native-warning"]
+        projection["claims"][0]["warning_codes"] = ["unreviewed-native-warning"]
+        with self.assertRaises(AssuranceIntegrationError):
+            derive_native_judgment(projection, self.profile)
+        with self.assertRaises(AssuranceIntegrationError):
+            validate_package(
+                ROOT,
+                self._result(
+                    lambda value: value["automated_judgment"].__setitem__(
+                        "state", "satisfied"
+                    )
+                ),
+            )
+
+    def test_native_missing_surface_blocks_and_status_changes_bind_package(
+        self,
+    ) -> None:
+        projection = copy.deepcopy(
+            self.success_expected["native_ae_summary_projection"]
+        )
+        projection["claims"][0]["missing_lanes"] = ["runtime"]
+        self.assertEqual(
+            derive_native_judgment(projection, self.profile)["state"], "blocked"
+        )
+
+        baseline_projection = copy.deepcopy(
+            self.success_expected["native_ae_summary_projection"]
+        )
+        changed_projection = copy.deepcopy(baseline_projection)
+        changed_projection["claims"][0]["status"] = "satisfied"
+        with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
+            staging = Path(temp)
+            with mock.patch(
+                "scripts.ae_framework_adapter._run_native",
+                return_value=baseline_projection,
+            ):
+                baseline = build_assurance_package(ROOT, self.success, staging)
+            with mock.patch(
+                "scripts.ae_framework_adapter._run_native",
+                return_value=changed_projection,
+            ):
+                changed = build_assurance_package(ROOT, self.success, staging)
+        self.assertNotEqual(baseline["package_digest"], changed["package_digest"])
+        self.assertEqual(
+            [record["status"] for record in baseline["evidence_records"]],
+            [record["status"] for record in changed["evidence_records"]],
+        )
+
     def test_output_is_transactional_and_failure_leaves_no_partial_tree(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
             output = Path(temp) / "final"
@@ -681,11 +828,136 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                         profile_path="profiles/private-match-ae-assurance.v0.1.json",
                         input_root=FIXTURE_ROOT,
                         relative_input="input/success.json",
-                        output_root=output,
+                        output_root=Path(temp),
+                        relative_output="final",
                         mode="fixture-test",
                     )
             self.assertFalse(output.exists())
             self.assertEqual(list(Path(temp).glob(".final.partial-*")), [])
+
+    def test_output_root_requires_one_confined_new_relative_directory(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
+            trusted = Path(temp) / "trusted"
+            unrelated = Path(temp) / "unrelated"
+            trusted.mkdir()
+            unrelated.mkdir()
+            (trusted / "nested").mkdir()
+            self.assertEqual(
+                resolve_new_directory(trusted, "nested/result"),
+                trusted.resolve() / "nested/result",
+            )
+            for relative in (
+                "/absolute",
+                "C:/windows",
+                "a\\b",
+                ".",
+                "./a",
+                "a/../b",
+                "../unrelated/escaped",
+                "a//b",
+            ):
+                with (
+                    self.subTest(relative=relative),
+                    self.assertRaises(AssuranceIntegrationError),
+                ):
+                    resolve_new_directory(trusted, relative)
+            (trusted / "existing").mkdir()
+            with self.assertRaises(AssuranceIntegrationError):
+                resolve_new_directory(trusted, "existing")
+            (trusted / "partial").write_text("partial", encoding="utf-8")
+            with self.assertRaises(AssuranceIntegrationError):
+                resolve_new_directory(trusted, "partial")
+            (trusted / "inside-target").mkdir()
+            (trusted / "inside-link").symlink_to(
+                trusted / "inside-target", target_is_directory=True
+            )
+            (trusted / "outside-link").symlink_to(unrelated, target_is_directory=True)
+            for relative in ("inside-link/result", "outside-link/result"):
+                with self.assertRaises(AssuranceIntegrationError):
+                    resolve_new_directory(trusted, relative)
+            self.assertEqual(list(unrelated.iterdir()), [])
+
+    def test_output_set_binds_exact_json_markdown_and_path_set(self) -> None:
+        entry = next(
+            item
+            for item in read_strict_json(ROOT / FIXTURE_CATALOG_PATH)["fixtures"]
+            if item["fixture_id"] == "PMAE-FIXTURE-SUCCESS-V0-1"
+        )
+        source = (FIXTURE_ROOT / entry["expected_output_set_path"]).parent
+        with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
+            base = Path(temp)
+
+            def fresh(name: str) -> Path:
+                target = base / name
+                shutil.copytree(source, target)
+                return target
+
+            valid = fresh("valid")
+            manifest = validate_output_directory(ROOT, valid)
+            self.assertEqual(
+                manifest["renderer"]["implementation_digest"],
+                renderer_source_digest(ROOT),
+            )
+            package = read_strict_json(valid / JSON_NAME)
+            with mock.patch(
+                "scripts.ae_assurance_output_set.renderer_source_digest",
+                return_value="sha256:" + "0" * 64,
+            ):
+                changed_renderer = build_output_set(
+                    ROOT,
+                    package,
+                    (valid / JSON_NAME).read_bytes(),
+                    (valid / MARKDOWN_NAME).read_bytes(),
+                )
+            self.assertNotEqual(
+                manifest["output_set_digest"], changed_renderer["output_set_digest"]
+            )
+
+            markdown_changed = fresh("markdown-changed")
+            (markdown_changed / MARKDOWN_NAME).write_text(
+                (markdown_changed / MARKDOWN_NAME).read_text() + "changed\n",
+                encoding="utf-8",
+            )
+            rebound = read_strict_json(markdown_changed / OUTPUT_SET_NAME)
+            rebound["markdown_report"]["file_digest"] = file_digest(
+                (markdown_changed / MARKDOWN_NAME).read_bytes()
+            )
+            rebound["output_set_digest"] = artifact_digest(
+                OUTPUT_SET_DOMAIN, rebound, "output_set_digest"
+            )
+            (markdown_changed / OUTPUT_SET_NAME).write_bytes(
+                canonicalize(rebound) + b"\n"
+            )
+            with self.assertRaises(AssuranceIntegrationError):
+                validate_output_directory(ROOT, markdown_changed)
+
+            json_changed = fresh("json-changed")
+            (json_changed / JSON_NAME).write_bytes(
+                (json_changed / JSON_NAME).read_bytes() + b" \n"
+            )
+            with self.assertRaises(AssuranceIntegrationError):
+                validate_output_directory(ROOT, json_changed)
+
+            for name, mutation in (
+                ("missing", lambda target: (target / MARKDOWN_NAME).unlink()),
+                ("extra", lambda target: (target / "stale.txt").write_text("stale")),
+            ):
+                target = fresh(name)
+                mutation(target)
+                with self.assertRaises(AssuranceIntegrationError):
+                    validate_output_directory(ROOT, target)
+
+            stale_renderer = fresh("stale-renderer")
+            output_set = read_strict_json(stale_renderer / OUTPUT_SET_NAME)
+            output_set["renderer"]["implementation_digest"] = "sha256:" + "0" * 64
+            output_set["output_set_digest"] = artifact_digest(
+                OUTPUT_SET_DOMAIN, output_set, "output_set_digest"
+            )
+            (stale_renderer / OUTPUT_SET_NAME).write_bytes(
+                canonicalize(output_set) + b"\n"
+            )
+            with self.assertRaises(AssuranceIntegrationError):
+                validate_output_directory(ROOT, stale_renderer)
 
     def test_cli_failure_is_bounded_and_does_not_emit_exception_detail(self) -> None:
         arguments = [
@@ -696,7 +968,9 @@ class AeAssuranceNegativeTests(unittest.TestCase):
             "--input",
             "input/success.json",
             "--output-root",
-            str(ROOT / ".codex-local/tmp/never-created-output"),
+            str(ROOT / ".codex-local/tmp"),
+            "--output",
+            "never-created-output",
             "--mode",
             "fixture-test",
         ]
@@ -721,44 +995,114 @@ class AeAssuranceNegativeTests(unittest.TestCase):
         self.assertIn("&lt;script&gt;\\|line next", markdown)
 
     def test_fabricated_fixture_approval_and_live_conversion_are_rejected(self) -> None:
-        fabricated = copy.deepcopy(self.success_expected)
-        fabricated["human_approval"]["state"] = "approved"
-        fabricated["human_approval"]["reviewer_role"] = "authorized-human"
-        fabricated["human_approval"]["reviewer_identity_verified"] = True
-        with self.assertRaises(AssuranceIntegrationError):
-            validate_package(ROOT, fabricated)
-        live = copy.deepcopy(self.success_expected)
-        live["execution_mode"] = "private-candidate"
-        live["artifact_status"] = "private-candidate"
-        live["human_approval"]["state"] = "approved"
-        live["human_approval"]["reviewer_role"] = "authorized-human"
-        live["human_approval"]["reviewer_identity_verified"] = True
-        with self.assertRaises(AssuranceIntegrationError):
-            validate_package(ROOT, live)
-        with self.assertRaisesRegex(AssuranceIntegrationError, "cannot override"):
+        mutations = (
+            lambda value: value["human_approval"].update(
+                {
+                    "state": "approved",
+                    "reviewer_role": "authorized-human",
+                    "reviewer_identity_verified": True,
+                }
+            ),
+            lambda value: value["human_approval"].update(
+                {
+                    "state": "rejected",
+                    "reviewer_role": "authorized-human",
+                    "reviewer_identity_verified": True,
+                }
+            ),
+            lambda value: value["human_approval"].__setitem__(
+                "reviewer_identity_verified", True
+            ),
+            lambda value: value["human_approval"].__setitem__(
+                "approval_decision_generated_by_automation", True
+            ),
+        )
+        for mutation in mutations:
+            with self.assertRaises(AssuranceIntegrationError):
+                validate_package(ROOT, self._result(mutation))
+        self.assertTrue(
+            self.success_expected["human_approval"][
+                "boundary_artifact_generated_by_automation"
+            ]
+        )
+        self.assertFalse(
+            self.success_expected["human_approval"]["approval_decision_present"]
+        )
+        with self.assertRaisesRegex(AssuranceIntegrationError, "cannot represent"):
             validate_judgment_approval_boundary("blocked", "approved")
 
-    def test_private_candidate_runner_never_creates_human_approval(self) -> None:
-        candidate = copy.deepcopy(self.success)
-        candidate["mode"] = "private-candidate"
-        candidate["artifact_status"] = "private-candidate"
-        candidate["package_digest"] = artifact_digest(
-            PRODUCER_PACKAGE_DOMAIN, candidate, "package_digest"
-        )
-        with self.assertRaises(AssuranceIntegrationError):
-            validate_producer_package(ROOT, candidate, self.inventory, self.profile)
-        for record in candidate["records"]:
-            record["test_only"] = False
-            record["retention_classification"] = "private-assurance-retained"
-        candidate["package_digest"] = artifact_digest(
-            PRODUCER_PACKAGE_DOMAIN, candidate, "package_digest"
-        )
+    def test_private_candidate_runner_is_deterministic_and_truthful(self) -> None:
+        candidate = self._private_candidate()
+        validate_producer_package(ROOT, candidate, self.inventory, self.profile)
         with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
-            package = build_assurance_package(ROOT, candidate, Path(temp))
-        self.assertEqual(package["execution_mode"], "private-candidate")
+            base = Path(temp)
+            (base / "candidate.json").write_bytes(canonicalize(candidate) + b"\n")
+            outputs = []
+            for name in ("first", "second"):
+                outputs.append(
+                    run_one(
+                        root=ROOT,
+                        profile_path="profiles/private-match-ae-assurance.v0.1.json",
+                        input_root=base,
+                        relative_input="candidate.json",
+                        output_root=base,
+                        relative_output=name,
+                        mode="private-candidate",
+                    )
+                )
+                validate_output_directory(ROOT, base / name)
+            self.assertEqual(outputs[0], outputs[1])
+            mutated = base / "mutated"
+            shutil.copytree(base / "first", mutated)
+            (mutated / MARKDOWN_NAME).write_text(
+                (mutated / MARKDOWN_NAME).read_text() + "changed\n",
+                encoding="utf-8",
+            )
+            rebound = read_strict_json(mutated / OUTPUT_SET_NAME)
+            rebound["markdown_report"]["file_digest"] = file_digest(
+                (mutated / MARKDOWN_NAME).read_bytes()
+            )
+            rebound["output_set_digest"] = artifact_digest(
+                OUTPUT_SET_DOMAIN, rebound, "output_set_digest"
+            )
+            (mutated / OUTPUT_SET_NAME).write_bytes(canonicalize(rebound) + b"\n")
+            with self.assertRaises(AssuranceIntegrationError):
+                validate_output_directory(ROOT, mutated)
+            package = read_strict_json(base / "first" / JSON_NAME)
+        self.assertEqual(package["artifact_status"], "private-candidate")
         self.assertEqual(package["human_approval"]["state"], "required-not-provided")
         self.assertFalse(package["human_approval"]["reviewer_identity_verified"])
         self.assertFalse(package["lifecycle_boundary"]["public_export_eligible"])
+        serialized = canonicalize(package).decode("utf-8")
+        for forbidden in (
+            "synthetic-private-match-product",
+            "synthetic-reviewer",
+            "Public synthetic fixture only",
+            '"test_only":true',
+            "synthetic-public-fixture",
+        ):
+            self.assertNotIn(forbidden, serialized)
+        self.assertTrue(
+            all(
+                record["configuration"]["retention_classification"]
+                == "private-assurance-retained"
+                for record in package["evidence_records"]
+            )
+        )
+        with self.assertRaises(AssuranceIntegrationError):
+            validate_package(
+                ROOT,
+                self._result(
+                    lambda value: value["human_approval"].update(
+                        {
+                            "state": "approved",
+                            "reviewer_role": "authorized-human",
+                            "reviewer_identity_verified": True,
+                        }
+                    ),
+                    source=package,
+                ),
+            )
         validate_package(ROOT, package)
 
     def test_json_markdown_mismatch_and_nondeterministic_fields_fail(self) -> None:

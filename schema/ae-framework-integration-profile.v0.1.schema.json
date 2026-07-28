@@ -17,6 +17,7 @@
     "optional_check_ids",
     "producer_status_mapping",
     "automated_gate_policy",
+    "native_ae_judgment_policy",
     "human_approval_policy",
     "tool_absence_behavior",
     "report_contract",
@@ -189,6 +190,7 @@
       "required": [
         "states",
         "satisfied_rule",
+        "satisfied_with_warnings_rule",
         "blocked_rule",
         "not_evaluated_rule"
       ],
@@ -196,6 +198,7 @@
         "states": {
           "const": [
             "satisfied",
+            "satisfied-with-warnings",
             "blocked",
             "not-evaluated"
           ]
@@ -211,6 +214,10 @@
         "not_evaluated_rule": {
           "type": "string",
           "minLength": 1
+        },
+        "satisfied_with_warnings_rule": {
+          "minLength": 1,
+          "type": "string"
         }
       }
     },
@@ -227,10 +234,7 @@
       "properties": {
         "states": {
           "const": [
-            "approved",
-            "rejected",
             "required-not-provided",
-            "not-applicable",
             "not-applicable-test-only"
           ]
         },
@@ -273,7 +277,10 @@
       "required": [
         "json_authority",
         "markdown_source",
-        "native_summary_handling"
+        "native_summary_handling",
+        "output_set_required",
+        "exact_json_bytes_bound",
+        "exact_markdown_bytes_bound"
       ],
       "properties": {
         "json_authority": {
@@ -284,6 +291,15 @@
         },
         "native_summary_handling": {
           "const": "validated-path-free-projection"
+        },
+        "exact_json_bytes_bound": {
+          "const": true
+        },
+        "exact_markdown_bytes_bound": {
+          "const": true
+        },
+        "output_set_required": {
+          "const": true
         }
       }
     },
@@ -336,7 +352,10 @@
         "shell",
         "arbitrary_arguments",
         "subprocess_timeout_seconds",
-        "stdout_stderr_max_bytes"
+        "stdout_stderr_max_bytes",
+        "trusted_output_root_required",
+        "relative_output_directory_required",
+        "final_output_must_not_exist"
       ],
       "properties": {
         "relative_input_only": {
@@ -360,6 +379,15 @@
           "type": "integer",
           "minimum": 1024,
           "maximum": 1048576
+        },
+        "final_output_must_not_exist": {
+          "const": true
+        },
+        "relative_output_directory_required": {
+          "const": true
+        },
+        "trusted_output_root_required": {
+          "const": true
         }
       }
     },
@@ -403,6 +431,54 @@
     "profile_digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "native_ae_judgment_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "blocking_warning_codes": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "combined_warning_state": {
+          "const": "satisfied-with-warnings"
+        },
+        "missing_required_surface_behavior": {
+          "const": "blocked"
+        },
+        "states": {
+          "const": [
+            "satisfied",
+            "warning",
+            "blocked",
+            "not-evaluated"
+          ]
+        },
+        "unknown_warning_behavior": {
+          "const": "fail-closed"
+        },
+        "visible_nonblocking_warning_codes": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "states",
+        "blocking_warning_codes",
+        "visible_nonblocking_warning_codes",
+        "unknown_warning_behavior",
+        "missing_required_surface_behavior",
+        "combined_warning_state"
+      ],
+      "type": "object"
     }
   },
   "description": "Defines deterministic offline Evidence organization without creating facts, security proof, certification, human approval, publication approval, pilot readiness, or production readiness."

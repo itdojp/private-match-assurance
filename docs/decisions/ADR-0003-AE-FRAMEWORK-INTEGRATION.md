@@ -47,15 +47,32 @@ Raw Product output could contain private state or implementation-specific
 values. It is rejected. The selected producer package contains only synthetic
 or private-retained metadata/digests and closed producer/tool/status records.
 Every normalized Evidence record independently validates against Evidence
-Schema 0.1.
+Schema 0.1. Fixture and private-candidate modes have distinct closed subjects,
+producer role IDs, test-only markers, retention classes, and human-approval
+states. The subject digest equals the reviewed source-revision digest; arbitrary
+customer or repository identity is not accepted.
 
 ### Automated gate versus human approval
 
 A single approval field would allow automated results to be confused with a
-human decision. Separate Schemas are selected. Automated judgment can be
-`satisfied`, `blocked`, or `not-evaluated`; human approval is independently
-bound to the exact Assurance content digest. CI, agents, fixtures, and
-ae-framework cannot produce a live approval.
+human decision. Separate Schemas are selected. Producer-gate and native
+ae-framework judgments remain distinct, and the combined judgment adds
+`satisfied-with-warnings` so a reviewed native warning cannot be hidden behind
+plain satisfaction. The current machine-generated human boundary permits only
+`not-applicable-test-only` or `required-not-provided`, binds the exact Assurance
+content digest, and truthfully identifies the boundary artifact as automated.
+There is no live `approved` or `rejected` ingestion contract in Draft 0.1. CI,
+agents, fixtures, and ae-framework cannot produce a live approval.
+
+### Native warning policy
+
+Ignoring the native ae-framework claim status would reduce invocation to an
+informational side effect. The selected profile closes the exact warning-code
+vocabulary from the pinned source. `missing-spec-derived-evidence` is reviewed
+as visible-nonblocking for the current synthetic lane scope; every other known
+warning is blocking, missing required lanes or Evidence kinds are blocking,
+and unknown warning codes fail closed. Native claims and treatment are visible
+in JSON and generated Markdown without rewriting producer statuses.
 
 ### Required versus optional tool absence
 
@@ -67,8 +84,19 @@ reviewed non-blocking policy.
 ### JSON authority versus separately authored Markdown
 
 Separately authored Markdown can diverge from machine judgment. JSON is the
-authority; Markdown is rendered only from validated JSON and compared against
-byte-exact expected fixtures.
+authority; Markdown is rendered only from validated JSON. A detached output-set
+manifest binds the exact JSON and Markdown bytes, renderer implementation,
+adapter, profile, ae-framework pin, and package digest for both fixture and
+private-candidate modes. Exact fixture directories contain only the JSON,
+Markdown, and output-set manifest.
+
+### Arbitrary destination versus trusted output root
+
+Allowing one unrestricted output directory would let a caller select any
+writable filesystem location. The selected interface accepts an existing,
+symlink-free trusted output root plus one validated POSIX-relative new
+directory. All intermediate directories exist under the root; staging and
+atomic rename remain in the same root, and failure leaves no partial output.
 
 ### Private Assurance package versus public export bundle
 
@@ -93,7 +121,9 @@ Adopt:
   `tool-error`;
 - a closed required/optional tool inventory;
 - JSON as authority and generated Markdown;
-- separate automated judgment and human-approval provenance;
+- exact output-set binding and trusted-root confinement;
+- separate producer/native/combined automated judgment and human-approval
+  provenance;
 - synthetic fixture mode that cannot create live approval;
 - no automatic public export or proof/certification claim.
 

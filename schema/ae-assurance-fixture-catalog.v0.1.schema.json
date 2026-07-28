@@ -34,6 +34,8 @@
           "expected_json_digest",
           "expected_markdown_path",
           "expected_markdown_digest",
+          "expected_output_set_path",
+          "expected_output_set_digest",
           "expected_status_counts",
           "expected_automated_judgment",
           "expected_human_approval_state",
@@ -58,7 +60,7 @@
           },
           "expected_json_path": {
             "type": "string",
-            "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)[A-Za-z0-9._/-]+$",
+            "pattern": "^expected/[a-z0-9-]+/private-match-assurance-package\\.v0\\.1\\.json$",
             "minLength": 1
           },
           "expected_json_digest": {
@@ -67,7 +69,7 @@
           },
           "expected_markdown_path": {
             "type": "string",
-            "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)[A-Za-z0-9._/-]+$",
+            "pattern": "^expected/[a-z0-9-]+/private-match-assurance-package\\.v0\\.1\\.md$",
             "minLength": 1
           },
           "expected_markdown_digest": {
@@ -115,6 +117,7 @@
           "expected_automated_judgment": {
             "enum": [
               "satisfied",
+              "satisfied-with-warnings",
               "blocked",
               "not-evaluated"
             ]
@@ -127,6 +130,14 @@
           },
           "artifact_status": {
             "const": "test-only"
+          },
+          "expected_output_set_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "expected_output_set_path": {
+            "pattern": "^expected/[a-z0-9-]+/private-match-assurance-output-set\\.v0\\.1\\.json$",
+            "type": "string"
           }
         }
       }

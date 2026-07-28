@@ -51,11 +51,13 @@ except ImportError:  # pragma: no cover
 MANIFEST_PATH = Path("manifests/ae-assurance-runner-implementation.v0.1.json")
 IMPLEMENTATION_DOMAIN = "private-match-ae-assurance-runner-implementation/v0.1"
 ADAPTER_SOURCE_DOMAIN = "private-match-ae-assurance-adapter-source/v0.1"
+RENDERER_SOURCE_DOMAIN = "private-match-ae-assurance-markdown-renderer-source/v0.1"
 
 SOURCE_PATHS = (
     "scripts/ae_assurance_common.py",
     "scripts/ae_assurance_implementation.py",
     "scripts/ae_assurance_policy.py",
+    "scripts/ae_assurance_output_set.py",
     "scripts/ae_framework_adapter.py",
     "scripts/ae_framework_manifest.py",
     "scripts/generate_ae_assurance_fixtures.py",
@@ -66,6 +68,7 @@ SOURCE_PATHS = (
 )
 SCHEMA_PATHS = (
     "schema/ae-assurance-fixture-catalog.v0.1.schema.json",
+    "schema/ae-assurance-output-set.v0.1.schema.json",
     "schema/ae-assurance-runner-implementation.v0.1.schema.json",
     "schema/ae-assurance-tool-inventory.v0.1.schema.json",
     "schema/ae-framework-integration-profile.v0.1.schema.json",
@@ -73,6 +76,8 @@ SCHEMA_PATHS = (
     "schema/ae-framework-source-manifest.v0.1.schema.json",
     "schema/assurance-automated-judgment.v0.1.schema.json",
     "schema/assurance-human-approval.v0.1.schema.json",
+    "schema/assurance-producer-gate-judgment.v0.1.schema.json",
+    "schema/ae-native-judgment.v0.1.schema.json",
     "schema/evidence-item.schema.json",
     "schema/private-match-assurance-package.v0.1.schema.json",
     "schema/private-match-producer-package.v0.1.schema.json",
@@ -112,6 +117,15 @@ def adapter_source_digest(root: Path) -> str:
     return domain_digest(ADAPTER_SOURCE_DOMAIN, material)
 
 
+def renderer_source_digest(root: Path) -> str:
+    """Bind the exact renderer bytes separately from the broader adapter."""
+
+    return domain_digest(
+        RENDERER_SOURCE_DOMAIN,
+        [path_entry(root, "scripts/render_ae_assurance_report.py")],
+    )
+
+
 def implementation_digest(manifest: dict[str, Any]) -> str:
     material = copy.deepcopy(manifest)
     material.pop("implementation_digest", None)
@@ -132,6 +146,7 @@ def build_manifest(root: Path) -> dict[str, Any]:
                 f"tests/fixtures/ae-framework/{fixture['input_path']}",
                 f"tests/fixtures/ae-framework/{fixture['expected_json_path']}",
                 f"tests/fixtures/ae-framework/{fixture['expected_markdown_path']}",
+                f"tests/fixtures/ae-framework/{fixture['expected_output_set_path']}",
             ]
         )
     source_manifest = read_strict_json(

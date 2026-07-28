@@ -45,7 +45,7 @@
     },
     "source_files": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 11,
       "uniqueItems": true,
       "items": {
         "type": "object",
@@ -65,11 +65,12 @@
             "pattern": "^sha256:[0-9a-f]{64}$"
           }
         }
-      }
+      },
+      "maxItems": 11
     },
     "schema_files": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 14,
       "uniqueItems": true,
       "items": {
         "type": "object",
@@ -89,11 +90,12 @@
             "pattern": "^sha256:[0-9a-f]{64}$"
           }
         }
-      }
+      },
+      "maxItems": 14
     },
     "profile_files": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 2,
       "uniqueItems": true,
       "items": {
         "type": "object",
@@ -113,11 +115,12 @@
             "pattern": "^sha256:[0-9a-f]{64}$"
           }
         }
-      }
+      },
+      "maxItems": 2
     },
     "authority_files": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 2,
       "uniqueItems": true,
       "items": {
         "type": "object",
@@ -137,7 +140,8 @@
             "pattern": "^sha256:[0-9a-f]{64}$"
           }
         }
-      }
+      },
+      "maxItems": 2
     },
     "tool_inventory_files": {
       "type": "array",
@@ -161,11 +165,12 @@
             "pattern": "^sha256:[0-9a-f]{64}$"
           }
         }
-      }
+      },
+      "maxItems": 1
     },
     "fixture_trust_files": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 25,
       "uniqueItems": true,
       "items": {
         "type": "object",
@@ -185,11 +190,12 @@
             "pattern": "^sha256:[0-9a-f]{64}$"
           }
         }
-      }
+      },
+      "maxItems": 25
     },
     "dependency_lock_files": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 4,
       "uniqueItems": true,
       "items": {
         "type": "object",
@@ -209,7 +215,8 @@
             "pattern": "^sha256:[0-9a-f]{64}$"
           }
         }
-      }
+      },
+      "maxItems": 4
     },
     "tested_runtime": {
       "type": "object",

@@ -96,6 +96,51 @@ def resolve_regular_file(
     return resolved
 
 
+def resolve_trusted_directory(root: Path) -> Path:
+    """Resolve an existing trusted directory without following symlinks."""
+
+    resolved = _resolve_root(root)
+    try:
+        mode = resolved.stat().st_mode
+    except OSError as error:
+        raise AssuranceIntegrationError("trusted directory is unavailable") from error
+    if not stat.S_ISDIR(mode):
+        raise AssuranceIntegrationError("trusted root is not a directory")
+    return resolved
+
+
+def resolve_new_directory(root: Path, relative: str) -> Path:
+    """Resolve a new directory below an existing trusted root.
+
+    Every intermediate directory must already exist and must not be a symlink. The
+    final path must not exist, including as a dangling symlink.
+    """
+
+    root_resolved = resolve_trusted_directory(root)
+    portable = validate_relative_path(relative)
+    current = root_resolved
+    for part in portable.parts[:-1]:
+        current = current / part
+        if current.is_symlink():
+            raise AssuranceIntegrationError("output path must not contain a symlink")
+        try:
+            mode = current.stat().st_mode
+        except OSError as error:
+            raise AssuranceIntegrationError("output parent is unavailable") from error
+        if not stat.S_ISDIR(mode):
+            raise AssuranceIntegrationError("output parent is not a directory")
+    target = current / portable.parts[-1]
+    if os.path.lexists(target):
+        raise AssuranceIntegrationError("final output directory already exists")
+    try:
+        target.parent.resolve(strict=True).relative_to(root_resolved)
+    except (OSError, ValueError) as error:
+        raise AssuranceIntegrationError(
+            "output path escapes the trusted root"
+        ) from error
+    return target
+
+
 def read_strict_json(path: Path, *, max_bytes: int = MAX_INPUT_BYTES) -> Any:
     try:
         return strict_loads(path.read_bytes(), max_bytes=max_bytes)

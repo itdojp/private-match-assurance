@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://itdo.jp/schemas/private-match/assurance/assurance-human-approval.v0.1.schema.json",
-  "title": "Human approval boundary v0.1",
+  "title": "Machine-generated human approval boundary v0.1",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -10,7 +10,9 @@
     "reviewer_role",
     "reviewer_identity_verified",
     "bound_assurance_content_digest",
-    "generated_by_automation",
+    "boundary_artifact_generated_by_automation",
+    "approval_decision_generated_by_automation",
+    "approval_decision_present",
     "limitations"
   ],
   "properties": {
@@ -19,28 +21,26 @@
     },
     "state": {
       "enum": [
-        "approved",
-        "rejected",
         "required-not-provided",
-        "not-applicable",
         "not-applicable-test-only"
       ]
     },
     "reviewer_role": {
-      "type": [
-        "string",
-        "null"
+      "anyOf": [
+        {
+          "const": "synthetic-reviewer"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "reviewer_identity_verified": {
-      "type": "boolean"
+      "const": false
     },
     "bound_assurance_content_digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
-    },
-    "generated_by_automation": {
-      "const": false
     },
     "limitations": {
       "type": "array",
@@ -48,8 +48,18 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "maxLength": 256
       }
+    },
+    "approval_decision_generated_by_automation": {
+      "const": false
+    },
+    "approval_decision_present": {
+      "const": false
+    },
+    "boundary_artifact_generated_by_automation": {
+      "const": true
     }
   },
   "allOf": [
@@ -65,9 +75,6 @@
         "properties": {
           "reviewer_role": {
             "const": "synthetic-reviewer"
-          },
-          "reviewer_identity_verified": {
-            "const": false
           }
         }
       }
@@ -76,10 +83,7 @@
       "if": {
         "properties": {
           "state": {
-            "enum": [
-              "required-not-provided",
-              "not-applicable"
-            ]
+            "const": "required-not-provided"
           }
         }
       },
@@ -87,39 +91,10 @@
         "properties": {
           "reviewer_role": {
             "type": "null"
-          },
-          "reviewer_identity_verified": {
-            "const": false
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "state": {
-            "enum": [
-              "approved",
-              "rejected"
-            ]
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "reviewer_role": {
-            "type": "string",
-            "minLength": 1
-          },
-          "reviewer_identity_verified": {
-            "const": true
-          },
-          "generated_by_automation": {
-            "const": false
           }
         }
       }
     }
   ],
-  "description": "Human approval provenance is separate from automation; CI, agents, fixtures, and ae-framework cannot generate a live approval."
+  "description": "This automated boundary records that no human approval decision exists. The current runner cannot accept or emit approved or rejected decisions."
 }

@@ -17,6 +17,8 @@
     "producer_inventory",
     "external_tool_inventory",
     "native_ae_summary_projection",
+    "producer_gate_judgment",
+    "native_ae_judgment",
     "automated_judgment",
     "human_approval",
     "required_gate_results",
@@ -730,17 +732,17 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "json_semantic_digest",
-        "markdown_semantic_digest"
+        "json_model_digest",
+        "markdown_model_digest"
       ],
       "properties": {
-        "json_semantic_digest": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
+        "json_model_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
         },
-        "markdown_semantic_digest": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
+        "markdown_model_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
         }
       }
     },
@@ -757,6 +759,12 @@
         "fixture-test",
         "private-candidate"
       ]
+    },
+    "native_ae_judgment": {
+      "$ref": "https://itdo.jp/schemas/private-match/assurance/ae-native-judgment.v0.1.schema.json"
+    },
+    "producer_gate_judgment": {
+      "$ref": "https://itdo.jp/schemas/private-match/assurance/assurance-producer-gate-judgment.v0.1.schema.json"
     }
   },
   "allOf": [

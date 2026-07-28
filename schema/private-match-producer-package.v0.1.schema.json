@@ -11,6 +11,7 @@
     "mode",
     "created_at",
     "source_revision_digest",
+    "subject",
     "records",
     "limitations",
     "package_digest"
@@ -89,8 +90,18 @@
             ]
           },
           "producer_id": {
-            "type": "string",
-            "minLength": 1
+            "enum": [
+              "synthetic-ci-producer",
+              "synthetic-formal-tool-producer",
+              "synthetic-test-runner-producer",
+              "synthetic-security-tool-producer",
+              "synthetic-human-review-producer",
+              "private-match-product-ci",
+              "private-match-product-formal-tool",
+              "private-match-product-test-runner",
+              "private-match-product-security-tool",
+              "private-match-product-human-review"
+            ]
           },
           "producer_version": {
             "type": "string",
@@ -159,7 +170,8 @@
             "uniqueItems": true,
             "items": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "maxLength": 256
             }
           },
           "test_only": {
@@ -184,7 +196,8 @@
           },
           "summary": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 96
           }
         }
       }
@@ -195,12 +208,41 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "maxLength": 256
       }
     },
     "package_digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "subject": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "identifier": {
+          "enum": [
+            "synthetic-private-match-product",
+            "private-match-product"
+          ]
+        },
+        "type": {
+          "const": "source-revision"
+        },
+        "version": {
+          "const": "0.1"
+        }
+      },
+      "required": [
+        "type",
+        "identifier",
+        "version",
+        "digest"
+      ],
+      "type": "object"
     }
   },
   "allOf": [
@@ -228,6 +270,13 @@
                 }
               }
             }
+          },
+          "subject": {
+            "properties": {
+              "identifier": {
+                "const": "synthetic-private-match-product"
+              }
+            }
           }
         }
       }
@@ -250,7 +299,20 @@
               "properties": {
                 "retention_classification": {
                   "const": "private-assurance-retained"
+                },
+                "test_only": {
+                  "const": false
                 }
+              }
+            }
+          },
+          "package_id": {
+            "const": "PMAE-PRODUCER-PRIVATE-CANDIDATE-V0-1"
+          },
+          "subject": {
+            "properties": {
+              "identifier": {
+                "const": "private-match-product"
               }
             }
           }

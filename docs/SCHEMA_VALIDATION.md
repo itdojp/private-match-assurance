@@ -64,8 +64,11 @@ python scripts/generate_ae_assurance_fixtures.py --check
 The supported target is Node.js 22.22.2. The lock contains the exact Ajv,
 Ajv-formats, and YAML dependencies required by the unmodified reviewed
 ae-framework command. Fixture checks execute every catalog entry twice and
-compare exact JSON/Markdown bytes. They do not run the public exporter or use
-live/private Product input.
+compare exact JSON, Markdown, and detached output-set bytes. Output-set
+validation binds the renderer and requires the exact three-file directory.
+Private-candidate contract tests use only ephemeral synthetic digest metadata
+under an existing trusted output root. They do not run the public exporter or
+use live/private Product input.
 
 Validate repository assurance records:
 

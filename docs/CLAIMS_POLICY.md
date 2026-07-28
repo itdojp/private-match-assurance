@@ -60,7 +60,9 @@ Do not transform:
   production-ready`
 
 ae-framework may organize supplied Evidence and apply the reviewed automated
-policy. It cannot create facts absent from Evidence, establish the absence of
+policy. Native warnings and their reviewed blocking/nonblocking treatment must
+remain visible; `satisfied-with-warnings` is not plain satisfaction. The
+framework cannot create facts absent from Evidence, establish the absence of
 undiscovered defects, verify reviewer identity or authority, create human
 approval, or authorize publication.
 

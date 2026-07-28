@@ -1,0 +1,187 @@
+{
+  "$id": "https://itdo.jp/schemas/private-match/assurance/assurance-producer-gate-judgment.v0.1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Producer-required and optional gates are distinct from the native ae-framework judgment.",
+  "properties": {
+    "limitations": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 2,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "optional_gate_results": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "gate_state": {
+            "enum": [
+              "satisfied",
+              "blocked",
+              "visible-nonblocking"
+            ]
+          },
+          "limitation": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "requirement": {
+            "enum": [
+              "required",
+              "optional"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail",
+              "skip",
+              "unsupported",
+              "timeout",
+              "tool-error"
+            ]
+          },
+          "tool_id": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool_id",
+          "requirement",
+          "status",
+          "gate_state",
+          "limitation"
+        ],
+        "type": "object"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "rationale_codes": {
+      "items": {
+        "enum": [
+          "ALL-REQUIRED-PASS",
+          "REQUIRED-NONPASS-BLOCKS"
+        ]
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "required_gate_results": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "gate_state": {
+            "enum": [
+              "satisfied",
+              "blocked",
+              "visible-nonblocking"
+            ]
+          },
+          "limitation": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "requirement": {
+            "enum": [
+              "required",
+              "optional"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail",
+              "skip",
+              "unsupported",
+              "timeout",
+              "tool-error"
+            ]
+          },
+          "tool_id": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool_id",
+          "requirement",
+          "status",
+          "gate_state",
+          "limitation"
+        ],
+        "type": "object"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "schema_version": {
+      "const": "0.1"
+    },
+    "state": {
+      "enum": [
+        "satisfied",
+        "blocked",
+        "not-evaluated"
+      ]
+    },
+    "status_counts": {
+      "additionalProperties": false,
+      "properties": {
+        "fail": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pass": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "skip": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "timeout": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tool-error": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unsupported": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pass",
+        "fail",
+        "skip",
+        "unsupported",
+        "timeout",
+        "tool-error"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "state",
+    "required_gate_results",
+    "optional_gate_results",
+    "status_counts",
+    "rationale_codes",
+    "limitations"
+  ],
+  "title": "Producer Evidence gate judgment v0.1",
+  "type": "object"
+}

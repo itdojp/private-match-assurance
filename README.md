@@ -66,8 +66,12 @@ is a separate, private/internal Assurance processing boundary. It pins an
 unmodified reviewed ae-framework source closure, preserves all six Evidence
 statuses, generates deterministic JSON-authority/Markdown reports from public
 synthetic fixtures, and keeps automated judgment structurally separate from
-human approval. It does not invoke the public exporter, process live Product
-Evidence, certify the Product, or authorize publication.
+human approval. Exact output-set manifests bind emitted JSON/Markdown bytes;
+private-candidate provenance uses a separate closed subject and trusted output
+root, while native ae warnings remain policy-visible. The current runner cannot
+generate a live approval. It does not invoke the public exporter, process live
+Product Evidence in this repository, certify the Product, or authorize
+publication.
 
 ## Related repositories
 

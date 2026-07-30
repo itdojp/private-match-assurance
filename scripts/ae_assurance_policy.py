@@ -63,6 +63,41 @@ MARKDOWN_REPORT_DOMAIN = "private-match-ae-assurance-markdown-report/v0.1"
 NATIVE_PROJECTION_DOMAIN = "private-match-ae-native-summary-projection/v0.1"
 EVIDENCE_RECORD_DOMAIN = "private-match-ae-evidence-record/v0.1"
 OUTPUT_SET_DOMAIN = "private-match-ae-assurance-output-set/v0.1"
+TOOL_BINDING_DOMAIN = "private-match-ae-producer-tool-binding/v0.1"
+
+FIXTURE_TOOL_BINDINGS = {
+    "PMAE-CI-PIPELINE-V0-1": (
+        "private-match-synthetic-ci",
+        "sha256:5a0d72c03773a0fc9fc274f1cad6cbe1cf8010a376d37814bbc7344a8863d066",
+    ),
+    "PMAE-CONFORMANCE-RUNNER-V0-1": (
+        "private-match-synthetic-conformance-runner",
+        "sha256:6be73d5936f68483eb035c61bc2d2d051e02181f1d6466686fbba55cf599bde2",
+    ),
+    "PMAE-FORMAL-TOOL-V0-1": (
+        "private-match-synthetic-formal-tool",
+        "sha256:9090107bc871011530c4283043f4dfafa0bdea91e3e4520daf73386db13749e7",
+    ),
+    "PMAE-SECURITY-TOOL-V0-1": (
+        "private-match-synthetic-security-tool",
+        "sha256:2e18e6bc8a77b167a92ecd08e2526d3500a5dea153511f7c1d0b1747db2db7b0",
+    ),
+    "PMAE-HUMAN-REVIEW-V0-1": (
+        "private-match-synthetic-review-contract",
+        "sha256:98b4f3965b9bca87a07ab6af51a5bcfb698fcfaca0d01d799ff47401bc58b85c",
+    ),
+}
+
+CANDIDATE_TOOL_IDENTITIES = {
+    "PMAE-CI-PIPELINE-V0-1": "private-match-product-ci",
+    "PMAE-CONFORMANCE-RUNNER-V0-1": ("private-match-product-conformance-runner"),
+    "PMAE-FORMAL-TOOL-V0-1": "private-match-product-formal-tool",
+    "PMAE-SECURITY-TOOL-V0-1": "private-match-product-security-tool",
+    "PMAE-HUMAN-REVIEW-V0-1": "private-match-product-human-review",
+}
+
+FIXTURE_TOOL_LIMITATION = "Synthetic fixture identity only; no live Product or external tool execution is claimed."
+CANDIDATE_TOOL_LIMITATION = "Private-candidate tool metadata is supplied and digest-bound but is not independently authenticated."
 
 AE_NATIVE_WARNING_CODES = (
     "all-evidence-derived-from-source",
@@ -83,6 +118,7 @@ SCHEMA_PATHS = {
     "source_manifest": "schema/ae-framework-source-manifest.v0.1.schema.json",
     "profile": "schema/ae-framework-integration-profile.v0.1.schema.json",
     "tools": "schema/ae-assurance-tool-inventory.v0.1.schema.json",
+    "tool_binding": "schema/ae-assurance-tool-binding.v0.1.schema.json",
     "producer": "schema/private-match-producer-package.v0.1.schema.json",
     "automated": "schema/assurance-automated-judgment.v0.1.schema.json",
     "producer_gate": "schema/assurance-producer-gate-judgment.v0.1.schema.json",
@@ -104,6 +140,34 @@ def without_field(value: dict[str, Any], field: str) -> dict[str, Any]:
 
 def artifact_digest(domain: str, value: dict[str, Any], field: str) -> str:
     return domain_digest(domain, without_field(value, field))
+
+
+def tool_binding_digest(value: dict[str, Any]) -> str:
+    """Return the detached digest of one mode-specific execution binding."""
+
+    return artifact_digest(TOOL_BINDING_DOMAIN, value, "binding_digest")
+
+
+def fixture_tool_bindings(inventory: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build the reviewed fixture bindings in policy-role order."""
+
+    bindings: list[dict[str, Any]] = []
+    for role in inventory["tools"]:
+        identity, implementation_digest = FIXTURE_TOOL_BINDINGS[role["tool_id"]]
+        binding: dict[str, Any] = {
+            "tool_role_id": role["tool_id"],
+            "producer_type": role["producer_type"],
+            "mode": "fixture-test",
+            "identity": identity,
+            "version": "1.0.0",
+            "implementation_digest": implementation_digest,
+            "input_contract": role["input_contract"],
+            "output_contract": role["output_contract"],
+            "limitations": [FIXTURE_TOOL_LIMITATION],
+        }
+        binding["binding_digest"] = tool_binding_digest(binding)
+        bindings.append(binding)
+    return bindings
 
 
 def load_schemas(root: Path) -> dict[str, dict[str, Any]]:

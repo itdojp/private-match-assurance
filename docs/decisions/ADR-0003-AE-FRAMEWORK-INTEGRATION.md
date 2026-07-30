@@ -46,11 +46,19 @@ validated offline.
 Raw Product output could contain private state or implementation-specific
 values. It is rejected. The selected producer package contains only synthetic
 or private-retained metadata/digests and closed producer/tool/status records.
+Policy roles define requirement and status semantics independently from the
+mode-specific execution-tool bindings carried by the producer package.
+Fixture bindings are exact reviewed synthetic authorities. Private-candidate
+bindings use closed non-identifying Product role identities while the Product
+supplies their version and implementation digest; those supplied values are
+digest-bound but not independently authenticated by this runner.
 Every normalized Evidence record independently validates against Evidence
 Schema 0.1. Fixture and private-candidate modes have distinct closed subjects,
 producer role IDs, test-only markers, retention classes, and human-approval
-states. The subject digest equals the reviewed source-revision digest; arbitrary
-customer or repository identity is not accepted.
+states. Draft 0.1 is strictly single-source-revision: the package subject digest
+equals the sole reviewed source-revision digest, redundant record-level
+revision fields are forbidden, and all emitted Evidence subjects are identical.
+Arbitrary customer or repository identity is not accepted.
 
 ### Automated gate versus human approval
 
@@ -120,6 +128,8 @@ Adopt:
 - exact preservation of `pass`, `fail`, `skip`, `unsupported`, `timeout`, and
   `tool-error`;
 - a closed required/optional tool inventory;
+- separate policy-role semantics and exact mode-specific execution-tool
+  bindings;
 - JSON as authority and generated Markdown;
 - exact output-set binding and trusted-root confinement;
 - separate producer/native/combined automated judgment and human-approval

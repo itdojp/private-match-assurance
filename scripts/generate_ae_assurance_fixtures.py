@@ -21,6 +21,7 @@ try:
         PROFILE_PATH,
         TOOL_INVENTORY_PATH,
         artifact_digest,
+        fixture_tool_bindings,
         verify_fixture_catalog,
     )
     from canonical_json import domain_digest, file_digest
@@ -40,6 +41,7 @@ except ImportError:  # pragma: no cover
         PROFILE_PATH,
         TOOL_INVENTORY_PATH,
         artifact_digest,
+        fixture_tool_bindings,
         verify_fixture_catalog,
     )
     from scripts.canonical_json import domain_digest, file_digest
@@ -129,6 +131,8 @@ def _synthetic_digest(label: str) -> str:
 def _build_input(
     inventory: dict, fixture_id: str, slug: str, statuses: dict[str, str]
 ) -> dict:
+    bindings = fixture_tool_bindings(inventory)
+    bindings_by_role = {binding["tool_role_id"]: binding for binding in bindings}
     records = []
     for index, tool in enumerate(inventory["tools"], start=1):
         status = statuses[tool["tool_id"]]
@@ -142,6 +146,7 @@ def _build_input(
             if status in {"pass", "fail"}
             else None
         )
+        binding = bindings_by_role[tool["tool_id"]]
         records.append(
             {
                 "evidence_id": f"PM-EVIDENCE-{index:04d}",
@@ -149,9 +154,9 @@ def _build_input(
                 "producer_id": f"synthetic-{tool['producer_type']}-producer",
                 "producer_version": "0.1",
                 "tool_id": tool["tool_id"],
-                "tool_version": tool["version"],
-                "tool_implementation_digest": tool["implementation_digest"],
-                "source_revision_digest": _synthetic_digest(f"{slug}:source"),
+                "tool_identity": binding["identity"],
+                "tool_version": binding["version"],
+                "tool_implementation_digest": binding["implementation_digest"],
                 "protocol_suite_digest": _synthetic_digest(f"{slug}:suite"),
                 "protocol_case_digest": _synthetic_digest(
                     f"{slug}:{tool['tool_id']}:case"
@@ -192,6 +197,7 @@ def _build_input(
             "version": "0.1",
             "digest": _synthetic_digest(f"{slug}:source"),
         },
+        "tool_bindings": bindings,
         "records": records,
         "limitations": [
             "All identifiers and digests are public synthetic fixture values.",

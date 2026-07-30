@@ -28,6 +28,8 @@ try:
         _combined_automated_judgment,
         _producer_gate_judgment,
         derive_native_judgment,
+        PRODUCER_IDS,
+        validate_tool_bindings,
     )
     from ae_assurance_policy import (
         ASSURANCE_CONTENT_DOMAIN,
@@ -63,6 +65,8 @@ except ImportError:  # pragma: no cover
         _combined_automated_judgment,
         _producer_gate_judgment,
         derive_native_judgment,
+        PRODUCER_IDS,
+        validate_tool_bindings,
     )
     from scripts.ae_assurance_policy import (
         ASSURANCE_CONTENT_DOMAIN,
@@ -138,16 +142,44 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
     }:
         raise AssuranceIntegrationError("adapter implementation binding does not match")
 
+    external_by_role = {
+        item["tool_role_id"]: item for item in package["external_tool_inventory"]
+    }
+    if len(external_by_role) != len(package["external_tool_inventory"]):
+        raise AssuranceIntegrationError("external tool inventory has duplicate roles")
+    output_bindings = [
+        {
+            "tool_role_id": item["tool_role_id"],
+            "producer_type": item["producer_type"],
+            "mode": item["mode"],
+            "identity": item["tool_id"],
+            "version": item["tool_version"],
+            "implementation_digest": item["tool_implementation_digest"],
+            "input_contract": item["input_contract"],
+            "output_contract": item["output_contract"],
+            "limitations": item["limitations"],
+            "binding_digest": item["tool_binding_digest"],
+        }
+        for item in package["external_tool_inventory"]
+    ]
+    ordered_bindings = validate_tool_bindings(
+        root, package["execution_mode"], output_bindings, inventory
+    )
     expected_external_tools = [
         {
-            "tool_id": tool["tool_id"],
-            "producer_type": tool["producer_type"],
-            "requirement": tool["requirement"],
-            "identity": tool["identity"],
-            "version": tool["version"],
-            "implementation_digest": tool["implementation_digest"],
+            "tool_role_id": role["tool_id"],
+            "producer_type": role["producer_type"],
+            "requirement": role["requirement"],
+            "mode": binding["mode"],
+            "tool_id": binding["identity"],
+            "tool_version": binding["version"],
+            "tool_implementation_digest": binding["implementation_digest"],
+            "input_contract": binding["input_contract"],
+            "output_contract": binding["output_contract"],
+            "limitations": binding["limitations"],
+            "tool_binding_digest": binding["binding_digest"],
         }
-        for tool in inventory["tools"]
+        for role, binding in zip(inventory["tools"], ordered_bindings, strict=True)
     ]
     if package["external_tool_inventory"] != expected_external_tools:
         raise AssuranceIntegrationError("external tool inventory does not match")
@@ -157,7 +189,7 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
     counts = {status: 0 for status in STATUS_VALUES}
     tools_by_id = {tool["tool_id"]: tool for tool in inventory["tools"]}
     expected_producers = []
-    expected_order = [tool["tool_id"] for tool in inventory["tools"]]
+    expected_order = [binding["identity"] for binding in ordered_bindings]
     observed_order = [record["tool"]["name"] for record in package["evidence_records"]]
     if observed_order != expected_order:
         raise AssuranceIntegrationError("Evidence tool order does not match inventory")
@@ -177,16 +209,25 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
             raise AssuranceIntegrationError(
                 "Evidence reference does not preserve status"
             )
-        tool_id = record["tool"]["name"]
-        tool = tools_by_id.get(tool_id)
         configuration = record.get("configuration", {})
+        tool_id = configuration.get("tool_role_id")
+        tool = tools_by_id.get(tool_id)
+        external = external_by_role.get(tool_id)
         producer_type = configuration.get("ae_producer_type")
         producer_version = configuration.get("ae_producer_version")
         if (
             tool is None
+            or external is None
             or producer_type != tool["producer_type"]
-            or record["tool"]["version"] != tool["version"]
-            or record["tool"]["source"] != tool["implementation_digest"]
+            or record["producer"]["identity"]
+            != PRODUCER_IDS[package["execution_mode"]][producer_type]
+            or record["tool"]["name"] != external["tool_id"]
+            or record["tool"]["version"] != external["tool_version"]
+            or record["tool"]["source"] != external["tool_implementation_digest"]
+            or configuration.get("tool_binding_digest")
+            != external["tool_binding_digest"]
+            or configuration.get("tool_input_contract") != external["input_contract"]
+            or configuration.get("tool_output_contract") != external["output_contract"]
             or record["execution"]["required"] != (tool["requirement"] == "required")
             or record["execution"]["ran"]
             != (record["status"] not in {"skip", "unsupported"})
@@ -198,9 +239,13 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
             if package["execution_mode"] == "fixture-test"
             else "private-match-product"
         )
-        if record["subject"]["identifier"] != expected_subject_identifier:
+        expected_subject = package["evidence_records"][0]["subject"]
+        if (
+            record["subject"] != expected_subject
+            or record["subject"]["identifier"] != expected_subject_identifier
+        ):
             raise AssuranceIntegrationError(
-                "Evidence subject provenance does not match"
+                "Evidence subjects do not share one source revision"
             )
         if package["execution_mode"] == "fixture-test" and (
             configuration.get("test_only") is not True
@@ -228,8 +273,11 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
                 "producer_type": producer_type,
                 "producer_id": record["producer"]["identity"],
                 "producer_version": producer_version,
-                "tool_id": tool_id,
+                "tool_role_id": tool_id,
+                "tool_id": external["tool_id"],
                 "tool_version": record["tool"]["version"],
+                "tool_implementation_digest": record["tool"]["source"],
+                "tool_binding_digest": external["tool_binding_digest"],
                 "status": record["status"],
             }
         )
@@ -249,7 +297,7 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
     ):
         raise AssuranceIntegrationError("gate result surfaces do not match")
     evidence_status_by_tool = {
-        record["tool"]["name"]: record["status"]
+        record["configuration"]["tool_role_id"]: record["status"]
         for record in package["evidence_records"]
     }
     expected_required = []
@@ -272,7 +320,7 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
             "limitation": next(
                 record["limitations"][0]
                 for record in package["evidence_records"]
-                if record["tool"]["name"] == tool["tool_id"]
+                if record["configuration"]["tool_role_id"] == tool["tool_id"]
             ),
         }
         (

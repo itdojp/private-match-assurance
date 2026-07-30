@@ -68,7 +68,9 @@ statuses, generates deterministic JSON-authority/Markdown reports from public
 synthetic fixtures, and keeps automated judgment structurally separate from
 human approval. Exact output-set manifests bind emitted JSON/Markdown bytes;
 private-candidate provenance uses a separate closed subject and trusted output
-root, while native ae warnings remain policy-visible. The current runner cannot
+root. Policy roles are separate from mode-specific execution-tool bindings,
+and one producer package is bound to one source revision, while native ae
+warnings remain policy-visible. The current runner cannot
 generate a live approval. It does not invoke the public exporter, process live
 Product Evidence in this repository, certify the Product, or authorize
 publication.

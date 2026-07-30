@@ -71,6 +71,7 @@ SCHEMA_PATHS = (
     "schema/ae-assurance-output-set.v0.1.schema.json",
     "schema/ae-assurance-runner-implementation.v0.1.schema.json",
     "schema/ae-assurance-tool-inventory.v0.1.schema.json",
+    "schema/ae-assurance-tool-binding.v0.1.schema.json",
     "schema/ae-framework-integration-profile.v0.1.schema.json",
     "schema/ae-framework-pin.v0.1.schema.json",
     "schema/ae-framework-source-manifest.v0.1.schema.json",

@@ -69,19 +69,34 @@ There is no status collapse or promotion. In particular, `skip` and
 `unsupported` do not become `pass`, while `timeout` and `tool-error` do not
 become `fail`. Unknown status values fail closed.
 
-The exact tool inventory contains two required checks (CI and
+The exact policy-role inventory contains two required checks (CI and
 conformance-runner records) and three optional checks (formal, security, and
-human-review contract records). A required non-pass status blocks the producer
-gate. Optional `skip` or `unsupported` records remain visible and are
-non-blocking under this Draft profile. They never disappear or become `pass`.
+human-review contract records). It defines requirement, absence, timeout,
+input/output, Evidence requirement, and six-status semantics, but it does not
+claim an execution implementation. Each producer package separately binds one
+mode-specific execution identity, version, implementation digest, and contract
+pair to every policy role. A required non-pass status blocks the producer gate.
+Optional `skip` or `unsupported` records remain visible and are non-blocking
+under this Draft profile. They never disappear or become `pass`.
+
+Fixture mode accepts only the five reviewed `private-match-synthetic-*`
+bindings and their exact fixture digests. Private-candidate mode accepts only
+the five closed `private-match-product-*` execution role identities and rejects
+fixture identities, fixture digests, missing/extra/duplicate roles, and any
+record/binding mismatch. Candidate versions and SHA-256 implementation digests
+are supplied by the private Product, digest-bound into every report surface,
+and deliberately not independently authenticated by this runner.
 
 Fixture input uses the closed subject `synthetic-private-match-product`,
 `test_only=true`, and `synthetic-public-fixture`. Private-candidate input uses
 the closed non-customer subject `private-match-product`, `test_only=false`, and
 `private-assurance-retained`. In both modes the subject digest must equal the
-producer package source-revision digest. Producer identities are closed role
-IDs; customer, tenant, account, organization, user, repository, host, path,
-credential, email, and telephone identifiers are rejected.
+producer package's sole source-revision digest. Draft 0.1 is a strict
+single-source-revision package: record-level revision fields are forbidden and
+every emitted Evidence subject is copied from that validated package subject.
+Producer identities are closed role IDs; customer, tenant, account,
+organization, user, repository, host, path, credential, email, and telephone
+identifiers are rejected.
 
 ## Automated judgment and human approval
 
@@ -159,7 +174,9 @@ JSON is the machine authority. Markdown is generated only from the validated
 JSON package and escapes producer-controlled labels. The package retains:
 
 - every independently Schema-valid Evidence record;
-- exact producer and external-tool identities, versions, and digests;
+- exact policy roles and mode-specific producer/external-tool identities,
+  versions, implementation digests, binding digests, and input/output
+  contracts;
 - all six status counts;
 - required and optional gate results;
 - the safe native ae-framework projection;

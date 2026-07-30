@@ -12,6 +12,7 @@
     "created_at",
     "source_revision_digest",
     "subject",
+    "tool_bindings",
     "records",
     "limitations",
     "package_digest"
@@ -46,7 +47,7 @@
     },
     "records": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 5,
       "uniqueItems": true,
       "items": {
         "type": "object",
@@ -57,9 +58,9 @@
           "producer_id",
           "producer_version",
           "tool_id",
+          "tool_identity",
           "tool_version",
           "tool_implementation_digest",
-          "source_revision_digest",
           "protocol_suite_digest",
           "protocol_case_digest",
           "protocol_input_digest",
@@ -116,10 +117,6 @@
             "minLength": 1
           },
           "tool_implementation_digest": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
-          },
-          "source_revision_digest": {
             "type": "string",
             "pattern": "^sha256:[0-9a-f]{64}$"
           },
@@ -198,9 +195,15 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 96
+          },
+          "tool_identity": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
           }
         }
-      }
+      },
+      "maxItems": 5
     },
     "limitations": {
       "type": "array",
@@ -243,6 +246,15 @@
         "digest"
       ],
       "type": "object"
+    },
+    "tool_bindings": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://itdo.jp/schemas/private-match/assurance/ae-assurance-tool-binding.v0.1.schema.json"
+      }
     }
   },
   "allOf": [
@@ -320,5 +332,5 @@
       }
     }
   ],
-  "description": "Digest-only producer metadata boundary; raw Product state, private input, identities, logs, secrets, and disclosure payloads are forbidden."
+  "description": "Strict single-source-revision, digest-only producer metadata boundary. The package subject digest is the sole source-revision authority; raw Product state, private input, identities, logs, secrets, and disclosure payloads are forbidden."
 }

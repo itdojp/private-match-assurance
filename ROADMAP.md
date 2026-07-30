@@ -73,7 +73,8 @@ pin ae-framework commit `bba9b6846608359b87ed5393cb208e321f3ba8af`, preserve
 all six Evidence statuses, and separate automated judgment from human
 approval. The Draft also separates producer/native judgment, binds exact
 JSON/Markdown bytes through a deterministic output set, and confines offline
-outputs to a trusted root. Live Product Evidence, approval ingestion,
+outputs to a trusted root. Policy roles are distinct from mode-specific tool
+bindings, and each producer package is single-source-revision. Live Product Evidence, approval ingestion,
 publication, and production-readiness claims remain outside A3.
 
 ## A4 — Signed assurance release bundle

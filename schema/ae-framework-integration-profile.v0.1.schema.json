@@ -19,6 +19,7 @@
     "automated_gate_policy",
     "native_ae_judgment_policy",
     "human_approval_policy",
+    "tool_binding_contract",
     "tool_absence_behavior",
     "report_contract",
     "reproducibility_contract",
@@ -479,6 +480,42 @@
         "combined_warning_state"
       ],
       "type": "object"
+    },
+    "tool_binding_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority",
+        "mode_specific",
+        "exact_policy_role_set",
+        "fixture_binding",
+        "private_candidate_binding",
+        "private_candidate_metadata_authenticated",
+        "single_source_revision"
+      ],
+      "properties": {
+        "authority": {
+          "const": "producer-package"
+        },
+        "mode_specific": {
+          "const": true
+        },
+        "exact_policy_role_set": {
+          "const": true
+        },
+        "fixture_binding": {
+          "const": "reviewed-synthetic-only"
+        },
+        "private_candidate_binding": {
+          "const": "closed-role-metadata-supplied-by-product"
+        },
+        "private_candidate_metadata_authenticated": {
+          "const": false
+        },
+        "single_source_revision": {
+          "const": true
+        }
+      }
     }
   },
   "description": "Defines deterministic offline Evidence organization without creating facts, security proof, certification, human approval, publication approval, pilot readiness, or production readiness."

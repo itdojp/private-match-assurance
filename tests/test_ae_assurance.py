@@ -37,6 +37,7 @@ from scripts.ae_assurance_output_set import (
 from scripts.ae_assurance_policy import (
     ASSURANCE_CONTENT_DOMAIN,
     ASSURANCE_PACKAGE_DOMAIN,
+    EVIDENCE_RECORD_DOMAIN,
     FIXTURE_CATALOG_PATH,
     JSON_REPORT_DOMAIN,
     MARKDOWN_REPORT_DOMAIN,
@@ -45,9 +46,13 @@ from scripts.ae_assurance_policy import (
     PRODUCER_PACKAGE_DOMAIN,
     PROFILE_DOMAIN,
     TOOL_INVENTORY_DOMAIN,
+    CANDIDATE_TOOL_IDENTITIES,
+    CANDIDATE_TOOL_LIMITATION,
+    FIXTURE_TOOL_BINDINGS,
     artifact_digest,
     load_authority,
     load_schemas,
+    tool_binding_digest,
 )
 from scripts.ae_framework_adapter import (
     _run_bounded_process,
@@ -64,6 +69,7 @@ from scripts.ae_framework_manifest import (
 from scripts.canonical_json import (
     CanonicalJSONError,
     canonicalize,
+    domain_digest,
     file_digest,
     strict_loads,
 )
@@ -188,6 +194,12 @@ class AeAssuranceFixtureTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.catalog = read_strict_json(ROOT / FIXTURE_CATALOG_PATH)
+        cls.inputs = {
+            Path(item["input_path"]).stem: read_strict_json(
+                FIXTURE_ROOT / item["input_path"]
+            )
+            for item in cls.catalog["fixtures"]
+        }
         cls.packages = {
             Path(item["expected_json_path"]).parent.name: read_strict_json(
                 FIXTURE_ROOT / item["expected_json_path"], max_bytes=2_097_152
@@ -248,18 +260,20 @@ class AeAssuranceFixtureTests(unittest.TestCase):
                 self.assertGreaterEqual(package["status_counts"][status], 1)
 
     def test_every_external_tool_and_version_remains_visible(self) -> None:
-        _, inventory, _ = load_authority(ROOT)
-        expected = [(item["tool_id"], item["version"]) for item in inventory["tools"]]
+        expected = [
+            (binding["identity"], binding["version"])
+            for binding in self.inputs["success"]["tool_bindings"]
+        ]
         for package in self.packages.values():
             self.assertEqual(
                 [
-                    (item["tool_id"], item["version"])
+                    (item["tool_id"], item["tool_version"])
                     for item in package["external_tool_inventory"]
                 ],
                 expected,
             )
             required = {
-                record["tool"]["name"]: record["execution"]["required"]
+                record["configuration"]["tool_role_id"]: record["execution"]["required"]
                 for record in package["evidence_records"]
             }
             self.assertTrue(required["PMAE-CI-PIPELINE-V0-1"])
@@ -350,9 +364,32 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 ],
             }
         )
+        candidate_bindings = []
+        for index, role in enumerate(self.inventory["tools"], start=1):
+            binding = {
+                "tool_role_id": role["tool_id"],
+                "producer_type": role["producer_type"],
+                "mode": "private-candidate",
+                "identity": CANDIDATE_TOOL_IDENTITIES[role["tool_id"]],
+                "version": f"0.1.{index}",
+                "implementation_digest": "sha256:" + f"{index:x}" * 64,
+                "input_contract": role["input_contract"],
+                "output_contract": role["output_contract"],
+                "limitations": [CANDIDATE_TOOL_LIMITATION],
+            }
+            binding["binding_digest"] = tool_binding_digest(binding)
+            candidate_bindings.append(binding)
+        value["tool_bindings"] = candidate_bindings
+        bindings_by_role = {
+            binding["tool_role_id"]: binding for binding in candidate_bindings
+        }
         for record in value["records"]:
             producer_type = record["producer_type"]
+            binding = bindings_by_role[record["tool_id"]]
             record["producer_id"] = f"private-match-product-{producer_type}"
+            record["tool_identity"] = binding["identity"]
+            record["tool_version"] = binding["version"]
+            record["tool_implementation_digest"] = binding["implementation_digest"]
             record["test_only"] = False
             record["retention_classification"] = "private-assurance-retained"
             record["summary"] = f"Private candidate {producer_type} status record."
@@ -413,7 +450,7 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 "implementation_digest", "sha256:" + "0" * 64
             ),
             lambda value: value["external_tool_inventory"][0].__setitem__(
-                "version", "9.9.9"
+                "tool_version", "9.9.9"
             ),
             lambda value: value["producer_inventory"][0].__setitem__(
                 "producer_version", "9.9.9"
@@ -466,6 +503,126 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 validate_producer_package(
                     ROOT, self._producer(mutation), self.inventory, self.profile
                 )
+
+    def test_mode_specific_tool_bindings_fail_closed(self) -> None:
+        def rebound(candidate: dict, index: int = 0) -> dict:
+            binding = candidate["tool_bindings"][index]
+            binding["binding_digest"] = tool_binding_digest(binding)
+            candidate["package_digest"] = artifact_digest(
+                PRODUCER_PACKAGE_DOMAIN, candidate, "package_digest"
+            )
+            return candidate
+
+        synthetic_identity = self._private_candidate()
+        synthetic_identity["tool_bindings"][0]["identity"] = FIXTURE_TOOL_BINDINGS[
+            "PMAE-CI-PIPELINE-V0-1"
+        ][0]
+        synthetic_identity["records"][0]["tool_identity"] = synthetic_identity[
+            "tool_bindings"
+        ][0]["identity"]
+        synthetic_digest = self._private_candidate()
+        synthetic_digest["tool_bindings"][0]["implementation_digest"] = (
+            FIXTURE_TOOL_BINDINGS["PMAE-CI-PIPELINE-V0-1"][1]
+        )
+        synthetic_digest["records"][0]["tool_implementation_digest"] = synthetic_digest[
+            "tool_bindings"
+        ][0]["implementation_digest"]
+        missing = self._private_candidate()
+        missing["tool_bindings"].pop()
+        extra = self._private_candidate()
+        extra["tool_bindings"].append(copy.deepcopy(extra["tool_bindings"][0]))
+        duplicate_role = self._private_candidate()
+        duplicate_role["tool_bindings"][1]["tool_role_id"] = duplicate_role[
+            "tool_bindings"
+        ][0]["tool_role_id"]
+        duplicate_role["tool_bindings"][1]["binding_digest"] = tool_binding_digest(
+            duplicate_role["tool_bindings"][1]
+        )
+        wrong_type = self._private_candidate()
+        wrong_type["tool_bindings"][0]["producer_type"] = "formal-tool"
+        unknown_role = self._private_candidate()
+        unknown_role["tool_bindings"][0]["tool_role_id"] = "PMAE-UNKNOWN-V0-1"
+        fixture_private = copy.deepcopy(self.success)
+        fixture_private["tool_bindings"][0]["identity"] = CANDIDATE_TOOL_IDENTITIES[
+            "PMAE-CI-PIPELINE-V0-1"
+        ]
+
+        candidates = (
+            rebound(synthetic_identity),
+            rebound(synthetic_digest),
+            rebound(missing),
+            rebound(extra),
+            rebound(duplicate_role, 1),
+            rebound(wrong_type),
+            rebound(unknown_role),
+            rebound(fixture_private),
+        )
+        for candidate in candidates:
+            with self.subTest(candidate=candidate["tool_bindings"][0]):
+                with self.assertRaises(AssuranceIntegrationError):
+                    validate_producer_package(
+                        ROOT, candidate, self.inventory, self.profile
+                    )
+
+    def test_record_binding_version_and_digest_mismatch_fail_closed(self) -> None:
+        for field, value in (
+            ("tool_version", "9.9.9"),
+            ("tool_implementation_digest", "sha256:" + "9" * 64),
+        ):
+            candidate = self._private_candidate()
+            candidate["records"][0][field] = value
+            candidate["package_digest"] = artifact_digest(
+                PRODUCER_PACKAGE_DOMAIN, candidate, "package_digest"
+            )
+            with (
+                self.subTest(field=field),
+                self.assertRaises(AssuranceIntegrationError),
+            ):
+                validate_producer_package(ROOT, candidate, self.inventory, self.profile)
+
+    def test_single_source_revision_contract_fails_closed_and_moves_atomically(
+        self,
+    ) -> None:
+        for count in (1, 2):
+            candidate = self._private_candidate()
+            for record in candidate["records"][:count]:
+                record["source_revision_digest"] = "sha256:" + "9" * 64
+            candidate["package_digest"] = artifact_digest(
+                PRODUCER_PACKAGE_DOMAIN, candidate, "package_digest"
+            )
+            with (
+                self.subTest(count=count),
+                self.assertRaises(AssuranceIntegrationError),
+            ):
+                validate_producer_package(ROOT, candidate, self.inventory, self.profile)
+
+        mismatched_subject = self._private_candidate()
+        mismatched_subject["subject"]["digest"] = "sha256:" + "8" * 64
+        mismatched_subject["package_digest"] = artifact_digest(
+            PRODUCER_PACKAGE_DOMAIN, mismatched_subject, "package_digest"
+        )
+        with self.assertRaises(AssuranceIntegrationError):
+            validate_producer_package(
+                ROOT, mismatched_subject, self.inventory, self.profile
+            )
+
+        moved = self._private_candidate()
+        moved["source_revision_digest"] = "sha256:" + "7" * 64
+        moved["subject"]["digest"] = moved["source_revision_digest"]
+        moved["package_digest"] = artifact_digest(
+            PRODUCER_PACKAGE_DOMAIN, moved, "package_digest"
+        )
+        validate_producer_package(ROOT, moved, self.inventory, self.profile)
+
+        def mixed_output(value: dict) -> None:
+            record = value["evidence_records"][0]
+            record["subject"]["digest"] = "sha256:" + "6" * 64
+            value["evidence_record_refs"][0]["record_digest"] = domain_digest(
+                EVIDENCE_RECORD_DOMAIN, record
+            )
+
+        with self.assertRaises(AssuranceIntegrationError):
+            validate_package(ROOT, self._result(mixed_output))
 
     def test_fixture_status_promotion_with_recomputed_digest_is_rejected(self) -> None:
         pass_limitation = next(
@@ -1073,15 +1230,62 @@ class AeAssuranceNegativeTests(unittest.TestCase):
         self.assertEqual(package["human_approval"]["state"], "required-not-provided")
         self.assertFalse(package["human_approval"]["reviewer_identity_verified"])
         self.assertFalse(package["lifecycle_boundary"]["public_export_eligible"])
+        self.assertTrue(
+            all(
+                record["subject"] == candidate["subject"]
+                for record in package["evidence_records"]
+            )
+        )
+        self.assertTrue(
+            all(
+                "source_revision_digest" not in record
+                for record in candidate["records"]
+            )
+        )
+        binding_by_role = {
+            binding["tool_role_id"]: binding for binding in candidate["tool_bindings"]
+        }
+        self.assertEqual(
+            package["external_tool_inventory"],
+            [
+                {
+                    "tool_role_id": role["tool_id"],
+                    "producer_type": role["producer_type"],
+                    "requirement": role["requirement"],
+                    "mode": binding_by_role[role["tool_id"]]["mode"],
+                    "tool_id": binding_by_role[role["tool_id"]]["identity"],
+                    "tool_version": binding_by_role[role["tool_id"]]["version"],
+                    "tool_implementation_digest": binding_by_role[role["tool_id"]][
+                        "implementation_digest"
+                    ],
+                    "input_contract": binding_by_role[role["tool_id"]][
+                        "input_contract"
+                    ],
+                    "output_contract": binding_by_role[role["tool_id"]][
+                        "output_contract"
+                    ],
+                    "limitations": binding_by_role[role["tool_id"]]["limitations"],
+                    "tool_binding_digest": binding_by_role[role["tool_id"]][
+                        "binding_digest"
+                    ],
+                }
+                for role in self.inventory["tools"]
+            ],
+        )
         serialized = canonicalize(package).decode("utf-8")
         for forbidden in (
             "synthetic-private-match-product",
             "synthetic-reviewer",
+            "synthetic-",
+            "private-match-synthetic-",
             "Public synthetic fixture only",
+            "Synthetic fixture identity only",
             '"test_only":true',
             "synthetic-public-fixture",
         ):
             self.assertNotIn(forbidden, serialized)
+        for _, fixture_digest in FIXTURE_TOOL_BINDINGS.values():
+            self.assertNotIn(fixture_digest, serialized)
         self.assertTrue(
             all(
                 record["configuration"]["retention_classification"]
@@ -1104,6 +1308,46 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 ),
             )
         validate_package(ROOT, package)
+
+    def test_candidate_tool_metadata_mutation_changes_bound_outputs(self) -> None:
+        original = self._private_candidate()
+        mutated = copy.deepcopy(original)
+        binding = mutated["tool_bindings"][0]
+        binding["version"] = "0.2.0"
+        binding["implementation_digest"] = "sha256:" + "a" * 64
+        binding["binding_digest"] = tool_binding_digest(binding)
+        mutated["records"][0]["tool_version"] = binding["version"]
+        mutated["records"][0]["tool_implementation_digest"] = binding[
+            "implementation_digest"
+        ]
+        mutated["package_digest"] = artifact_digest(
+            PRODUCER_PACKAGE_DOMAIN, mutated, "package_digest"
+        )
+        with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
+            base = Path(temp)
+            outputs = []
+            for name, source in (("original", original), ("mutated", mutated)):
+                input_name = f"{name}.json"
+                (base / input_name).write_bytes(canonicalize(source) + b"\n")
+                run_one(
+                    root=ROOT,
+                    profile_path="profiles/private-match-ae-assurance.v0.1.json",
+                    input_root=base,
+                    relative_input=input_name,
+                    output_root=base,
+                    relative_output=name,
+                    mode="private-candidate",
+                )
+                validate_output_directory(ROOT, base / name)
+                outputs.append(
+                    (
+                        read_strict_json(base / name / JSON_NAME)["package_digest"],
+                        read_strict_json(base / name / OUTPUT_SET_NAME)[
+                            "output_set_digest"
+                        ],
+                    )
+                )
+        self.assertNotEqual(outputs[0], outputs[1])
 
     def test_json_markdown_mismatch_and_nondeterministic_fields_fail(self) -> None:
         package = copy.deepcopy(self.success_expected)

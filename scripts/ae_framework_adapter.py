@@ -33,8 +33,13 @@ try:
         MARKDOWN_REPORT_DOMAIN,
         NATIVE_PROFILE_PATH,
         NATIVE_PROJECTION_DOMAIN,
+        CANDIDATE_TOOL_IDENTITIES,
+        CANDIDATE_TOOL_LIMITATION,
+        FIXTURE_TOOL_BINDINGS,
+        FIXTURE_TOOL_LIMITATION,
         load_authority,
         load_schemas,
+        tool_binding_digest,
         verify_producer_package,
     )
     from canonical_json import domain_digest
@@ -57,8 +62,13 @@ except ImportError:  # pragma: no cover
         MARKDOWN_REPORT_DOMAIN,
         NATIVE_PROFILE_PATH,
         NATIVE_PROJECTION_DOMAIN,
+        CANDIDATE_TOOL_IDENTITIES,
+        CANDIDATE_TOOL_LIMITATION,
+        FIXTURE_TOOL_BINDINGS,
+        FIXTURE_TOOL_LIMITATION,
         load_authority,
         load_schemas,
+        tool_binding_digest,
         verify_producer_package,
     )
     from scripts.canonical_json import domain_digest
@@ -186,7 +196,7 @@ def validate_producer_package(
     package: dict[str, Any],
     inventory: dict[str, Any],
     profile: dict[str, Any],
-) -> None:
+) -> list[dict[str, Any]]:
     schemas = load_schemas(root)
     validate_schema_instance(
         package,
@@ -227,6 +237,10 @@ def validate_producer_package(
     if package["limitations"] != MODE_PACKAGE_LIMITATIONS[package["mode"]]:
         raise AssuranceIntegrationError("producer package limitations are not closed")
     tool_by_id = {tool["tool_id"]: tool for tool in inventory["tools"]}
+    bindings = validate_tool_bindings(
+        root, package["mode"], package["tool_bindings"], inventory
+    )
+    binding_by_id = {binding["tool_role_id"]: binding for binding in bindings}
     records = {record["tool_id"]: record for record in package["records"]}
     if set(records) != set(tool_by_id):
         raise AssuranceIntegrationError(
@@ -234,6 +248,7 @@ def validate_producer_package(
         )
     for tool_id, tool in tool_by_id.items():
         record = records[tool_id]
+        binding = binding_by_id[tool_id]
         if (
             record["producer_id"]
             != PRODUCER_IDS[package["mode"]][record["producer_type"]]
@@ -241,8 +256,9 @@ def validate_producer_package(
             raise AssuranceIntegrationError("producer identity is not a closed role ID")
         if (
             record["producer_type"] != tool["producer_type"]
-            or record["tool_version"] != tool["version"]
-            or record["tool_implementation_digest"] != tool["implementation_digest"]
+            or record["tool_identity"] != binding["identity"]
+            or record["tool_version"] != binding["version"]
+            or record["tool_implementation_digest"] != binding["implementation_digest"]
         ):
             raise AssuranceIntegrationError("producer tool binding does not match")
         mapping = next(
@@ -275,10 +291,75 @@ def validate_producer_package(
         "human-review",
     ]:
         raise AssuranceIntegrationError("producer type profile is unavailable")
+    return bindings
+
+
+def validate_tool_bindings(
+    root: Path,
+    mode: str,
+    bindings: list[dict[str, Any]],
+    inventory: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Validate one exact mode-specific execution binding per policy role."""
+
+    schemas = load_schemas(root)
+    registry = build_schema_registry(schemas.values())
+    role_by_id = {role["tool_id"]: role for role in inventory["tools"]}
+    binding_by_id: dict[str, dict[str, Any]] = {}
+    identities: set[str] = set()
+    for binding in bindings:
+        validate_schema_instance(binding, schemas["tool_binding"], registry=registry)
+        role_id = binding["tool_role_id"]
+        if role_id in binding_by_id or binding["identity"] in identities:
+            raise AssuranceIntegrationError(
+                "tool binding role or identity is duplicate"
+            )
+        binding_by_id[role_id] = binding
+        identities.add(binding["identity"])
+    if set(binding_by_id) != set(role_by_id):
+        raise AssuranceIntegrationError("tool bindings do not match policy roles")
+    fixture_digests = {item[1] for item in FIXTURE_TOOL_BINDINGS.values()}
+    ordered: list[dict[str, Any]] = []
+    for role in inventory["tools"]:
+        role_id = role["tool_id"]
+        binding = binding_by_id[role_id]
+        if (
+            binding["mode"] != mode
+            or binding["producer_type"] != role["producer_type"]
+            or binding["input_contract"] != role["input_contract"]
+            or binding["output_contract"] != role["output_contract"]
+            or binding["binding_digest"] != tool_binding_digest(binding)
+        ):
+            raise AssuranceIntegrationError("tool binding does not match policy role")
+        if mode == "fixture-test":
+            fixture_identity, fixture_digest = FIXTURE_TOOL_BINDINGS[role_id]
+            if (
+                binding["identity"] != fixture_identity
+                or binding["version"] != "1.0.0"
+                or binding["implementation_digest"] != fixture_digest
+                or binding["limitations"] != [FIXTURE_TOOL_LIMITATION]
+            ):
+                raise AssuranceIntegrationError(
+                    "fixture tool binding does not match reviewed authority"
+                )
+        elif mode == "private-candidate":
+            if (
+                binding["identity"] != CANDIDATE_TOOL_IDENTITIES[role_id]
+                or binding["implementation_digest"] in fixture_digests
+                or binding["limitations"] != [CANDIDATE_TOOL_LIMITATION]
+            ):
+                raise AssuranceIntegrationError(
+                    "private-candidate tool binding is synthetic or unreviewed"
+                )
+        else:  # Schema validation normally catches this first.
+            raise AssuranceIntegrationError("tool binding mode is unavailable")
+        ordered.append(binding)
+    return ordered
 
 
 def _evidence_record(
     record: dict[str, Any],
+    binding: dict[str, Any],
     package_digest: str,
     subject: dict[str, Any],
     *,
@@ -290,6 +371,10 @@ def _evidence_record(
     configuration: dict[str, Any] = {
         "ae_producer_type": record["producer_type"],
         "ae_producer_version": record["producer_version"],
+        "tool_role_id": binding["tool_role_id"],
+        "tool_binding_digest": binding["binding_digest"],
+        "tool_input_contract": binding["input_contract"],
+        "tool_output_contract": binding["output_contract"],
         "protocol_case_digest": record["protocol_case_digest"],
         "protocol_input_digest": record["protocol_input_digest"],
         "test_only": record["test_only"],
@@ -342,9 +427,9 @@ def _evidence_record(
             "identity": record["producer_id"],
         },
         "tool": {
-            "name": record["tool_id"],
-            "version": record["tool_version"],
-            "source": record["tool_implementation_digest"],
+            "name": binding["identity"],
+            "version": binding["version"],
+            "source": binding["implementation_digest"],
         },
         "started_at": record["started_at"],
         "completed_at": record["completed_at"],
@@ -359,6 +444,9 @@ def _evidence_record(
 
 
 def _native_manifest(package: dict[str, Any]) -> dict[str, Any]:
+    bindings = {
+        binding["tool_role_id"]: binding for binding in package["tool_bindings"]
+    }
     entries = []
     for record in package["records"]:
         lane, kind, source_kind = TYPE_TO_NATIVE[record["producer_type"]]
@@ -372,7 +460,7 @@ def _native_manifest(package: dict[str, Any]) -> dict[str, Any]:
                 "artifactPath": f"producer-package/{record['evidence_id']}",
                 "detail": f"status={record['status']}",
                 "claimRefs": ["supplied-evidence-contract"],
-                "generatorLineage": record["tool_id"],
+                "generatorLineage": bindings[record["tool_id"]]["identity"],
             }
         )
     return {"schemaVersion": "assurance-evidence-manifest/v1", "entries": entries}
@@ -699,19 +787,22 @@ def build_assurance_package(
     root: Path, producer_package: dict[str, Any], staging: Path
 ) -> dict[str, Any]:
     pin, inventory, profile = load_authority(root)
-    validate_producer_package(root, producer_package, inventory, profile)
+    bindings = validate_producer_package(root, producer_package, inventory, profile)
+    bindings_by_role = {binding["tool_role_id"]: binding for binding in bindings}
     records_by_tool = {
         record["tool_id"]: record for record in producer_package["records"]
     }
     ordered_records = [records_by_tool[tool["tool_id"]] for tool in inventory["tools"]]
     normalized_producer_package = copy.deepcopy(producer_package)
     normalized_producer_package["records"] = ordered_records
+    normalized_producer_package["tool_bindings"] = bindings
     schemas = load_schemas(root)
     producer_digest = producer_package["package_digest"]
     tools_by_id = {tool["tool_id"]: tool for tool in inventory["tools"]}
     evidence = [
         _evidence_record(
             record,
+            bindings_by_role[record["tool_id"]],
             producer_digest,
             normalized_producer_package["subject"],
             required=tools_by_id[record["tool_id"]]["requirement"] == "required",
@@ -744,22 +835,34 @@ def build_assurance_package(
             "producer_type": record["producer_type"],
             "producer_id": record["producer_id"],
             "producer_version": record["producer_version"],
-            "tool_id": record["tool_id"],
-            "tool_version": record["tool_version"],
+            "tool_role_id": record["tool_id"],
+            "tool_id": bindings_by_role[record["tool_id"]]["identity"],
+            "tool_version": bindings_by_role[record["tool_id"]]["version"],
+            "tool_implementation_digest": bindings_by_role[record["tool_id"]][
+                "implementation_digest"
+            ],
+            "tool_binding_digest": bindings_by_role[record["tool_id"]][
+                "binding_digest"
+            ],
             "status": record["status"],
         }
         for record in ordered_records
     ]
     external_tools = [
         {
-            "tool_id": tool["tool_id"],
-            "producer_type": tool["producer_type"],
-            "requirement": tool["requirement"],
-            "identity": tool["identity"],
-            "version": tool["version"],
-            "implementation_digest": tool["implementation_digest"],
+            "tool_role_id": role["tool_id"],
+            "producer_type": role["producer_type"],
+            "requirement": role["requirement"],
+            "mode": binding["mode"],
+            "tool_id": binding["identity"],
+            "tool_version": binding["version"],
+            "tool_implementation_digest": binding["implementation_digest"],
+            "input_contract": binding["input_contract"],
+            "output_contract": binding["output_contract"],
+            "limitations": binding["limitations"],
+            "tool_binding_digest": binding["binding_digest"],
         }
-        for tool in inventory["tools"]
+        for role, binding in zip(inventory["tools"], bindings, strict=True)
     ]
     core: dict[str, Any] = {
         "schema_version": "0.1",

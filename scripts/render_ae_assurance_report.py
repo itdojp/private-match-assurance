@@ -55,12 +55,21 @@ def render_markdown(package: dict[str, Any]) -> str:
         "## Producer Evidence",
         "",
         *_table(
-            ["Evidence ID", "producer type", "producer", "tool", "version", "status"],
+            [
+                "Evidence ID",
+                "producer type",
+                "producer",
+                "tool role",
+                "execution tool",
+                "version",
+                "status",
+            ],
             [
                 [
                     item["evidence_id"],
                     item["producer_type"],
                     item["producer_id"],
+                    item["tool_role_id"],
                     item["tool_id"],
                     item["tool_version"],
                     item["status"],
@@ -73,7 +82,7 @@ def render_markdown(package: dict[str, Any]) -> str:
         "",
         *_table(
             [
-                "tool",
+                "tool role",
                 "producer type",
                 "requirement",
                 "identity",
@@ -82,12 +91,12 @@ def render_markdown(package: dict[str, Any]) -> str:
             ],
             [
                 [
-                    item["tool_id"],
+                    item["tool_role_id"],
                     item["producer_type"],
                     item["requirement"],
-                    item["identity"],
-                    item["version"],
-                    item["implementation_digest"],
+                    item["tool_id"],
+                    item["tool_version"],
+                    item["tool_implementation_digest"],
                 ]
                 for item in package["external_tool_inventory"]
             ],

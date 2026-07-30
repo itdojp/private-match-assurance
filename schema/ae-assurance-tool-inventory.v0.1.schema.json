@@ -34,9 +34,6 @@
           "tool_id",
           "producer_type",
           "requirement",
-          "identity",
-          "version",
-          "implementation_digest",
           "input_contract",
           "output_contract",
           "timeout_policy",
@@ -64,18 +61,6 @@
               "required",
               "optional"
             ]
-          },
-          "identity": {
-            "type": "string",
-            "minLength": 1
-          },
-          "version": {
-            "type": "string",
-            "minLength": 1
-          },
-          "implementation_digest": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
           },
           "input_contract": {
             "type": "string",
@@ -208,5 +193,5 @@
       }
     }
   },
-  "description": "Closed required and optional producer/tool inventory with exact six-status preservation."
+  "description": "Closed policy-role inventory for required/optional behavior and exact six-status preservation; execution-tool provenance is supplied separately by a mode-specific binding."
 }

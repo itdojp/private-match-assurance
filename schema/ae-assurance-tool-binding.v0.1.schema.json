@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/ae-assurance-tool-binding.v0.1.schema.json",
+  "title": "Private Match Assurance mode-specific execution tool binding v0.1",
+  "description": "One digest-bound execution identity under a closed Assurance policy role. Supplied private-candidate metadata is not independently authenticated by this contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tool_role_id",
+    "producer_type",
+    "mode",
+    "identity",
+    "version",
+    "implementation_digest",
+    "input_contract",
+    "output_contract",
+    "limitations",
+    "binding_digest"
+  ],
+  "properties": {
+    "tool_role_id": {
+      "enum": [
+        "PMAE-CI-PIPELINE-V0-1",
+        "PMAE-CONFORMANCE-RUNNER-V0-1",
+        "PMAE-FORMAL-TOOL-V0-1",
+        "PMAE-SECURITY-TOOL-V0-1",
+        "PMAE-HUMAN-REVIEW-V0-1"
+      ]
+    },
+    "producer_type": {
+      "enum": [
+        "ci",
+        "formal-tool",
+        "test-runner",
+        "security-tool",
+        "human-review"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "fixture-test",
+        "private-candidate"
+      ]
+    },
+    "identity": {
+      "enum": [
+        "private-match-synthetic-ci",
+        "private-match-synthetic-conformance-runner",
+        "private-match-synthetic-formal-tool",
+        "private-match-synthetic-security-tool",
+        "private-match-synthetic-review-contract",
+        "private-match-product-ci",
+        "private-match-product-conformance-runner",
+        "private-match-product-formal-tool",
+        "private-match-product-security-tool",
+        "private-match-product-human-review"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9A-Za-z](?:[0-9A-Za-z._+-]{0,31})$"
+    },
+    "implementation_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "input_contract": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "output_contract": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 192
+      }
+    },
+    "binding_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "fixture-test"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "enum": [
+              "private-match-synthetic-ci",
+              "private-match-synthetic-conformance-runner",
+              "private-match-synthetic-formal-tool",
+              "private-match-synthetic-security-tool",
+              "private-match-synthetic-review-contract"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "private-candidate"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "enum": [
+              "private-match-product-ci",
+              "private-match-product-conformance-runner",
+              "private-match-product-formal-tool",
+              "private-match-product-security-tool",
+              "private-match-product-human-review"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

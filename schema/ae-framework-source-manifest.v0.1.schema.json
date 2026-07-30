@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/ae-framework-source-manifest.v0.1.schema.json",
+  "title": "Reviewed ae-framework source closure v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "repository",
+    "source_commit",
+    "reviewed_package",
+    "entrypoint",
+    "files",
+    "runtime_dependencies",
+    "source_tree_digest",
+    "license",
+    "limitations",
+    "manifest_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "const": "draft"
+    },
+    "repository": {
+      "const": "itdojp/ae-framework"
+    },
+    "source_commit": {
+      "const": "bba9b6846608359b87ed5393cb208e321f3ba8af"
+    },
+    "reviewed_package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "package_json_digest"
+      ],
+      "properties": {
+        "name": {
+          "const": "ae-framework"
+        },
+        "version": {
+          "const": "1.0.0"
+        },
+        "package_json_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "entrypoint": {
+      "const": "vendor/ae-framework/scripts/assurance/aggregate-lanes.mjs"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "original_path",
+          "digest",
+          "role",
+          "license"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)[A-Za-z0-9._/-]+$",
+            "minLength": 1
+          },
+          "original_path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)[A-Za-z0-9._/-]+$",
+            "minLength": 1
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "role": {
+            "enum": [
+              "native-assurance-entrypoint",
+              "runtime-source-dependency",
+              "native-input-schema",
+              "native-output-schema",
+              "runtime-schema-dependency"
+            ]
+          },
+          "license": {
+            "const": "Apache-2.0"
+          }
+        }
+      }
+    },
+    "runtime_dependencies": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "version",
+          "license"
+        ],
+        "properties": {
+          "name": {
+            "enum": [
+              "ajv",
+              "ajv-formats",
+              "yaml"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "license": {
+            "enum": [
+              "MIT",
+              "ISC"
+            ]
+          }
+        }
+      }
+    },
+    "source_tree_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "license": {
+      "const": "Apache-2.0"
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "manifest_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "description": "Exact Apache-2.0 ae-framework source and runtime-data closure from the reviewed commit."
+}

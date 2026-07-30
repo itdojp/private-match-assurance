@@ -48,6 +48,28 @@ Run regression tests:
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
+Install the exact Node runtime dependencies and validate the ae-framework
+integration closure and deterministic fixtures:
+
+```bash
+corepack enable
+corepack prepare pnpm@10.34.5 --activate
+pnpm install --frozen-lockfile
+python scripts/ae_framework_manifest.py --check
+python scripts/ae_assurance_implementation.py --check
+python scripts/validate_ae_assurance.py
+python scripts/generate_ae_assurance_fixtures.py --check
+```
+
+The supported target is Node.js 22.22.2. The lock contains the exact Ajv,
+Ajv-formats, and YAML dependencies required by the unmodified reviewed
+ae-framework command. Fixture checks execute every catalog entry twice and
+compare exact JSON, Markdown, and detached output-set bytes. Output-set
+validation binds the renderer and requires the exact three-file directory.
+Private-candidate contract tests use only ephemeral synthetic digest metadata
+under an existing trusted output root. They do not run the public exporter or
+use live/private Product input.
+
 Validate repository assurance records:
 
 ```bash

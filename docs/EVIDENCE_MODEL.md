@@ -170,6 +170,17 @@ or CI success does not create that approval.
 
 Only `pass` supports a positive statement about that specific check. Other statuses remain visible.
 
+The Draft ae-framework integration preserves this exact vocabulary for every
+producer and external tool. It does not collapse or promote statuses: in
+particular, `skip` and `unsupported` do not become `pass`, while `timeout` and
+`tool-error` do not become `fail`. Required non-pass checks block the producer
+gate; optional non-pass checks remain visible under the profile policy. Native
+ae-framework claims and warnings form a second judgment surface. The combined
+result may be `satisfied-with-warnings`, but it never rewrites an Evidence
+status. Automated judgments are not Evidence statuses and remain structurally
+separate from the current machine-generated no-decision human approval
+boundary.
+
 ## Lifecycle semantics
 
 - `collected`: the result exists in a private or controlled system
@@ -230,3 +241,9 @@ programmatic or staged-file execution context, not caller-supplied claims.
 ## Reproducibility
 
 Publicly reproducible evidence should include inputs, commands, tool versions, and expected results. Evidence dependent on private data or infrastructure must be labeled `privately reproducible` or `not publicly reproducible`, with the reason stated.
+
+The ae-framework fixture catalog uses only public synthetic producer packages.
+Its JSON package remains the machine authority and its Markdown is rendered
+only from validated JSON. The integration package is internal Assurance
+Evidence and is not passed automatically to the public exporter. See
+[`AE_FRAMEWORK_INTEGRATION.md`](AE_FRAMEWORK_INTEGRATION.md).

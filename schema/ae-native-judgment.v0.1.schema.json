@@ -1,0 +1,154 @@
+{
+  "$id": "https://itdo.jp/schemas/private-match/assurance/ae-native-judgment.v0.1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The reviewed native ae-framework claim and warning surface is explicit and does not rewrite producer Evidence statuses.",
+  "properties": {
+    "claim_results": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "claim_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "missing_evidence_kinds": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "missing_lanes": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "observed_evidence_kinds": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "observed_lanes": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "required_evidence_kinds": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "required_lanes": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "status": {
+            "enum": [
+              "satisfied",
+              "warning"
+            ]
+          },
+          "warning_codes": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "claim_id",
+          "status",
+          "required_lanes",
+          "observed_lanes",
+          "missing_lanes",
+          "required_evidence_kinds",
+          "observed_evidence_kinds",
+          "missing_evidence_kinds",
+          "warning_codes"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "limitations": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 2,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "policy_treatment": {
+      "enum": [
+        "blocking",
+        "visible-nonblocking",
+        "not-applicable"
+      ]
+    },
+    "rationale_codes": {
+      "items": {
+        "enum": [
+          "NATIVE-REQUIRED-SURFACE-BLOCKED",
+          "NATIVE-WARNING-REVIEWED-NONBLOCKING",
+          "NATIVE-CLAIMS-SATISFIED"
+        ]
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "schema_version": {
+      "const": "0.1"
+    },
+    "state": {
+      "enum": [
+        "satisfied",
+        "warning",
+        "blocked",
+        "not-evaluated"
+      ]
+    },
+    "warning_codes": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "state",
+    "claim_results",
+    "warning_codes",
+    "policy_treatment",
+    "rationale_codes",
+    "limitations"
+  ],
+  "title": "Native ae-framework judgment v0.1",
+  "type": "object"
+}

@@ -55,6 +55,16 @@ Do not transform:
 - `no issue found` into `no vulnerability exists`
 - `vendor reports property X` into `ITDO independently established property X`
 - `no direct competitor identified` into `no competitor exists`
+- `ae-framework automated judgment satisfied` into `the Product is secure,
+  certified, human-approved, publication-approved, pilot-ready, or
+  production-ready`
+
+ae-framework may organize supplied Evidence and apply the reviewed automated
+policy. Native warnings and their reviewed blocking/nonblocking treatment must
+remain visible; `satisfied-with-warnings` is not plain satisfaction. The
+framework cannot create facts absent from Evidence, establish the absence of
+undiscovered defects, verify reviewer identity or authority, create human
+approval, or authorize publication.
 
 ## Cryptographic claims
 

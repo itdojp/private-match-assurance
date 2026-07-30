@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/assurance-automated-judgment.v0.1.schema.json",
+  "title": "Combined automated Assurance judgment v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_id",
+    "policy_version",
+    "state",
+    "producer_gate_state",
+    "native_ae_state",
+    "rationale_codes",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "policy_id": {
+      "const": "private-match-assurance-automated-policy"
+    },
+    "policy_version": {
+      "const": "0.1"
+    },
+    "state": {
+      "enum": [
+        "satisfied",
+        "satisfied-with-warnings",
+        "blocked",
+        "not-evaluated"
+      ]
+    },
+    "rationale_codes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "PRODUCER-OR-NATIVE-BLOCKED",
+          "REVIEWED-NATIVE-WARNING-VISIBLE",
+          "PRODUCER-AND-NATIVE-SATISFIED",
+          "NATIVE-JUDGMENT-NOT-EVALUATED"
+        ]
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "native_ae_state": {
+      "enum": [
+        "satisfied",
+        "warning",
+        "blocked",
+        "not-evaluated"
+      ]
+    },
+    "producer_gate_state": {
+      "enum": [
+        "satisfied",
+        "blocked",
+        "not-evaluated"
+      ]
+    }
+  },
+  "description": "Combined judgment is derived from separate producer-gate and native ae-framework surfaces; satisfaction is not human approval."
+}

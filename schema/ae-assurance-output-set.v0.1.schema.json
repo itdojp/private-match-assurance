@@ -1,0 +1,113 @@
+{
+  "$id": "https://itdo.jp/schemas/private-match/assurance/ae-assurance-output-set.v0.1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Detached manifest binding the exact canonical JSON bytes, rendered Markdown bytes, renderer, adapter, profile, ae-framework pin, and package.",
+  "properties": {
+    "adapter_implementation_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "ae_framework_pin_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "artifact_status": {
+      "enum": [
+        "test-only",
+        "private-candidate"
+      ]
+    },
+    "execution_mode": {
+      "enum": [
+        "fixture-test",
+        "private-candidate"
+      ]
+    },
+    "integration_profile_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "json_report": {
+      "additionalProperties": false,
+      "properties": {
+        "file_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "path": {
+          "const": "private-match-assurance-package.v0.1.json"
+        }
+      },
+      "required": [
+        "path",
+        "file_digest"
+      ],
+      "type": "object"
+    },
+    "markdown_report": {
+      "additionalProperties": false,
+      "properties": {
+        "file_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "path": {
+          "const": "private-match-assurance-package.v0.1.md"
+        }
+      },
+      "required": [
+        "path",
+        "file_digest"
+      ],
+      "type": "object"
+    },
+    "output_set_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "package_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "renderer": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "const": "private-match-assurance/markdown-renderer"
+        },
+        "implementation_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "version": {
+          "const": "0.1"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "implementation_digest"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "0.1"
+    }
+  },
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "execution_mode",
+    "package_digest",
+    "json_report",
+    "markdown_report",
+    "renderer",
+    "adapter_implementation_digest",
+    "integration_profile_digest",
+    "ae_framework_pin_digest",
+    "output_set_digest"
+  ],
+  "title": "Exact ae Assurance output set v0.1",
+  "type": "object"
+}

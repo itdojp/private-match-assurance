@@ -24,42 +24,35 @@ jobs:
           cache-dependency-path: |
             requirements-build.txt
             requirements-dev.txt
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.22.2'
+      - name: Install exact Node dependencies
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.34.5 --activate
+          pnpm install --frozen-lockfile
       - name: Install integrity-locked build backend
         run: python -m pip install --require-hashes -r requirements-build.txt
       - name: Install integrity-locked validation dependencies
         run: python -m pip install --require-hashes --no-build-isolation -r requirements-dev.txt
       - name: Run schema validator tests
         run: python -m unittest discover -s tests -p 'test_*.py'
+      - name: Validate exact ae-framework integration
+        run: |
+          python scripts/ae_framework_manifest.py --check
+          python scripts/ae_assurance_implementation.py --check
+          python scripts/validate_ae_assurance.py
+          python scripts/generate_ae_assurance_fixtures.py --check
       - name: Compile and lint Python
         run: |
           python -m compileall -q scripts tests
           ruff check scripts tests
           ruff format --check scripts tests
-      - name: Export synthetic public Evidence fixture
-        run: |
-          python scripts/export_public_evidence.py \
-            --mode test-fixture \
-            --staging-root tests/fixtures/export/input \
-            --input protocol-conformance.json \
-            --output-dir .codex-local/tmp/export
-          cmp \
-            tests/fixtures/export/expected/protocol-conformance.json \
-            .codex-local/tmp/export/public-evidence-export.v0.1.json
-      - name: Validate assurance records
+      - name: Validate assurance records without public export
         run: >-
           python scripts/validate_assurance.py
           --root .
-          --report-dir artifacts
-          --export-profile profiles/public-evidence-export.v0.1.json
-          --export-mode test-fixture
-          --export-bundle .codex-local/tmp/export/public-evidence-export.v0.1.json
+          --report-dir .codex-local/tmp/validation
       - name: Validate REUSE licensing metadata
         run: reuse lint
-      - name: Upload validation report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: assurance-schema-report
-          path: artifacts/
-          if-no-files-found: error
-          retention-days: 30

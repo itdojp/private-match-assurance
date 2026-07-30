@@ -7,21 +7,35 @@ path = [
   ".github/workflows/assurance-schema.yml",
   ".gitignore",
   "REUSE.toml",
+  "package.json",
+  "pnpm-lock.yaml",
   "requirements-build.in",
   "requirements-build.txt",
   "requirements-dev.in",
   "requirements-dev.txt",
+  "config/*.json",
   "manifests/*.json",
   "profiles/*.json",
   "schema/*.json",
   "scripts/*.py",
   "tests/*.py",
   "tests/fixtures/export/**/*.json",
+  "tests/fixtures/ae-framework/**/*.json",
+  "tests/fixtures/ae-framework/**/*.md",
   "tests/fixtures/invalid/*.json",
   "tests/fixtures/valid/*.json",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 ITDO Inc. / 株式会社アイティードゥ"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "vendor/ae-framework/**/*.json",
+  "vendor/ae-framework/**/*.mjs",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "ae-framework contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]

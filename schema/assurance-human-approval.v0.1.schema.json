@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/assurance-human-approval.v0.1.schema.json",
+  "title": "Machine-generated human approval boundary v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "state",
+    "reviewer_role",
+    "reviewer_identity_verified",
+    "bound_assurance_content_digest",
+    "boundary_artifact_generated_by_automation",
+    "approval_decision_generated_by_automation",
+    "approval_decision_present",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "state": {
+      "enum": [
+        "required-not-provided",
+        "not-applicable-test-only"
+      ]
+    },
+    "reviewer_role": {
+      "anyOf": [
+        {
+          "const": "synthetic-reviewer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reviewer_identity_verified": {
+      "const": false
+    },
+    "bound_assurance_content_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    },
+    "approval_decision_generated_by_automation": {
+      "const": false
+    },
+    "approval_decision_present": {
+      "const": false
+    },
+    "boundary_artifact_generated_by_automation": {
+      "const": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "not-applicable-test-only"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reviewer_role": {
+            "const": "synthetic-reviewer"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "required-not-provided"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reviewer_role": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "description": "This automated boundary records that no human approval decision exists. The current runner cannot accept or emit approved or rejected decisions."
+}

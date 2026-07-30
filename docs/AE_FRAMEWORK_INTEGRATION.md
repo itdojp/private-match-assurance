@@ -87,6 +87,18 @@ record/binding mismatch. Candidate versions and SHA-256 implementation digests
 are supplied by the private Product, digest-bound into every report surface,
 and deliberately not independently authenticated by this runner.
 
+Policy-role ID, execution identity, and native implementation lineage are
+separate surfaces. Policy-role ID controls requirement and status semantics;
+execution identity remains visible in Evidence and tool inventories. Only the
+validated implementation digest is projected into the pinned ae-framework as
+`generatorLineage`, using the deterministic form
+`implementation/sha256:<64 lowercase hexadecimal digits>`. A caller cannot
+supply a separate lineage. Equal supplied implementation digests therefore
+produce one native lineage even when their policy roles and execution
+identities differ. Distinct supplied digests remain distinct native lineages,
+but do not prove independent development, organizational independence, or
+independent execution.
+
 Fixture input uses the closed subject `synthetic-private-match-product`,
 `test_only=true`, and `synthetic-public-fixture`. Private-candidate input uses
 the closed non-customer subject `private-match-product`, `test_only=false`, and
@@ -114,6 +126,13 @@ unknown warning fails closed. Therefore the current success fixture is
 every native claim, required/observed/missing lane and Evidence-kind set,
 warning code, and policy treatment. Producer Evidence statuses are never
 rewritten by native judgment.
+
+The pinned framework emits `same-generator-lineage` when more than one
+observed Evidence entry for a claim has one distinct implementation-derived
+lineage. The Draft profile classifies that warning as blocking. Optional
+non-pass entries with other digests do not change the pinned framework's
+observed-Evidence calculation; the adapter does not invent a stronger
+independence rule.
 
 The current runner-generated human boundary has only
 `required-not-provided` and `not-applicable-test-only`. It cannot accept or

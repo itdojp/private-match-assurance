@@ -52,6 +52,13 @@ Fixture bindings are exact reviewed synthetic authorities. Private-candidate
 bindings use closed non-identifying Product role identities while the Product
 supplies their version and implementation digest; those supplied values are
 digest-bound but not independently authenticated by this runner.
+Policy-role identity and mode-specific execution identity remain reportable
+contract surfaces, but neither is used as native implementation lineage. The
+adapter deterministically derives ae-framework `generatorLineage` as
+`implementation/<implementation_digest>` after binding validation. Equal
+supplied digests are therefore one lineage even across different roles, while
+distinct supplied digests do not prove actual organizational, development, or
+execution independence.
 Every normalized Evidence record independently validates against Evidence
 Schema 0.1. Fixture and private-candidate modes have distinct closed subjects,
 producer role IDs, test-only markers, retention classes, and human-approval
@@ -81,6 +88,10 @@ as visible-nonblocking for the current synthetic lane scope; every other known
 warning is blocking, missing required lanes or Evidence kinds are blocking,
 and unknown warning codes fail closed. Native claims and treatment are visible
 in JSON and generated Markdown without rewriting producer statuses.
+The pinned `same-generator-lineage` rule is evaluated over observed Evidence
+using the implementation-derived lineage. It blocks the combined judgment when
+multiple observed entries share one lineage. The adapter does not strengthen
+that upstream rule for non-observed optional entries.
 
 ### Required versus optional tool absence
 

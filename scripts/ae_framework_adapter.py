@@ -17,6 +17,7 @@ from typing import Any
 try:
     from ae_assurance_common import (
         AssuranceIntegrationError,
+        DIGEST_PATTERN,
         STATUS_VALUES,
         build_schema_registry,
         canonical_json_bytes,
@@ -46,6 +47,7 @@ try:
 except ImportError:  # pragma: no cover
     from scripts.ae_assurance_common import (
         AssuranceIntegrationError,
+        DIGEST_PATTERN,
         STATUS_VALUES,
         build_schema_registry,
         canonical_json_bytes,
@@ -443,6 +445,20 @@ def _evidence_record(
     }
 
 
+def native_generator_lineage(binding: dict[str, Any]) -> str:
+    """Derive native implementation lineage from one validated tool binding."""
+
+    implementation_digest = binding.get("implementation_digest")
+    if (
+        not isinstance(implementation_digest, str)
+        or DIGEST_PATTERN.fullmatch(implementation_digest) is None
+    ):
+        raise AssuranceIntegrationError(
+            "native generator lineage implementation digest is invalid"
+        )
+    return f"implementation/{implementation_digest}"
+
+
 def _native_manifest(package: dict[str, Any]) -> dict[str, Any]:
     bindings = {
         binding["tool_role_id"]: binding for binding in package["tool_bindings"]
@@ -460,7 +476,9 @@ def _native_manifest(package: dict[str, Any]) -> dict[str, Any]:
                 "artifactPath": f"producer-package/{record['evidence_id']}",
                 "detail": f"status={record['status']}",
                 "claimRefs": ["supplied-evidence-contract"],
-                "generatorLineage": bindings[record["tool_id"]]["identity"],
+                "generatorLineage": native_generator_lineage(
+                    bindings[record["tool_id"]]
+                ),
             }
         )
     return {"schemaVersion": "assurance-evidence-manifest/v1", "entries": entries}

@@ -491,7 +491,9 @@
         "fixture_binding",
         "private_candidate_binding",
         "private_candidate_metadata_authenticated",
-        "single_source_revision"
+        "single_source_revision",
+        "native_generator_lineage",
+        "digest_inequality_proves_independence"
       ],
       "properties": {
         "authority": {
@@ -514,6 +516,12 @@
         },
         "single_source_revision": {
           "const": true
+        },
+        "native_generator_lineage": {
+          "const": "implementation-digest-derived"
+        },
+        "digest_inequality_proves_independence": {
+          "const": false
         }
       }
     }

@@ -55,11 +55,13 @@ from scripts.ae_assurance_policy import (
     tool_binding_digest,
 )
 from scripts.ae_framework_adapter import (
+    _native_manifest,
     _run_bounded_process,
     _run_native,
     build_assurance_package,
-    validate_producer_package,
     derive_native_judgment,
+    native_generator_lineage,
+    validate_producer_package,
 )
 from scripts.ae_framework_manifest import (
     SOURCE_COMMIT,
@@ -97,6 +99,13 @@ class AeAssuranceAuthorityTests(unittest.TestCase):
         self.assertEqual(pin["entrypoint"]["type"], "vendored-reviewed-subset")
         self.assertEqual(len(inventory["tools"]), 5)
         self.assertEqual(len(profile["producer_status_mapping"]), 30)
+        self.assertEqual(
+            profile["tool_binding_contract"]["native_generator_lineage"],
+            "implementation-digest-derived",
+        )
+        self.assertFalse(
+            profile["tool_binding_contract"]["digest_inequality_proves_independence"]
+        )
         for mapping in profile["producer_status_mapping"]:
             self.assertEqual(
                 mapping["raw_producer_status"], mapping["normalized_evidence_status"]
@@ -272,6 +281,10 @@ class AeAssuranceFixtureTests(unittest.TestCase):
                 ],
                 expected,
             )
+            self.assertNotIn(
+                "same-generator-lineage",
+                package["native_ae_judgment"]["warning_codes"],
+            )
             required = {
                 record["configuration"]["tool_role_id"]: record["execution"]["required"]
                 for record in package["evidence_records"]
@@ -401,6 +414,26 @@ class AeAssuranceNegativeTests(unittest.TestCase):
         )
         return value
 
+    def _rebind_candidate_implementations(
+        self, candidate: dict, implementation_digests: dict[str, str]
+    ) -> dict:
+        bindings_by_role = {}
+        for binding in candidate["tool_bindings"]:
+            if binding["tool_role_id"] in implementation_digests:
+                binding["implementation_digest"] = implementation_digests[
+                    binding["tool_role_id"]
+                ]
+                binding["binding_digest"] = tool_binding_digest(binding)
+            bindings_by_role[binding["tool_role_id"]] = binding
+        for record in candidate["records"]:
+            record["tool_implementation_digest"] = bindings_by_role[record["tool_id"]][
+                "implementation_digest"
+            ]
+        candidate["package_digest"] = artifact_digest(
+            PRODUCER_PACKAGE_DOMAIN, candidate, "package_digest"
+        )
+        return candidate
+
     def _result(self, mutate, source: dict | None = None) -> dict:
         value = copy.deepcopy(source if source is not None else self.success_expected)
         mutate(value)
@@ -439,6 +472,36 @@ class AeAssuranceNegativeTests(unittest.TestCase):
             ASSURANCE_PACKAGE_DOMAIN, value, "package_digest"
         )
         return value
+
+    def test_native_manifest_lineage_uses_implementation_digest_not_role(self) -> None:
+        candidate = self._private_candidate()
+        shared_digest = "sha256:" + "e" * 64
+        self._rebind_candidate_implementations(
+            candidate,
+            {
+                "PMAE-CI-PIPELINE-V0-1": shared_digest,
+                "PMAE-CONFORMANCE-RUNNER-V0-1": shared_digest,
+            },
+        )
+        bindings = {
+            binding["tool_role_id"]: binding for binding in candidate["tool_bindings"]
+        }
+        self.assertNotEqual(
+            bindings["PMAE-CI-PIPELINE-V0-1"]["identity"],
+            bindings["PMAE-CONFORMANCE-RUNNER-V0-1"]["identity"],
+        )
+        manifest = _native_manifest(candidate)
+        self.assertEqual(
+            manifest["entries"][0]["generatorLineage"],
+            manifest["entries"][1]["generatorLineage"],
+        )
+        self.assertEqual(
+            manifest["entries"][0]["generatorLineage"],
+            f"implementation/{shared_digest}",
+        )
+        for malformed in ({}, {"implementation_digest": "sha256:invalid"}):
+            with self.assertRaises(AssuranceIntegrationError):
+                native_generator_lineage(malformed)
 
     def test_result_authority_inventory_and_record_bindings_fail_closed(self) -> None:
         mutations = (
@@ -1230,6 +1293,14 @@ class AeAssuranceNegativeTests(unittest.TestCase):
         self.assertEqual(package["human_approval"]["state"], "required-not-provided")
         self.assertFalse(package["human_approval"]["reviewer_identity_verified"])
         self.assertFalse(package["lifecycle_boundary"]["public_export_eligible"])
+        self.assertNotIn(
+            "same-generator-lineage",
+            package["native_ae_judgment"]["warning_codes"],
+        )
+        self.assertEqual(package["native_ae_judgment"]["state"], "warning")
+        self.assertEqual(
+            package["automated_judgment"]["state"], "satisfied-with-warnings"
+        )
         self.assertTrue(
             all(
                 record["subject"] == candidate["subject"]
@@ -1308,6 +1379,113 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 ),
             )
         validate_package(ROOT, package)
+
+    def test_same_implementation_lineage_blocks_without_status_rewrite(self) -> None:
+        candidate = self._private_candidate()
+        shared_digest = "sha256:" + "e" * 64
+        self._rebind_candidate_implementations(
+            candidate,
+            {
+                binding["tool_role_id"]: shared_digest
+                for binding in candidate["tool_bindings"]
+            },
+        )
+        validate_producer_package(ROOT, candidate, self.inventory, self.profile)
+        with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
+            base = Path(temp)
+            (base / "candidate.json").write_bytes(canonicalize(candidate) + b"\n")
+            output_bytes = []
+            for name in ("first", "second"):
+                run_one(
+                    root=ROOT,
+                    profile_path="profiles/private-match-ae-assurance.v0.1.json",
+                    input_root=base,
+                    relative_input="candidate.json",
+                    output_root=base,
+                    relative_output=name,
+                    mode="private-candidate",
+                )
+                validate_output_directory(ROOT, base / name)
+                output_bytes.append(
+                    tuple(
+                        (base / name / filename).read_bytes()
+                        for filename in (JSON_NAME, MARKDOWN_NAME, OUTPUT_SET_NAME)
+                    )
+                )
+            self.assertEqual(output_bytes[0], output_bytes[1])
+            package = read_strict_json(base / "first" / JSON_NAME)
+            output_set = read_strict_json(base / "first" / OUTPUT_SET_NAME)
+
+        self.assertIn(
+            "same-generator-lineage",
+            package["native_ae_judgment"]["warning_codes"],
+        )
+        self.assertEqual(package["native_ae_judgment"]["state"], "blocked")
+        self.assertEqual(package["automated_judgment"]["state"], "blocked")
+        self.assertEqual(package["producer_gate_judgment"]["state"], "satisfied")
+        self.assertEqual(
+            [record["status"] for record in package["evidence_records"]],
+            [record["status"] for record in candidate["records"]],
+        )
+        self.assertEqual(
+            {
+                item["tool_implementation_digest"]
+                for item in package["external_tool_inventory"]
+            },
+            {shared_digest},
+        )
+        self.assertEqual(
+            [item["tool_id"] for item in package["external_tool_inventory"]],
+            [
+                CANDIDATE_TOOL_IDENTITIES[role["tool_id"]]
+                for role in self.inventory["tools"]
+            ],
+        )
+        self.assertEqual(package["human_approval"]["state"], "required-not-provided")
+        self.assertFalse(package["lifecycle_boundary"]["public_export_eligible"])
+        self.assertRegex(package["package_digest"], r"^sha256:[0-9a-f]{64}$")
+        self.assertRegex(output_set["output_set_digest"], r"^sha256:[0-9a-f]{64}$")
+
+    def test_partial_shared_lineage_follows_pinned_observed_evidence_rule(self) -> None:
+        candidate = self._private_candidate()
+        shared_digest = "sha256:" + "d" * 64
+        self._rebind_candidate_implementations(
+            candidate,
+            {
+                "PMAE-CI-PIPELINE-V0-1": shared_digest,
+                "PMAE-CONFORMANCE-RUNNER-V0-1": shared_digest,
+            },
+        )
+        with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
+            base = Path(temp)
+            (base / "candidate.json").write_bytes(canonicalize(candidate) + b"\n")
+            run_one(
+                root=ROOT,
+                profile_path="profiles/private-match-ae-assurance.v0.1.json",
+                input_root=base,
+                relative_input="candidate.json",
+                output_root=base,
+                relative_output="result",
+                mode="private-candidate",
+            )
+            package = read_strict_json(base / "result" / JSON_NAME)
+
+        self.assertIn(
+            "same-generator-lineage",
+            package["native_ae_judgment"]["warning_codes"],
+        )
+        self.assertEqual(package["native_ae_judgment"]["state"], "blocked")
+        self.assertEqual(package["automated_judgment"]["state"], "blocked")
+        self.assertEqual(package["producer_gate_judgment"]["state"], "satisfied")
+        self.assertGreater(
+            len(
+                {
+                    item["tool_implementation_digest"]
+                    for item in package["external_tool_inventory"]
+                }
+            ),
+            1,
+        )
 
     def test_candidate_tool_metadata_mutation_changes_bound_outputs(self) -> None:
         original = self._private_candidate()

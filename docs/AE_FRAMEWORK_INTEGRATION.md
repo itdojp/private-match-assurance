@@ -23,15 +23,20 @@ The vendored command is unmodified. Its raw native output is validated in a
 controlled staging directory, reduced to a path-free deterministic safe
 projection, and then removed. The raw output contains native execution
 metadata and absolute staging paths and is not an Assurance package surface.
-Package validation does not trust that stored projection. It reconstructs the
-native input manifest from the package's independently bound Evidence records
-and external-tool inventory, reruns the same exact vendored command in an
-ephemeral process-owned system temporary directory, and requires the recomputed safe
-projection and judgments to match exactly. The package also binds the
-domain-separated native input-manifest digest. Changing a native claim,
-warning, lane, Evidence-kind set, or counter while leaving the Evidence
-unchanged therefore fails even if every package and output-set digest is
-recomputed. Stored-package validation neither creates nor follows
+Package validation does not trust that stored projection or the stored Evidence
+as an independent authority. The internal Assurance package embeds the exact
+strictly validated safe-metadata producer package whose detached digest it
+names. Generation and stored-package validation share one pure derivation for
+Evidence records and references, producer and external-tool inventories,
+validation provenance, gate results, status counts, producer judgment, and the
+native input manifest. Validation revalidates the embedded producer package,
+rederives every surface, reruns the same exact vendored command in an ephemeral
+process-owned system temporary directory, and requires exact equality. The
+package also binds the domain-separated native input-manifest digest. Changing
+any derived Evidence field, native claim, warning, lane, Evidence-kind set, or
+counter while leaving the embedded producer package unchanged therefore fails
+even if every downstream digest and output-set byte binding is recomputed.
+Stored-package validation neither creates nor follows
 `.codex-local/tmp`; the process-owned directory has a private final component,
 is passed to Node's read/write permission allowlist, is absent from every report
 surface and bounded error, and is removed on success or failure.
@@ -121,6 +126,15 @@ every emitted Evidence subject is copied from that validated package subject.
 Producer identities are closed role IDs; customer, tenant, account,
 organization, user, repository, host, path, credential, email, and telephone
 identifiers are rejected.
+
+The complete validated producer object is embedded only because its closed
+contract already excludes raw Product input, source, logs, identifiers, and
+credentials. The JSON package is therefore independently reconstructible from
+its named input without adding a fourth output file. Embedding proves internal
+producer-to-Assurance consistency; it does not externally authenticate supplied
+source, case, input, Product, tool, output, or timestamp metadata. A wholly new
+private-candidate producer package remains acceptable only when it satisfies
+the closed contract and the runner regenerates every downstream surface.
 
 ## Protocol and conformance authority
 

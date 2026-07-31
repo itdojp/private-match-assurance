@@ -27,10 +27,12 @@ try:
     from ae_framework_adapter import (
         _combined_automated_judgment,
         _producer_gate_judgment,
+        derive_assurance_surfaces_from_producer_package,
         derive_native_judgment,
         PRODUCER_IDS,
         _parse_time,
         recompute_native_projection_from_assurance_package,
+        validate_producer_package,
         validate_tool_bindings,
     )
     from ae_assurance_policy import (
@@ -69,10 +71,12 @@ except ImportError:  # pragma: no cover
     from scripts.ae_framework_adapter import (
         _combined_automated_judgment,
         _producer_gate_judgment,
+        derive_assurance_surfaces_from_producer_package,
         derive_native_judgment,
         PRODUCER_IDS,
         _parse_time,
         recompute_native_projection_from_assurance_package,
+        validate_producer_package,
         validate_tool_bindings,
     )
     from scripts.ae_assurance_policy import (
@@ -115,6 +119,51 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
     schemas = load_schemas(root)
     registry = build_schema_registry(schemas.values())
     validate_schema_instance(package, schemas["package"], registry=registry)
+    producer_package = package["input_producer_package"]
+    ordered_bindings = validate_producer_package(
+        root, producer_package, inventory, profile
+    )
+    expected_surfaces = derive_assurance_surfaces_from_producer_package(
+        root,
+        producer_package,
+        inventory,
+        profile,
+        expected_protocol_binding,
+        ordered_bindings,
+    )
+    producer_digest = producer_package["package_digest"]
+    if not (
+        package["input_producer_package_digest"]
+        == producer_digest
+        == package["validation_provenance"]["producer_package_digest"]
+    ):
+        raise AssuranceIntegrationError(
+            "embedded producer package digest binding does not match"
+        )
+    if (
+        package["execution_mode"] != producer_package["mode"]
+        or package["artifact_status"] != producer_package["artifact_status"]
+        or package["protocol_conformance_authority"]
+        != producer_package["protocol_conformance_authority"]
+    ):
+        raise AssuranceIntegrationError(
+            "Assurance package does not preserve embedded producer authority"
+        )
+    for field in (
+        "evidence_records",
+        "evidence_record_refs",
+        "producer_inventory",
+        "external_tool_inventory",
+        "validation_provenance",
+        "required_gate_results",
+        "optional_gate_results",
+        "status_counts",
+        "producer_gate_judgment",
+    ):
+        if package[field] != expected_surfaces[field]:
+            raise AssuranceIntegrationError(
+                "Assurance surfaces do not match embedded producer package"
+            )
     for evidence in package["evidence_records"]:
         validate_schema_instance(evidence, schemas["evidence"], registry=registry)
     validate_schema_instance(
@@ -159,15 +208,7 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
     if package["adapter"] != expected_adapter:
         raise AssuranceIntegrationError("adapter implementation binding does not match")
     validation_provenance = package["validation_provenance"]
-    expected_validation_provenance = {
-        "validated_at": validation_provenance["validated_at"],
-        "producer_package_created_at": validation_provenance[
-            "producer_package_created_at"
-        ],
-        "producer_package_digest": package["input_producer_package_digest"],
-        "integration_profile_digest": profile["profile_digest"],
-        "adapter_implementation_digest": expected_adapter["implementation_digest"],
-    }
+    expected_validation_provenance = expected_surfaces["validation_provenance"]
     if validation_provenance != expected_validation_provenance:
         raise AssuranceIntegrationError("validation provenance binding does not match")
     validated_at = _parse_time(validation_provenance["validated_at"])
@@ -197,7 +238,7 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
         }
         for item in package["external_tool_inventory"]
     ]
-    ordered_bindings = validate_tool_bindings(
+    stored_ordered_bindings = validate_tool_bindings(
         root, package["execution_mode"], output_bindings, inventory
     )
     expected_external_tools = [
@@ -214,7 +255,9 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
             "limitations": binding["limitations"],
             "tool_binding_digest": binding["binding_digest"],
         }
-        for role, binding in zip(inventory["tools"], ordered_bindings, strict=True)
+        for role, binding in zip(
+            inventory["tools"], stored_ordered_bindings, strict=True
+        )
     ]
     if package["external_tool_inventory"] != expected_external_tools:
         raise AssuranceIntegrationError("external tool inventory does not match")
@@ -320,7 +363,7 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
             if package["execution_mode"] == "fixture-test"
             else "private-match-product"
         )
-        expected_subject = package["evidence_records"][0]["subject"]
+        expected_subject = producer_package["subject"]
         if (
             record["subject"] != expected_subject
             or record["subject"]["identifier"] != expected_subject_identifier
@@ -417,6 +460,10 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
     native_manifest, recomputed_projection = (
         recompute_native_projection_from_assurance_package(root, package, profile)
     )
+    if native_manifest != expected_surfaces["native_input_manifest"]:
+        raise AssuranceIntegrationError(
+            "native manifest does not match embedded producer package"
+        )
     expected_ae_framework = {
         **expected_ae_framework_static,
         "native_input_manifest_digest": domain_digest(
@@ -428,7 +475,7 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
     }
     if package["native_ae_summary_projection"] != recomputed_projection:
         raise AssuranceIntegrationError(
-            "native ae projection does not match bound Evidence"
+            "native ae projection does not match embedded producer input"
         )
     if package["ae_framework"] != expected_ae_framework:
         raise AssuranceIntegrationError(

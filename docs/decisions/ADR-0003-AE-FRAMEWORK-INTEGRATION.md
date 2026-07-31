@@ -95,16 +95,20 @@ that upstream rule for non-observed optional entries.
 
 ### Stored native projection versus Evidence-derived recomputation
 
-Trusting the stored native projection would let a package author strengthen a
-claim or remove a warning and then recompute the package/output digests without
-changing the Evidence. The selected validator instead reconstructs the native
-manifest from the stored Evidence records and the validated external-tool
-inventory, reruns the exact pinned vendored command, and requires the safe
-projection and derived judgments to match exactly. Generation and validation
-share the same fixed invocation implementation. A domain-separated native
-input-manifest digest records the exact reconstructed input. A Python
-approximation of ae-framework was rejected because it would create a second,
-unreviewed judgment implementation.
+Trusting either the stored native projection or stored Evidence would let a
+package author strengthen claims or change provenance and then recompute all
+package/output digests while retaining the old input digest. The selected
+package therefore embeds the complete safe-metadata producer package. The
+validator revalidates its Schema, detached digest, closed mode, authority,
+tools, source revision, statuses, privacy boundary, and chronology, then uses
+the same pure producer-to-Assurance derivation as generation. Evidence,
+inventories, validation provenance, gates, counts, producer judgment, and the
+native manifest must match exactly before the exact pinned command is rerun.
+A domain-separated native input-manifest digest records that input. A selected
+projection or Python approximation was rejected because the former could omit
+derived fields and the latter would create a second unreviewed judgment
+implementation. This establishes internal consistency, not external
+authentication of producer-supplied metadata.
 
 ### Adapter constants versus reviewed Protocol authority
 
@@ -225,7 +229,8 @@ Adopt:
 The native command's raw output is validated but not retained because it
 contains implementation/runtime paths and metadata. The package stores a
 closed path-free safe projection and its domain-separated digest, but validation
-recomputes that projection from the bound Evidence instead of trusting it.
+recomputes that projection from the exact embedded producer package instead of
+trusting either stored Evidence or the projection.
 
 ## Consequences
 

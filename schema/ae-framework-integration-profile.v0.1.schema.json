@@ -283,7 +283,9 @@
         "native_summary_handling",
         "output_set_required",
         "exact_json_bytes_bound",
-        "exact_markdown_bytes_bound"
+        "exact_markdown_bytes_bound",
+        "producer_input_authority",
+        "producer_to_assurance_derivation"
       ],
       "properties": {
         "json_authority": {
@@ -303,6 +305,12 @@
         },
         "output_set_required": {
           "const": true
+        },
+        "producer_input_authority": {
+          "const": "embedded-exact-validated-producer-package"
+        },
+        "producer_to_assurance_derivation": {
+          "const": "shared-pure-mapping"
         }
       }
     },

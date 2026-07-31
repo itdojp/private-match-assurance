@@ -69,8 +69,10 @@ synthetic fixtures, and keeps automated judgment structurally separate from
 human approval. Exact output-set manifests bind emitted JSON/Markdown bytes;
 private-candidate provenance uses a separate closed subject and trusted output
 root. Policy roles are separate from mode-specific execution-tool bindings,
-and one producer package is bound to one source revision. Stored native claims
-are recomputed from bound Evidence with the exact pinned command, Protocol and
+and one producer package is bound to one source revision. The exact validated
+safe-metadata producer package is embedded so stored Evidence, inventories,
+provenance, gates, counts, and the native input can be independently rederived.
+Stored native claims are recomputed with the exact pinned command, Protocol and
 conformance labels come from one closed reviewed authority, and every producer
 and Evidence record places that authority's suite digest in one closed position.
 Stored-package native validation uses a process-owned system temporary directory

@@ -244,9 +244,11 @@ Publicly reproducible evidence should include inputs, commands, tool versions, a
 
 The ae-framework fixture catalog uses only public synthetic producer packages.
 Its JSON package remains the machine authority and its Markdown is rendered
-only from validated JSON. Native claims are not accepted from that JSON as an
-independent fact: validation reconstructs the native input from the bound
-Evidence and reruns the exact pinned framework. Conformance labels come from a
+only from validated JSON. The package embeds the exact safe-metadata producer
+package it names, and validation rederives every Evidence, inventory,
+provenance, gate, count, and native-input surface from that object. Native
+claims are not accepted as an independent fact: validation reruns the exact
+pinned framework over the rederived input. Conformance labels come from a
 closed Protocol authority, the current formal role produces `proof-check`
 rather than unbounded `model-check` Evidence, and a digest-bound validation
 event supplies each validated lifecycle timestamp and the deterministic native
@@ -254,6 +256,8 @@ generation time. Every producer and generated Evidence record is bound to that
 authority's single reviewed suite digest; Evidence stores it at `input_digests`
 index 0 in an exact five-digest input surface. Stored native validation uses an
 ephemeral process-owned system temporary directory and never trusts an ignored
-repository-local staging path. The integration package is internal Assurance Evidence and is
-not passed automatically to the public exporter. See
+repository-local staging path. This embedding provides internal derivation
+consistency but no external source, tool, or timestamp attestation. The
+integration package is internal Assurance Evidence and is not passed
+automatically to the public exporter. See
 [`AE_FRAMEWORK_INTEGRATION.md`](AE_FRAMEWORK_INTEGRATION.md).

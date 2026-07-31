@@ -27,6 +27,8 @@ def render_markdown(package: dict[str, Any]) -> str:
     profile = package["integration_profile"]
     framework = package["ae_framework"]
     protocol_authority = package["protocol_conformance_authority"]
+    producer_package = package["input_producer_package"]
+    producer_subject = producer_package["subject"]
     validation = package["validation_provenance"]
     automated = package["automated_judgment"]
     producer_gate = package["producer_gate_judgment"]
@@ -61,6 +63,18 @@ def render_markdown(package: dict[str, Any]) -> str:
         "ae-framework is not a certification authority.",
         "",
         "Automated satisfaction is not human approval or publication approval.",
+        "",
+        "## Embedded producer package",
+        "",
+        f"- package ID: `{_cell(producer_package['package_id'])}`",
+        f"- mode: `{_cell(producer_package['mode'])}`",
+        f"- artifact status: `{_cell(producer_package['artifact_status'])}`",
+        f"- subject: `{_cell(producer_subject['identifier'])}/{_cell(producer_subject['version'])}`",
+        f"- subject digest: `{_cell(producer_subject['digest'])}`",
+        f"- producer package digest: `{_cell(producer_package['package_digest'])}`",
+        f"- created at: `{_cell(producer_package['created_at'])}`",
+        f"- validated at: `{_cell(producer_package['validation_event']['validated_at'])}`",
+        f"- Protocol authority: `{_cell(producer_package['protocol_conformance_authority']['authority_id'])}/{_cell(producer_package['protocol_conformance_authority']['authority_version'])}`",
         "",
         "## Producer Evidence",
         "",

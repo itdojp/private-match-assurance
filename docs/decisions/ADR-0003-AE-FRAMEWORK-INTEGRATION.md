@@ -117,6 +117,15 @@ The profile, producer package, conformance Evidence, report, and runner
 implementation manifest must agree with that authority. No runtime Protocol
 checkout or network lookup is introduced.
 
+Draft 0.1 treats one producer package as one Protocol-suite scope. Requiring
+only the test-runner record to match the authority was rejected because other
+producer records could retain a conflicting suite digest. All five producer
+records must now equal the reviewed suite digest, and all generated Evidence
+records expose an exact five-element input-digest surface with that digest at
+index 0. Protocol/suite labels remain confined to conformance Evidence. The
+other supplied digests are structurally bound metadata, not independent
+attestation.
+
 ### Proof-check metadata versus bounded model-check Evidence
 
 Calling the existing generic formal-tool record a `model-check` was rejected
@@ -163,6 +172,14 @@ symlink-free trusted output root plus one validated POSIX-relative new
 directory. All intermediate directories exist under the root; staging and
 atomic rename remain in the same root, and failure leaves no partial output.
 
+Stored-package native recomputation has a separate, nonpersistent requirement.
+Using `.codex-local/tmp` was rejected because an ignored repository component
+could be replaced by a symlink before validation. The selected implementation
+uses Python's process-owned system `TemporaryDirectory` without a caller-supplied
+parent, verifies private permissions on POSIX, grants the exact final directory
+to Node's permission allowlist, emits no path in reports or bounded errors, and
+removes native input/JSON/Markdown on success and all failure paths.
+
 ### Private Assurance package versus public export bundle
 
 Reusing the public exporter automatically was rejected. The ae package is
@@ -194,7 +211,10 @@ Adopt:
 - Evidence-derived execution of the exact pinned native command during both
   generation and stored-package validation;
 - a closed exact Protocol/conformance authority rather than adapter-invented
-  labels;
+  labels, with one reviewed suite digest across every producer and Evidence
+  record;
+- process-owned, private temporary storage for stored-package native
+  recomputation rather than repository-local ignored staging;
 - proof-check-only formal metadata until a bounded model-check producer
   contract exists;
 - digest-bound validation-event chronology shared by Evidence lifecycle and

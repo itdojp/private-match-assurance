@@ -313,12 +313,11 @@ def validate_producer_package(
                 "producer validation precedes record completion"
             )
         if (
-            record["producer_type"] == "test-runner"
-            and record["protocol_suite_digest"]
+            record["protocol_suite_digest"]
             != expected_protocol_binding["conformance_suite"]["digest"]
         ):
             raise AssuranceIntegrationError(
-                "conformance record does not match reviewed suite authority"
+                "producer record does not match reviewed suite authority"
             )
     if profile["accepted_producer_types"] != [
         "ci",
@@ -455,7 +454,7 @@ def _evidence_record(
         ],
         "subject": copy.deepcopy(subject),
         "input_digests": [
-            record["protocol_suite_digest"],
+            protocol_binding["conformance_suite"]["digest"],
             record["protocol_case_digest"],
             record["protocol_input_digest"],
             record["product_implementation_digest"],
@@ -804,18 +803,26 @@ def recompute_native_projection_from_assurance_package(
     """Run the exact pinned framework over a stored package's bound Evidence."""
 
     native_manifest = build_native_manifest_from_assurance_package(package)
-    temporary_root = root / ".codex-local/tmp"
-    temporary_root.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(
-        prefix="ae-native-validation-", dir=temporary_root
-    ) as temporary:
-        projection = run_pinned_ae_framework_manifest(
-            root,
-            native_manifest,
-            package["validation_provenance"]["validated_at"],
-            profile,
-            Path(temporary),
-        )
+    try:
+        with tempfile.TemporaryDirectory(
+            prefix="private-match-ae-native-validation-"
+        ) as temporary:
+            staging = Path(temporary)
+            if staging.is_symlink() or (
+                os.name == "posix" and staging.stat().st_mode & 0o077
+            ):
+                raise AssuranceIntegrationError(
+                    "stored native validation staging is not private"
+                )
+            projection = run_pinned_ae_framework_manifest(
+                root,
+                native_manifest,
+                package["validation_provenance"]["validated_at"],
+                profile,
+                staging,
+            )
+    except Exception as error:
+        raise AssuranceIntegrationError("stored native recomputation failed") from error
     return native_manifest, projection
 
 

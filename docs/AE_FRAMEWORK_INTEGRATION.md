@@ -26,12 +26,15 @@ metadata and absolute staging paths and is not an Assurance package surface.
 Package validation does not trust that stored projection. It reconstructs the
 native input manifest from the package's independently bound Evidence records
 and external-tool inventory, reruns the same exact vendored command in an
-ephemeral trusted staging directory, and requires the recomputed safe
+ephemeral process-owned system temporary directory, and requires the recomputed safe
 projection and judgments to match exactly. The package also binds the
 domain-separated native input-manifest digest. Changing a native claim,
 warning, lane, Evidence-kind set, or counter while leaving the Evidence
 unchanged therefore fails even if every package and output-set digest is
-recomputed.
+recomputed. Stored-package validation neither creates nor follows
+`.codex-local/tmp`; the process-owned directory has a private final component,
+is passed to Node's read/write permission allowlist, is absent from every report
+surface and bounded error, and is removed on success or failure.
 The exact runtime dependencies are Ajv 8.20.0, Ajv-formats 2.1.1, and YAML
 2.8.3. YAML 2.8.3 is the patched exact release within the reviewed
 ae-framework `^2.8.1` range; it avoids GHSA-48c2-rrv3-qjmp without changing the
@@ -130,10 +133,16 @@ Assurance package, conformance record, implementation manifest, and generated
 report all bind the same authority.
 
 The adapter does not invent identifiers or versions and does not fetch the
-Protocol repository at runtime. A conformance record's suite digest must equal
-the bound reviewed suite digest. Unknown, stale, floating, or internally
-inconsistent authority metadata fails closed. This metadata binding identifies
-the reviewed public authority; it is not runtime attestation and does not prove
+Protocol repository at runtime. Draft 0.1 is a strict one-package/one-suite
+contract: all five producer records must carry the bound reviewed suite digest,
+and every generated Evidence `input_digests` array has exactly five entries with
+that suite digest at index 0. Only conformance Evidence additionally carries the
+reviewed Protocol/suite identifier and version configuration. Unknown, stale,
+floating, mixed, or internally inconsistent authority metadata fails closed.
+The remaining four input digests are supplied case, input, Product
+implementation, and Product artifact metadata; the runner structurally binds
+but does not independently attest them. This metadata binding identifies the
+reviewed public authority; it is not runtime attestation and does not prove
 Protocol or Product correctness.
 
 ## Formal Evidence boundary

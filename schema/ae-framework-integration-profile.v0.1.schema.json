@@ -358,7 +358,8 @@
         "stdout_stderr_max_bytes",
         "trusted_output_root_required",
         "relative_output_directory_required",
-        "final_output_must_not_exist"
+        "final_output_must_not_exist",
+        "native_validation_temporary_boundary"
       ],
       "properties": {
         "relative_input_only": {
@@ -391,6 +392,9 @@
         },
         "trusted_output_root_required": {
           "const": true
+        },
+        "native_validation_temporary_boundary": {
+          "const": "process-owned-system-temporary-directory"
         }
       }
     },
@@ -567,11 +571,36 @@
         },
         "path": {
           "const": "config/private-match-protocol-authorities.v0.1.json"
+        },
+        "suite_binding_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "single_suite_per_package",
+            "producer_record_scope",
+            "evidence_input_digest_count",
+            "evidence_suite_digest_index"
+          ],
+          "properties": {
+            "single_suite_per_package": {
+              "const": true
+            },
+            "producer_record_scope": {
+              "const": "all-reviewed-producer-roles"
+            },
+            "evidence_input_digest_count": {
+              "const": 5
+            },
+            "evidence_suite_digest_index": {
+              "const": 0
+            }
+          }
         }
       },
       "required": [
         "path",
-        "digest"
+        "digest",
+        "suite_binding_contract"
       ],
       "type": "object"
     }

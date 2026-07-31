@@ -72,8 +72,12 @@ use live/private Product input.
 
 Stored Assurance-package validation reconstructs the native manifest from the
 bound Evidence and tool inventory and reruns the exact pinned ae-framework
-command; a self-declared native projection is not accepted as authority. It
-also requires the closed Protocol/conformance authority, the proof-check-only
+command in a process-owned, private system temporary directory; it never creates
+or follows repository-local `.codex-local/tmp`, and cleanup occurs on every
+success and failure path. A self-declared native projection is not accepted as
+authority. Validation also requires the closed Protocol/conformance authority
+for every producer record and the suite digest at index 0 of every exact
+five-element Evidence input-digest surface, the proof-check-only
 formal mapping, and exact timestamp ordering
 `started_at <= completed_at <= created_at <= validated_at`. The validation
 event is digest-bound and reused as the native generation time, but is not an

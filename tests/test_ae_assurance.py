@@ -68,6 +68,8 @@ from scripts.ae_framework_adapter import (
     build_native_manifest_from_assurance_package,
     derive_native_judgment,
     native_generator_lineage,
+    recompute_native_projection_from_assurance_package,
+    run_pinned_ae_framework_manifest,
     validate_producer_package,
 )
 from scripts.ae_framework_manifest import (
@@ -121,6 +123,19 @@ class AeAssuranceAuthorityTests(unittest.TestCase):
         self.assertEqual(
             protocol_authority["conformance_suite"]["semantic_digest"],
             "sha256:83787c69ec1128eb9ba4b8dcdfcb4ae218674b6158cd8c6c573d898a6f72ceba",
+        )
+        self.assertEqual(
+            profile["protocol_conformance_authority"]["suite_binding_contract"],
+            {
+                "single_suite_per_package": True,
+                "producer_record_scope": "all-reviewed-producer-roles",
+                "evidence_input_digest_count": 5,
+                "evidence_suite_digest_index": 0,
+            },
+        )
+        self.assertEqual(
+            profile["path_execution_contract"]["native_validation_temporary_boundary"],
+            "process-owned-system-temporary-directory",
         )
         self.assertEqual(
             profile["formal_tool_evidence_contract"]["mode"], "proof-check-only"
@@ -575,6 +590,33 @@ class AeAssuranceNegativeTests(unittest.TestCase):
         )
         return self._result(lambda _: None, source=value)
 
+    def _rebound_evidence_inputs(self, mutate) -> dict:
+        """Mutate stored Evidence input digests and rebind every package digest."""
+
+        value = copy.deepcopy(self.success_expected)
+        mutate(value["evidence_records"])
+        refs = {item["evidence_id"]: item for item in value["evidence_record_refs"]}
+        for record in value["evidence_records"]:
+            refs[record["id"]]["record_digest"] = domain_digest(
+                EVIDENCE_RECORD_DOMAIN, record
+            )
+        return self._result(lambda _: None, source=value)
+
+    def _assert_rebound_output_rejected(self, package: dict) -> None:
+        """Rebind exact output bytes and require stored-package validation to fail."""
+
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "result"
+            output.mkdir()
+            json_bytes = canonicalize(package) + b"\n"
+            markdown_bytes = render_markdown(package).encode("utf-8")
+            output_set = build_output_set(ROOT, package, json_bytes, markdown_bytes)
+            (output / JSON_NAME).write_bytes(json_bytes)
+            (output / MARKDOWN_NAME).write_bytes(markdown_bytes)
+            (output / OUTPUT_SET_NAME).write_bytes(canonicalize(output_set) + b"\n")
+            with self.assertRaises(AssuranceIntegrationError):
+                validate_output_directory(ROOT, output)
+
     def test_native_manifest_lineage_uses_implementation_digest_not_role(self) -> None:
         candidate = self._private_candidate()
         shared_digest = "sha256:" + "e" * 64
@@ -832,6 +874,104 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                     validate_producer_package(
                         ROOT, package, self.inventory, self.profile
                     )
+
+    def test_every_producer_role_is_bound_to_one_reviewed_suite(self) -> None:
+        expected = protocol_authority_binding(load_protocol_authority(ROOT))[
+            "conformance_suite"
+        ]["digest"]
+        self.assertEqual(
+            {record["protocol_suite_digest"] for record in self.success["records"]},
+            {expected},
+        )
+        for index, record in enumerate(self.success["records"]):
+            with self.subTest(producer_type=record["producer_type"]):
+                package = self._producer(
+                    lambda value, index=index: value["records"][index].__setitem__(
+                        "protocol_suite_digest", "sha256:" + "0" * 64
+                    )
+                )
+                with self.assertRaisesRegex(
+                    AssuranceIntegrationError,
+                    "producer record does not match reviewed suite authority",
+                ):
+                    validate_producer_package(
+                        ROOT, package, self.inventory, self.profile
+                    )
+
+        all_unreviewed = self._producer(
+            lambda value: [
+                record.__setitem__("protocol_suite_digest", "sha256:" + "1" * 64)
+                for record in value["records"]
+            ]
+        )
+        with self.assertRaisesRegex(
+            AssuranceIntegrationError,
+            "producer record does not match reviewed suite authority",
+        ):
+            validate_producer_package(
+                ROOT, all_unreviewed, self.inventory, self.profile
+            )
+
+    def test_producer_suite_digest_missing_malformed_or_stale_authority_fails(
+        self,
+    ) -> None:
+        mutations = (
+            lambda value: value["records"][0].pop("protocol_suite_digest"),
+            lambda value: value["records"][0].__setitem__(
+                "protocol_suite_digest", "sha256:invalid"
+            ),
+            lambda value: value["protocol_conformance_authority"].__setitem__(
+                "authority_digest", "sha256:" + "0" * 64
+            ),
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                with self.assertRaises(AssuranceIntegrationError):
+                    validate_producer_package(
+                        ROOT,
+                        self._producer(mutation),
+                        self.inventory,
+                        self.profile,
+                    )
+
+    def test_every_stored_evidence_record_has_closed_suite_digest_position(
+        self,
+    ) -> None:
+        expected = protocol_authority_binding(load_protocol_authority(ROOT))[
+            "conformance_suite"
+        ]["digest"]
+        for record in self.success_expected["evidence_records"]:
+            self.assertEqual(len(record["input_digests"]), 5)
+            self.assertEqual(record["input_digests"][0], expected)
+
+        mutations = (
+            lambda records: records[0]["input_digests"].__setitem__(
+                0, "sha256:" + "0" * 64
+            ),
+            lambda records: records[0]["input_digests"].append("sha256:" + "0" * 64),
+            lambda records: records[0].__setitem__(
+                "input_digests",
+                [
+                    records[0]["input_digests"][1],
+                    records[0]["input_digests"][0],
+                    *records[0]["input_digests"][2:],
+                ],
+            ),
+            lambda records: records[0]["input_digests"].pop(0),
+            lambda records: [
+                record["input_digests"].__setitem__(0, "sha256:" + "1" * 64)
+                for record in records
+            ],
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                package = self._rebound_evidence_inputs(mutation)
+                with self.assertRaisesRegex(
+                    AssuranceIntegrationError,
+                    "Evidence input digests do not match the reviewed suite authority",
+                ):
+                    validate_package(ROOT, package)
+                self._assert_rebound_output_rejected(package)
 
     def test_validation_event_orders_records_creation_and_validation(self) -> None:
         validate_producer_package(ROOT, self.success, self.inventory, self.profile)
@@ -1240,6 +1380,190 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 timeout_seconds=5,
                 max_output_bytes=65536,
             )
+
+    def test_stored_validation_uses_private_process_temp_without_output_leak(
+        self,
+    ) -> None:
+        captured: list[Path] = []
+
+        def invoke(*args, **kwargs):
+            staging = Path(args[4])
+            captured.append(staging)
+            self.assertTrue(staging.exists())
+            if sys.platform != "win32":
+                self.assertEqual(staging.stat().st_mode & 0o077, 0)
+            return run_pinned_ae_framework_manifest(*args, **kwargs)
+
+        with mock.patch(
+            "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
+            side_effect=invoke,
+        ):
+            validate_package(ROOT, self.success_expected)
+        self.assertEqual(len(captured), 1)
+        staging = captured[0]
+        self.assertTrue(staging.name.startswith("private-match-ae-native-validation-"))
+        self.assertFalse(staging.exists())
+
+        json_bytes = canonicalize(self.success_expected) + b"\n"
+        markdown_bytes = render_markdown(self.success_expected).encode("utf-8")
+        output_set = canonicalize(
+            build_output_set(ROOT, self.success_expected, json_bytes, markdown_bytes)
+        )
+        encoded_path = str(staging).encode("utf-8")
+        for output in (json_bytes, markdown_bytes, output_set):
+            self.assertNotIn(encoded_path, output)
+
+    def test_stored_validation_ignores_repository_local_codex_symlinks(self) -> None:
+        projection = self.success_expected["native_ae_summary_projection"]
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            scenarios: list[tuple[str, Path, Path]] = []
+
+            outside_a = base / "outside-a"
+            outside_a.mkdir()
+            (outside_a / "sentinel").write_text("untouched", encoding="utf-8")
+            root_a = base / "repo-a"
+            root_a.mkdir()
+            (root_a / ".codex-local").symlink_to(outside_a, target_is_directory=True)
+            scenarios.append(("codex-local-symlink", root_a, outside_a))
+
+            outside_b = base / "outside-b"
+            outside_b.mkdir()
+            (outside_b / "sentinel").write_text("untouched", encoding="utf-8")
+            root_b = base / "repo-b"
+            (root_b / ".codex-local").mkdir(parents=True)
+            (root_b / ".codex-local/tmp").symlink_to(
+                outside_b, target_is_directory=True
+            )
+            scenarios.append(("tmp-symlink", root_b, outside_b))
+
+            root_c = base / "repo-c"
+            local_tmp = root_c / ".codex-local/tmp"
+            local_tmp.mkdir(parents=True)
+            (local_tmp / "sentinel").write_text("untouched", encoding="utf-8")
+            scenarios.append(("preexisting-content", root_c, local_tmp))
+
+            for name, fake_root, sentinel_root in scenarios:
+                captured: list[Path] = []
+
+                def invoke(*args, **_kwargs):
+                    captured.append(Path(args[4]))
+                    return copy.deepcopy(projection)
+
+                with (
+                    self.subTest(name=name),
+                    mock.patch(
+                        "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
+                        side_effect=invoke,
+                    ),
+                ):
+                    _, result = recompute_native_projection_from_assurance_package(
+                        fake_root, self.success_expected, self.profile
+                    )
+                    self.assertEqual(result, projection)
+                self.assertEqual(len(captured), 1)
+                self.assertFalse(captured[0].is_relative_to(fake_root))
+                self.assertFalse(captured[0].exists())
+                self.assertEqual(
+                    (sentinel_root / "sentinel").read_text(encoding="utf-8"),
+                    "untouched",
+                )
+                self.assertEqual(
+                    sorted(path.name for path in sentinel_root.iterdir()), ["sentinel"]
+                )
+
+    def test_stored_validation_temp_cleans_all_failure_paths_and_bounds_errors(
+        self,
+    ) -> None:
+        failures = (
+            ("native-schema", AssuranceIntegrationError("native Schema is invalid")),
+            ("nonzero", AssuranceIntegrationError("native process failed")),
+            ("timeout", subprocess.TimeoutExpired(["node"], 1)),
+            ("output-bound", AssuranceIntegrationError("native output exceeded")),
+        )
+        for name, failure in failures:
+            captured: list[Path] = []
+
+            def fail(*args, failure=failure, **_kwargs):
+                captured.append(Path(args[4]))
+                raise failure
+
+            with (
+                self.subTest(name=name),
+                mock.patch(
+                    "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
+                    side_effect=fail,
+                ),
+                self.assertRaisesRegex(
+                    AssuranceIntegrationError, "stored native recomputation failed"
+                ) as raised,
+            ):
+                recompute_native_projection_from_assurance_package(
+                    ROOT, self.success_expected, self.profile
+                )
+            self.assertEqual(len(captured), 1)
+            self.assertFalse(captured[0].exists())
+            self.assertNotIn(str(captured[0]), str(raised.exception))
+
+        captured = []
+
+        def unexpected(*args, **_kwargs):
+            staging = Path(args[4])
+            captured.append(staging)
+            raise RuntimeError(f"unexpected failure at {staging}")
+
+        with (
+            mock.patch(
+                "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
+                side_effect=unexpected,
+            ),
+            self.assertRaisesRegex(
+                AssuranceIntegrationError, "stored native recomputation failed"
+            ) as raised,
+        ):
+            recompute_native_projection_from_assurance_package(
+                ROOT, self.success_expected, self.profile
+            )
+        self.assertFalse(captured[0].exists())
+        self.assertNotIn(str(captured[0]), str(raised.exception))
+
+    def test_projection_mismatch_cleans_temp_and_malformed_package_creates_none(
+        self,
+    ) -> None:
+        captured: list[Path] = []
+        projection = copy.deepcopy(
+            self.success_expected["native_ae_summary_projection"]
+        )
+        projection["summary"]["warningCount"] += 1
+
+        def mismatch(*args, **_kwargs):
+            captured.append(Path(args[4]))
+            return projection
+
+        with (
+            mock.patch(
+                "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
+                side_effect=mismatch,
+            ),
+            self.assertRaisesRegex(
+                AssuranceIntegrationError,
+                "native ae projection does not match bound Evidence",
+            ),
+        ):
+            validate_package(ROOT, self.success_expected)
+        self.assertEqual(len(captured), 1)
+        self.assertFalse(captured[0].exists())
+
+        malformed = copy.deepcopy(self.success_expected)
+        malformed.pop("evidence_records")
+        with (
+            mock.patch(
+                "scripts.ae_framework_adapter.tempfile.TemporaryDirectory"
+            ) as temporary,
+            self.assertRaises(AssuranceIntegrationError),
+        ):
+            validate_package(ROOT, malformed)
+        temporary.assert_not_called()
 
     def test_native_subprocess_uses_fixed_arguments_no_shell_and_allowlisted_environment(
         self,

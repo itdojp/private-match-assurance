@@ -71,7 +71,10 @@ private-candidate provenance uses a separate closed subject and trusted output
 root. Policy roles are separate from mode-specific execution-tool bindings,
 and one producer package is bound to one source revision. Stored native claims
 are recomputed from bound Evidence with the exact pinned command, Protocol and
-conformance labels come from one closed reviewed authority, and the current
+conformance labels come from one closed reviewed authority, and every producer
+and Evidence record places that authority's suite digest in one closed position.
+Stored-package native validation uses a process-owned system temporary directory
+rather than an ignored repository-local path. The current
 formal-tool contract is proof-check-only rather than an unbounded model-check.
 A digest-bound validation event orders record completion, package creation,
 Evidence validation, and native generation, while native ae warnings remain

@@ -228,6 +228,7 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
     observed_order = [record["tool"]["name"] for record in package["evidence_records"]]
     if observed_order != expected_order:
         raise AssuranceIntegrationError("Evidence tool order does not match inventory")
+    expected_suite_digest = expected_protocol_binding["conformance_suite"]["digest"]
     for record in package["evidence_records"]:
         if record["id"] in evidence_ids:
             raise AssuranceIntegrationError(
@@ -288,25 +289,23 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
             raise AssuranceIntegrationError(
                 "Evidence lifecycle does not match validation provenance"
             )
+        if (
+            len(record["input_digests"]) != 5
+            or record["input_digests"][0] != expected_suite_digest
+        ):
+            raise AssuranceIntegrationError(
+                "Evidence input digests do not match the reviewed suite authority"
+            )
         if record["type"] == "conformance":
-            if (
-                configuration.get("protocol")
-                != {
-                    "identifier": expected_protocol_binding["protocol"]["identifier"],
-                    "version": expected_protocol_binding["protocol"]["version"],
-                }
-                or configuration.get("conformance_suite")
-                != {
-                    "identifier": expected_protocol_binding["conformance_suite"][
-                        "identifier"
-                    ],
-                    "version": expected_protocol_binding["conformance_suite"][
-                        "version"
-                    ],
-                }
-                or expected_protocol_binding["conformance_suite"]["digest"]
-                not in record["input_digests"]
-            ):
+            if configuration.get("protocol") != {
+                "identifier": expected_protocol_binding["protocol"]["identifier"],
+                "version": expected_protocol_binding["protocol"]["version"],
+            } or configuration.get("conformance_suite") != {
+                "identifier": expected_protocol_binding["conformance_suite"][
+                    "identifier"
+                ],
+                "version": expected_protocol_binding["conformance_suite"]["version"],
+            }:
                 raise AssuranceIntegrationError(
                     "conformance Evidence authority does not match"
                 )

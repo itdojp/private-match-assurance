@@ -134,7 +134,8 @@
         "$ref": "https://itdo.jp/schemas/private-match/assurance/evidence-item-0.1.json"
       },
       "maxItems": 5,
-      "uniqueItems": true
+      "uniqueItems": true,
+      "description": "Exactly five Evidence records. Every input_digests array has exactly five entries and places the package's reviewed conformance-suite digest at index 0."
     },
     "evidence_record_refs": {
       "type": "array",

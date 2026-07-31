@@ -286,6 +286,12 @@ def load_authority(root: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str
     if profile["protocol_conformance_authority"] != {
         "path": PROTOCOL_AUTHORITY_PATH,
         "digest": protocol_authority["authority_digest"],
+        "suite_binding_contract": {
+            "single_suite_per_package": True,
+            "producer_record_scope": "all-reviewed-producer-roles",
+            "evidence_input_digest_count": 5,
+            "evidence_suite_digest_index": 0,
+        },
     }:
         raise AssuranceIntegrationError(
             "profile Protocol authority binding does not match"

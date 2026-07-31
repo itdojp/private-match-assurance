@@ -250,6 +250,10 @@ Evidence and reruns the exact pinned framework. Conformance labels come from a
 closed Protocol authority, the current formal role produces `proof-check`
 rather than unbounded `model-check` Evidence, and a digest-bound validation
 event supplies each validated lifecycle timestamp and the deterministic native
-generation time. The integration package is internal Assurance Evidence and is
+generation time. Every producer and generated Evidence record is bound to that
+authority's single reviewed suite digest; Evidence stores it at `input_digests`
+index 0 in an exact five-digest input surface. Stored native validation uses an
+ephemeral process-owned system temporary directory and never trusts an ignored
+repository-local staging path. The integration package is internal Assurance Evidence and is
 not passed automatically to the public exporter. See
 [`AE_FRAMEWORK_INTEGRATION.md`](AE_FRAMEWORK_INTEGRATION.md).

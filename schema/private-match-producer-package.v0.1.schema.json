@@ -10,8 +10,10 @@
     "artifact_status",
     "mode",
     "created_at",
+    "validation_event",
     "source_revision_digest",
     "subject",
+    "protocol_conformance_authority",
     "tool_bindings",
     "records",
     "limitations",
@@ -143,8 +145,8 @@
           "product_output_digest": {
             "anyOf": [
               {
-                "type": "string",
-                "pattern": "^sha256:[0-9a-f]{64}$"
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
               },
               {
                 "type": "null"
@@ -255,6 +257,22 @@
       "items": {
         "$ref": "https://itdo.jp/schemas/private-match/assurance/ae-assurance-tool-binding.v0.1.schema.json"
       }
+    },
+    "protocol_conformance_authority": {
+      "$ref": "https://itdo.jp/schemas/private-match/assurance/private-match-protocol-authorities.v0.1.schema.json#/$defs/binding"
+    },
+    "validation_event": {
+      "additionalProperties": false,
+      "properties": {
+        "validated_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "validated_at"
+      ],
+      "type": "object"
     }
   },
   "allOf": [
@@ -274,11 +292,11 @@
           "records": {
             "items": {
               "properties": {
-                "test_only": {
-                  "const": true
-                },
                 "retention_classification": {
                   "const": "synthetic-public-fixture"
+                },
+                "test_only": {
+                  "const": true
                 }
               }
             }
@@ -306,6 +324,9 @@
           "artifact_status": {
             "const": "private-candidate"
           },
+          "package_id": {
+            "const": "PMAE-PRODUCER-PRIVATE-CANDIDATE-V0-1"
+          },
           "records": {
             "items": {
               "properties": {
@@ -317,9 +338,6 @@
                 }
               }
             }
-          },
-          "package_id": {
-            "const": "PMAE-PRODUCER-PRIVATE-CANDIDATE-V0-1"
           },
           "subject": {
             "properties": {

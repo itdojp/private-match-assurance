@@ -70,6 +70,15 @@ Private-candidate contract tests use only ephemeral synthetic digest metadata
 under an existing trusted output root. They do not run the public exporter or
 use live/private Product input.
 
+Stored Assurance-package validation reconstructs the native manifest from the
+bound Evidence and tool inventory and reruns the exact pinned ae-framework
+command; a self-declared native projection is not accepted as authority. It
+also requires the closed Protocol/conformance authority, the proof-check-only
+formal mapping, and exact timestamp ordering
+`started_at <= completed_at <= created_at <= validated_at`. The validation
+event is digest-bound and reused as the native generation time, but is not an
+external timestamp attestation.
+
 Validate repository assurance records:
 
 ```bash

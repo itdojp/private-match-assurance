@@ -93,6 +93,52 @@ using the implementation-derived lineage. It blocks the combined judgment when
 multiple observed entries share one lineage. The adapter does not strengthen
 that upstream rule for non-observed optional entries.
 
+### Stored native projection versus Evidence-derived recomputation
+
+Trusting the stored native projection would let a package author strengthen a
+claim or remove a warning and then recompute the package/output digests without
+changing the Evidence. The selected validator instead reconstructs the native
+manifest from the stored Evidence records and the validated external-tool
+inventory, reruns the exact pinned vendored command, and requires the safe
+projection and derived judgments to match exactly. Generation and validation
+share the same fixed invocation implementation. A domain-separated native
+input-manifest digest records the exact reconstructed input. A Python
+approximation of ae-framework was rejected because it would create a second,
+unreviewed judgment implementation.
+
+### Adapter constants versus reviewed Protocol authority
+
+Hard-coded Protocol and suite labels in adapter code were rejected because a
+producer previously supplied only a suite digest. Draft 0.1 now uses one closed
+authority artifact pinned to public Protocol commit
+`9bb59d3b5e1435885fdea60280d6602f937305c9`. It binds the Protocol and suite
+identifiers, versions, semantic/tree digests, and reviewed oracle artifacts.
+The profile, producer package, conformance Evidence, report, and runner
+implementation manifest must agree with that authority. No runtime Protocol
+checkout or network lookup is introduced.
+
+### Proof-check metadata versus bounded model-check Evidence
+
+Calling the existing generic formal-tool record a `model-check` was rejected
+because its `model_check` surface is null and it carries no checked properties,
+state-space parameters, constraints, depth/state bounds, explored counts, or
+completeness-within-bounds result. Draft 0.1 maps this role to Evidence type and
+native kind `proof-check`; `model-derived` remains only a source classification.
+A future `model-check` producer contract must validate the existing typed
+bounded model-check surface rather than invent synthetic bounds.
+
+### Completion timestamp versus digest-bound validation event
+
+Using record completion as the validation time allowed a lifecycle to claim
+that a later producer-package digest had already been reviewed. Draft 0.1
+therefore requires a producer-supplied, digest-bound validation event and
+enforces `started_at <= completed_at <= package.created_at <= validated_at`.
+The same `validated_at` is used in Evidence lifecycle history, package
+validation provenance, generated Markdown, and the pinned native command's
+`generated-at` argument. This timestamp is deterministic and bound, but it is
+not externally timestamp-attested; private-candidate timestamp authority is a
+private process concern.
+
 ### Required versus optional tool absence
 
 Silently omitting unavailable tools or promoting them to `pass` was rejected.
@@ -145,12 +191,21 @@ Adopt:
 - exact output-set binding and trusted-root confinement;
 - separate producer/native/combined automated judgment and human-approval
   provenance;
+- Evidence-derived execution of the exact pinned native command during both
+  generation and stored-package validation;
+- a closed exact Protocol/conformance authority rather than adapter-invented
+  labels;
+- proof-check-only formal metadata until a bounded model-check producer
+  contract exists;
+- digest-bound validation-event chronology shared by Evidence lifecycle and
+  native execution;
 - synthetic fixture mode that cannot create live approval;
 - no automatic public export or proof/certification claim.
 
 The native command's raw output is validated but not retained because it
 contains implementation/runtime paths and metadata. The package stores a
-closed path-free safe projection and its domain-separated digest.
+closed path-free safe projection and its domain-separated digest, but validation
+recomputes that projection from the bound Evidence instead of trusting it.
 
 ## Consequences
 

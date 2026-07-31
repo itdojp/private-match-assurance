@@ -26,6 +26,8 @@ def render_markdown(package: dict[str, Any]) -> str:
 
     profile = package["integration_profile"]
     framework = package["ae_framework"]
+    protocol_authority = package["protocol_conformance_authority"]
+    validation = package["validation_provenance"]
     automated = package["automated_judgment"]
     producer_gate = package["producer_gate_judgment"]
     native_judgment = package["native_ae_judgment"]
@@ -42,6 +44,14 @@ def render_markdown(package: dict[str, Any]) -> str:
         f"- ae-framework commit: `{_cell(framework['commit'])}`",
         f"- ae-framework package: `{_cell(framework['package_name'])}@{_cell(framework['package_version'])}`",
         f"- ae-framework source tree: `{_cell(framework['source_tree_digest'])}`",
+        f"- native input manifest digest: `{_cell(framework['native_input_manifest_digest'])}`",
+        f"- Protocol authority: `{_cell(protocol_authority['authority_id'])}/{_cell(protocol_authority['authority_version'])}`",
+        f"- Protocol: `{_cell(protocol_authority['protocol']['identifier'])}/{_cell(protocol_authority['protocol']['version'])}`",
+        f"- conformance suite: `{_cell(protocol_authority['conformance_suite']['identifier'])}/{_cell(protocol_authority['conformance_suite']['version'])}`",
+        f"- conformance suite digest: `{_cell(protocol_authority['conformance_suite']['digest'])}`",
+        f"- producer package created at: `{_cell(validation['producer_package_created_at'])}`",
+        f"- validation recorded at: `{_cell(validation['validated_at'])}`",
+        f"- validation producer package digest: `{_cell(validation['producer_package_digest'])}`",
         f"- package digest: `{_cell(package['package_digest'])}`",
         f"- JSON report model digest: `{_cell(package['report_digests']['json_model_digest'])}`",
         f"- Markdown report model digest: `{_cell(package['report_digests']['markdown_model_digest'])}`",

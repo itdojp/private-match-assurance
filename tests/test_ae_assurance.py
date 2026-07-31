@@ -41,8 +41,10 @@ from scripts.ae_assurance_policy import (
     FIXTURE_CATALOG_PATH,
     JSON_REPORT_DOMAIN,
     MARKDOWN_REPORT_DOMAIN,
+    NATIVE_PROJECTION_DOMAIN,
     OUTPUT_SET_DOMAIN,
     PIN_DOMAIN,
+    PROTOCOL_AUTHORITY_DOMAIN,
     PRODUCER_PACKAGE_DOMAIN,
     PROFILE_DOMAIN,
     TOOL_INVENTORY_DOMAIN,
@@ -51,14 +53,19 @@ from scripts.ae_assurance_policy import (
     FIXTURE_TOOL_BINDINGS,
     artifact_digest,
     load_authority,
+    load_protocol_authority,
     load_schemas,
+    protocol_authority_binding,
     tool_binding_digest,
 )
 from scripts.ae_framework_adapter import (
     _native_manifest,
+    _combined_automated_judgment,
+    _evidence_record,
     _run_bounded_process,
     _run_native,
     build_assurance_package,
+    build_native_manifest_from_assurance_package,
     derive_native_judgment,
     native_generator_lineage,
     validate_producer_package,
@@ -93,6 +100,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/ae-framework"
 class AeAssuranceAuthorityTests(unittest.TestCase):
     def test_exact_authority_profile_inventory_and_source_closure(self) -> None:
         pin, inventory, profile = load_authority(ROOT)
+        protocol_authority = load_protocol_authority(ROOT)
         self.assertEqual(pin["commit"], SOURCE_COMMIT)
         self.assertEqual(pin["repository"], "itdojp/ae-framework")
         self.assertEqual(pin["package"], {"name": "ae-framework", "version": "1.0.0"})
@@ -106,6 +114,17 @@ class AeAssuranceAuthorityTests(unittest.TestCase):
         self.assertFalse(
             profile["tool_binding_contract"]["digest_inequality_proves_independence"]
         )
+        self.assertEqual(
+            protocol_authority["commit"],
+            "9bb59d3b5e1435885fdea60280d6602f937305c9",
+        )
+        self.assertEqual(
+            protocol_authority["conformance_suite"]["semantic_digest"],
+            "sha256:83787c69ec1128eb9ba4b8dcdfcb4ae218674b6158cd8c6c573d898a6f72ceba",
+        )
+        self.assertEqual(
+            profile["formal_tool_evidence_contract"]["mode"], "proof-check-only"
+        )
         for mapping in profile["producer_status_mapping"]:
             self.assertEqual(
                 mapping["raw_producer_status"], mapping["normalized_evidence_status"]
@@ -116,6 +135,7 @@ class AeAssuranceAuthorityTests(unittest.TestCase):
 
     def test_authority_digests_are_detached_and_current(self) -> None:
         pin, inventory, profile = load_authority(ROOT)
+        protocol_authority = load_protocol_authority(ROOT)
         self.assertEqual(
             pin["pin_digest"], artifact_digest(PIN_DOMAIN, pin, "pin_digest")
         )
@@ -127,6 +147,43 @@ class AeAssuranceAuthorityTests(unittest.TestCase):
             profile["profile_digest"],
             artifact_digest(PROFILE_DOMAIN, profile, "profile_digest"),
         )
+        self.assertEqual(
+            protocol_authority["authority_digest"],
+            artifact_digest(
+                PROTOCOL_AUTHORITY_DOMAIN,
+                protocol_authority,
+                "authority_digest",
+            ),
+        )
+
+    def test_protocol_authority_rejects_stale_or_floating_labels(self) -> None:
+        schemas = load_schemas(ROOT)
+        authority = load_protocol_authority(ROOT)
+        mutations = (
+            lambda value: value.__setitem__("commit", "0" * 40),
+            lambda value: value.__setitem__("ref", "main"),
+            lambda value: value["protocol"].__setitem__("identifier", "other"),
+            lambda value: value["protocol"].__setitem__("version", "0.2"),
+            lambda value: value["protocol"].__setitem__(
+                "semantic_digest", "sha256:" + "0" * 64
+            ),
+            lambda value: value["conformance_suite"].__setitem__("identifier", "other"),
+            lambda value: value["conformance_suite"].__setitem__("version", "0.2"),
+            lambda value: value["conformance_suite"].__setitem__(
+                "semantic_digest", "sha256:" + "0" * 64
+            ),
+        )
+        registry = build_schema_registry(schemas.values())
+        for mutation in mutations:
+            value = copy.deepcopy(authority)
+            mutation(value)
+            value["authority_digest"] = artifact_digest(
+                PROTOCOL_AUTHORITY_DOMAIN, value, "authority_digest"
+            )
+            with self.assertRaises(AssuranceIntegrationError):
+                validate_schema_instance(
+                    value, schemas["protocol_authority"], registry=registry
+                )
 
     def test_all_new_schemas_self_validate_with_complete_registry(self) -> None:
         schemas = load_schemas(ROOT)
@@ -308,6 +365,37 @@ class AeAssuranceFixtureTests(unittest.TestCase):
         self.assertIn("## Native ae-framework judgment", markdown)
         self.assertIn("missing-spec-derived-evidence", markdown)
         self.assertIn("visible-nonblocking", markdown)
+        self.assertIn("validation recorded at: `2030-01-01T00:02:00Z`", markdown)
+        self.assertIn("conformance suite: `private-match-core/0.1`", markdown)
+
+    def test_fixture_protocol_and_validation_authority_are_exact(self) -> None:
+        authority = protocol_authority_binding(load_protocol_authority(ROOT))
+        for name, package in self.packages.items():
+            with self.subTest(name=name):
+                producer = self.inputs[name]
+                self.assertEqual(producer["protocol_conformance_authority"], authority)
+                self.assertEqual(package["protocol_conformance_authority"], authority)
+                self.assertEqual(
+                    package["validation_provenance"]["validated_at"],
+                    producer["validation_event"]["validated_at"],
+                )
+                self.assertEqual(
+                    package["native_ae_summary_projection"]["generated_at"],
+                    producer["validation_event"]["validated_at"],
+                )
+                conformance = next(
+                    record
+                    for record in package["evidence_records"]
+                    if record["type"] == "conformance"
+                )
+                self.assertEqual(
+                    conformance["configuration"]["protocol"],
+                    {"identifier": "private-match-core", "version": "0.1"},
+                )
+                self.assertEqual(
+                    conformance["configuration"]["conformance_suite"],
+                    {"identifier": "private-match-core", "version": "0.1"},
+                )
 
     def test_native_warning_is_explicitly_policy_evaluated(self) -> None:
         package = self.packages["success"]
@@ -473,6 +561,20 @@ class AeAssuranceNegativeTests(unittest.TestCase):
         )
         return value
 
+    def _rebound_native_projection(self, source: dict, mutate) -> dict:
+        value = copy.deepcopy(source)
+        mutate(value["native_ae_summary_projection"])
+        value["ae_framework"]["native_projection_digest"] = domain_digest(
+            NATIVE_PROJECTION_DOMAIN, value["native_ae_summary_projection"]
+        )
+        value["native_ae_judgment"] = derive_native_judgment(
+            value["native_ae_summary_projection"], self.profile
+        )
+        value["automated_judgment"] = _combined_automated_judgment(
+            value["producer_gate_judgment"], value["native_ae_judgment"]
+        )
+        return self._result(lambda _: None, source=value)
+
     def test_native_manifest_lineage_uses_implementation_digest_not_role(self) -> None:
         candidate = self._private_candidate()
         shared_digest = "sha256:" + "e" * 64
@@ -530,6 +632,160 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 with self.assertRaises(AssuranceIntegrationError):
                     validate_package(ROOT, self._result(mutation))
 
+    def test_native_projection_is_recomputed_from_bound_evidence(self) -> None:
+        required_fail = read_strict_json(
+            FIXTURE_ROOT / "expected/required-fail" / JSON_NAME,
+            max_bytes=2_097_152,
+        )
+
+        def strengthen(value: dict) -> None:
+            claim = value["claims"][0]
+            claim["status"] = "satisfied"
+            claim["warning_codes"] = []
+            value["warning_codes"] = []
+            value["summary"]["warningClaims"] = 0
+            value["summary"]["satisfiedClaims"] = 1
+            value["summary"]["warningCount"] = 0
+
+        mutations = (
+            (self.success_expected, strengthen),
+            (
+                self.success_expected,
+                lambda value: value["claims"][0].__setitem__("status", "satisfied"),
+            ),
+            (
+                required_fail,
+                lambda value: value["claims"][0].__setitem__("missing_lanes", []),
+            ),
+            (
+                required_fail,
+                lambda value: value["claims"][0].__setitem__(
+                    "missing_evidence_kinds", []
+                ),
+            ),
+            (
+                self.success_expected,
+                lambda value: value["lane_coverage"]["runtime"].__setitem__(
+                    "observedClaims", 0
+                ),
+            ),
+            (
+                self.success_expected,
+                lambda value: value["summary"].__setitem__("warningCount", 0),
+            ),
+            (
+                self.success_expected,
+                lambda value: value.__setitem__("warning_codes", []),
+            ),
+        )
+        for source, mutation in mutations:
+            with self.subTest(mutation=mutation):
+                tampered = self._rebound_native_projection(source, mutation)
+                with self.assertRaisesRegex(
+                    AssuranceIntegrationError,
+                    "native ae projection does not match bound Evidence",
+                ):
+                    validate_package(ROOT, tampered)
+                with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
+                    output = Path(temp) / "result"
+                    output.mkdir()
+                    json_bytes = canonicalize(tampered) + b"\n"
+                    markdown_bytes = render_markdown(tampered).encode("utf-8")
+                    output_set = build_output_set(
+                        ROOT, tampered, json_bytes, markdown_bytes
+                    )
+                    (output / JSON_NAME).write_bytes(json_bytes)
+                    (output / MARKDOWN_NAME).write_bytes(markdown_bytes)
+                    (output / OUTPUT_SET_NAME).write_bytes(
+                        canonicalize(output_set) + b"\n"
+                    )
+                    with self.assertRaisesRegex(
+                        AssuranceIntegrationError,
+                        "native ae projection does not match bound Evidence",
+                    ):
+                        validate_output_directory(ROOT, output)
+
+    def test_bound_evidence_status_changes_recomputed_native_projection(self) -> None:
+        required_fail = read_strict_json(
+            FIXTURE_ROOT / "expected/required-fail" / JSON_NAME,
+            max_bytes=2_097_152,
+        )
+        self.assertNotEqual(
+            self.success_expected["native_ae_summary_projection"],
+            required_fail["native_ae_summary_projection"],
+        )
+        self.assertNotEqual(
+            build_native_manifest_from_assurance_package(self.success_expected),
+            build_native_manifest_from_assurance_package(required_fail),
+        )
+
+    def test_native_manifest_is_reconstructed_from_stored_evidence(self) -> None:
+        manifest = build_native_manifest_from_assurance_package(self.success_expected)
+        self.assertEqual(manifest, _native_manifest(self.success))
+        formal = next(
+            entry
+            for entry in manifest["entries"]
+            if entry["artifactPath"].endswith("PM-EVIDENCE-0003")
+        )
+        self.assertEqual(
+            (formal["lane"], formal["kind"], formal["sourceKind"]),
+            ("proof", "proof-check", "model-derived"),
+        )
+        self.assertNotIn("model-check", canonicalize(manifest).decode("utf-8"))
+
+    def test_formal_tool_uses_proof_check_and_preserves_every_status(self) -> None:
+        authority = protocol_authority_binding(load_protocol_authority(ROOT))
+        formal_role = next(
+            role
+            for role in self.inventory["tools"]
+            if role["producer_type"] == "formal-tool"
+        )
+        formal_binding = next(
+            binding
+            for binding in self.success["tool_bindings"]
+            if binding["producer_type"] == "formal-tool"
+        )
+        formal_record = next(
+            record
+            for record in self.success["records"]
+            if record["producer_type"] == "formal-tool"
+        )
+        for status in ("pass", "fail", "skip", "unsupported", "timeout", "tool-error"):
+            record = copy.deepcopy(formal_record)
+            mapping = next(
+                item
+                for item in formal_role["status_mappings"]
+                if item["raw_producer_status"] == status
+            )
+            record["status"] = status
+            record["product_output_digest"] = (
+                "sha256:" + "a" * 64 if status in {"pass", "fail"} else None
+            )
+            record["limitations"][0] = mapping["required_limitation"]
+            evidence = _evidence_record(
+                record,
+                formal_binding,
+                self.success["package_digest"],
+                self.success["subject"],
+                authority,
+                self.success["validation_event"]["validated_at"],
+                required=False,
+            )
+            self.assertEqual(evidence["status"], status)
+            self.assertEqual(evidence["type"], "proof-check")
+            self.assertIsNone(evidence["model_check"])
+        with self.assertRaises(AssuranceIntegrationError):
+            validate_producer_package(
+                ROOT,
+                self._producer(
+                    lambda value: value["records"][2].__setitem__(
+                        "native_kind", "model-check"
+                    )
+                ),
+                self.inventory,
+                self.profile,
+            )
+
     def test_unknown_producer_type_and_status_fail_closed(self) -> None:
         for mutate in (
             lambda value: value["records"][0].__setitem__("producer_type", "unknown"),
@@ -539,6 +795,87 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 validate_producer_package(
                     ROOT, self._producer(mutate), self.inventory, self.profile
                 )
+
+    def test_producer_protocol_authority_and_suite_digest_fail_closed(self) -> None:
+        mutations = (
+            lambda value: value["protocol_conformance_authority"][
+                "protocol"
+            ].__setitem__("identifier", "other"),
+            lambda value: value["protocol_conformance_authority"][
+                "protocol"
+            ].__setitem__("version", "0.2"),
+            lambda value: value["protocol_conformance_authority"][
+                "protocol"
+            ].__setitem__("digest", "sha256:" + "0" * 64),
+            lambda value: value["protocol_conformance_authority"][
+                "conformance_suite"
+            ].__setitem__("identifier", "other"),
+            lambda value: value["protocol_conformance_authority"][
+                "conformance_suite"
+            ].__setitem__("version", "0.2"),
+            lambda value: value["protocol_conformance_authority"][
+                "conformance_suite"
+            ].__setitem__("digest", "sha256:" + "0" * 64),
+            lambda value: value["protocol_conformance_authority"].__setitem__(
+                "authority_id", "unknown"
+            ),
+            lambda value: next(
+                record
+                for record in value["records"]
+                if record["producer_type"] == "test-runner"
+            ).__setitem__("protocol_suite_digest", "sha256:" + "0" * 64),
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                package = self._producer(mutation)
+                with self.assertRaises(AssuranceIntegrationError):
+                    validate_producer_package(
+                        ROOT, package, self.inventory, self.profile
+                    )
+
+    def test_validation_event_orders_records_creation_and_validation(self) -> None:
+        validate_producer_package(ROOT, self.success, self.inventory, self.profile)
+        mutations = (
+            lambda value: value["validation_event"].__setitem__(
+                "validated_at", "2030-01-01T00:00:01Z"
+            ),
+            lambda value: value.update(
+                {
+                    "created_at": "2030-01-01T00:00:00Z",
+                    "validation_event": {"validated_at": "2030-01-01T00:00:00Z"},
+                }
+            ),
+            lambda value: value["records"][0].__setitem__(
+                "completed_at", "2030-01-01T00:01:01Z"
+            ),
+            lambda value: value["validation_event"].__setitem__(
+                "validated_at", "2030-01-01T00:02:00+00:00"
+            ),
+            lambda value: value.pop("validation_event"),
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                with self.assertRaises(AssuranceIntegrationError):
+                    validate_producer_package(
+                        ROOT,
+                        self._producer(mutation),
+                        self.inventory,
+                        self.profile,
+                    )
+
+    def test_evidence_lifecycle_is_bound_to_validation_provenance(self) -> None:
+        value = copy.deepcopy(self.success_expected)
+        record = value["evidence_records"][0]
+        record["lifecycle_history"][1]["recorded_at"] = record["completed_at"]
+        ref = next(
+            item
+            for item in value["evidence_record_refs"]
+            if item["evidence_id"] == record["id"]
+        )
+        ref["record_digest"] = domain_digest(EVIDENCE_RECORD_DOMAIN, record)
+        value = self._result(lambda _: None, source=value)
+        with self.assertRaisesRegex(AssuranceIntegrationError, "Evidence lifecycle"):
+            validate_package(ROOT, value)
 
     def test_missing_required_or_optional_record_remains_an_error(self) -> None:
         for index in (0, 2):
@@ -1020,12 +1357,12 @@ class AeAssuranceNegativeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
             staging = Path(temp)
             with mock.patch(
-                "scripts.ae_framework_adapter._run_native",
+                "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
                 return_value=baseline_projection,
             ):
                 baseline = build_assurance_package(ROOT, self.success, staging)
             with mock.patch(
-                "scripts.ae_framework_adapter._run_native",
+                "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
                 return_value=changed_projection,
             ):
                 changed = build_assurance_package(ROOT, self.success, staging)

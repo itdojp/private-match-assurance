@@ -21,8 +21,10 @@ try:
         FIXTURE_CATALOG_PATH,
         PIN_PATH,
         PROFILE_PATH,
+        PROTOCOL_AUTHORITY_PATH,
         TOOL_INVENTORY_PATH,
         load_authority,
+        load_protocol_authority,
         verify_fixture_catalog,
     )
     from ae_framework_manifest import MANIFEST_PATH as AE_SOURCE_MANIFEST_PATH
@@ -40,8 +42,10 @@ except ImportError:  # pragma: no cover
         FIXTURE_CATALOG_PATH,
         PIN_PATH,
         PROFILE_PATH,
+        PROTOCOL_AUTHORITY_PATH,
         TOOL_INVENTORY_PATH,
         load_authority,
+        load_protocol_authority,
         verify_fixture_catalog,
     )
     from scripts.ae_framework_manifest import MANIFEST_PATH as AE_SOURCE_MANIFEST_PATH
@@ -81,13 +85,18 @@ SCHEMA_PATHS = (
     "schema/ae-native-judgment.v0.1.schema.json",
     "schema/evidence-item.schema.json",
     "schema/private-match-assurance-package.v0.1.schema.json",
+    "schema/private-match-protocol-authorities.v0.1.schema.json",
     "schema/private-match-producer-package.v0.1.schema.json",
 )
 PROFILE_PATHS = (
     PROFILE_PATH,
     "profiles/private-match-ae-native-profile.v0.1.json",
 )
-AUTHORITY_PATHS = (PIN_PATH, AE_SOURCE_MANIFEST_PATH.as_posix())
+AUTHORITY_PATHS = (
+    PIN_PATH,
+    PROTOCOL_AUTHORITY_PATH,
+    AE_SOURCE_MANIFEST_PATH.as_posix(),
+)
 TOOL_PATHS = (TOOL_INVENTORY_PATH,)
 LOCK_PATHS = (
     "package.json",
@@ -135,6 +144,7 @@ def implementation_digest(manifest: dict[str, Any]) -> str:
 
 def build_manifest(root: Path) -> dict[str, Any]:
     pin, inventory, profile = load_authority(root)
+    protocol_authority = load_protocol_authority(root)
     catalog_path = resolve_regular_file(root, FIXTURE_CATALOG_PATH)
     catalog = read_strict_json(catalog_path)
     if not isinstance(catalog, dict):
@@ -178,6 +188,7 @@ def build_manifest(root: Path) -> dict[str, Any]:
             "ae_framework_pin_digest": pin["pin_digest"],
             "ae_framework_source_tree_digest": source_manifest["source_tree_digest"],
             "tool_inventory_digest": inventory["inventory_digest"],
+            "protocol_authority_digest": protocol_authority["authority_digest"],
             "fixture_catalog_digest": catalog["catalog_digest"],
         },
         "adapter_source_digest": adapter_source_digest(root),

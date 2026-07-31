@@ -74,8 +74,12 @@ all six Evidence statuses, and separate automated judgment from human
 approval. The Draft also separates producer/native judgment, binds exact
 JSON/Markdown bytes through a deterministic output set, and confines offline
 outputs to a trusted root. Policy roles are distinct from mode-specific tool
-bindings, and each producer package is single-source-revision. Live Product Evidence, approval ingestion,
-publication, and production-readiness claims remain outside A3.
+bindings, and each producer package is single-source-revision. Stored native
+claims are recomputed from bound Evidence, Protocol/conformance labels are
+exact-authority-bound, current formal output is proof-check-only, and validation
+time is a digest-bound ordered event. Live Product Evidence, approval
+ingestion, bounded model-check producer authority, publication, and
+production-readiness claims remain outside A3.
 
 ## A4 — Signed assurance release bundle
 

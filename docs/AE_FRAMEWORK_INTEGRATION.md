@@ -23,6 +23,15 @@ The vendored command is unmodified. Its raw native output is validated in a
 controlled staging directory, reduced to a path-free deterministic safe
 projection, and then removed. The raw output contains native execution
 metadata and absolute staging paths and is not an Assurance package surface.
+Package validation does not trust that stored projection. It reconstructs the
+native input manifest from the package's independently bound Evidence records
+and external-tool inventory, reruns the same exact vendored command in an
+ephemeral trusted staging directory, and requires the recomputed safe
+projection and judgments to match exactly. The package also binds the
+domain-separated native input-manifest digest. Changing a native claim,
+warning, lane, Evidence-kind set, or counter while leaving the Evidence
+unchanged therefore fails even if every package and output-set digest is
+recomputed.
 The exact runtime dependencies are Ajv 8.20.0, Ajv-formats 2.1.1, and YAML
 2.8.3. YAML 2.8.3 is the patched exact release within the reviewed
 ae-framework `^2.8.1` range; it avoids GHSA-48c2-rrv3-qjmp without changing the
@@ -109,6 +118,34 @@ every emitted Evidence subject is copied from that validated package subject.
 Producer identities are closed role IDs; customer, tenant, account,
 organization, user, repository, host, path, credential, email, and telephone
 identifiers are rejected.
+
+## Protocol and conformance authority
+
+`config/private-match-protocol-authorities.v0.1.json` is the closed authority
+for Protocol and conformance labels. Draft 0.1 pins public Protocol commit
+`9bb59d3b5e1435885fdea60280d6602f937305c9`, the `private-match-core/0.1`
+state-machine semantic digest, and the `private-match-core/0.1` conformance
+suite semantic/tree and reviewed-oracle digests. The profile, producer package,
+Assurance package, conformance record, implementation manifest, and generated
+report all bind the same authority.
+
+The adapter does not invent identifiers or versions and does not fetch the
+Protocol repository at runtime. A conformance record's suite digest must equal
+the bound reviewed suite digest. Unknown, stale, floating, or internally
+inconsistent authority metadata fails closed. This metadata binding identifies
+the reviewed public authority; it is not runtime attestation and does not prove
+Protocol or Product correctness.
+
+## Formal Evidence boundary
+
+The current `formal-tool` producer contract emits Evidence type `proof-check`
+and native lane/kind `proof`/`proof-check`. `sourceKind` remains
+`model-derived` only as a source classification. The adapter does not emit a
+`model-check` claim because Draft 0.1 does not accept the checked-property,
+state-space, constraint, depth/state-count, or completeness-within-bounds
+surface required by the existing Evidence Schema `model_check` contract.
+Adding bounded model-check Evidence requires a future reviewed producer
+contract; synthetic bounds are not inferred.
 
 ## Automated judgment and human approval
 
@@ -216,8 +253,15 @@ The same profile, producer package, exact ae-framework pin, dependency locks,
 and implementation produce byte-identical JSON, Markdown, and output-set
 manifest. The runner does
 not add current time, random IDs, hostnames, usernames, local paths,
-environment values, network metadata, or floating tool versions. Any required
-timestamp is supplied and digest-bound by the producer package.
+environment values, network metadata, or floating tool versions. The producer
+package supplies a closed `validation_event.validated_at` after every record
+completion and package creation. It is included in the producer-package digest,
+copied to every Evidence `validated` lifecycle transition and package validation
+provenance, and supplied to the pinned ae-framework as `generated-at`.
+Chronology is enforced as `started_at <= completed_at <= created_at <=
+validated_at`. The timestamp is digest-bound but not externally timestamp-
+attested; fixture values are synthetic, while private-candidate timestamp
+authority remains a private execution/process responsibility.
 
 ## Private/public boundary
 

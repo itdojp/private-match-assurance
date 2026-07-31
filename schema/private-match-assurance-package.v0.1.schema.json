@@ -9,8 +9,10 @@
     "artifact_status",
     "execution_mode",
     "integration_profile",
+    "protocol_conformance_authority",
     "ae_framework",
     "adapter",
+    "validation_provenance",
     "input_producer_package_digest",
     "evidence_records",
     "evidence_record_refs",
@@ -70,7 +72,8 @@
         "package_name",
         "package_version",
         "source_tree_digest",
-        "native_projection_digest"
+        "native_projection_digest",
+        "native_input_manifest_digest"
       ],
       "properties": {
         "repository": {
@@ -92,6 +95,10 @@
         "native_projection_digest": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "native_input_manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
         }
       }
     },
@@ -828,6 +835,42 @@
     },
     "producer_gate_judgment": {
       "$ref": "https://itdo.jp/schemas/private-match/assurance/assurance-producer-gate-judgment.v0.1.schema.json"
+    },
+    "protocol_conformance_authority": {
+      "$ref": "https://itdo.jp/schemas/private-match/assurance/private-match-protocol-authorities.v0.1.schema.json#/$defs/binding"
+    },
+    "validation_provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter_implementation_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "integration_profile_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "producer_package_created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "producer_package_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "validated_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "validated_at",
+        "producer_package_created_at",
+        "producer_package_digest",
+        "integration_profile_digest",
+        "adapter_implementation_digest"
+      ],
+      "type": "object"
     }
   },
   "allOf": [

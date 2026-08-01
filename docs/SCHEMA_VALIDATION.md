@@ -70,6 +70,31 @@ Private-candidate contract tests use only ephemeral synthetic digest metadata
 under an existing trusted output root. They do not run the public exporter or
 use live/private Product input.
 
+Stored Assurance-package validation first revalidates the exact embedded
+producer package and its detached digest, then rederives Evidence records and
+references, inventories, validation provenance, gates, status counts, producer
+judgment, and the native manifest through the same mapping used by generation.
+It reruns the exact pinned ae-framework command in a process-owned, private
+system temporary directory; it never creates or follows repository-local
+`.codex-local/tmp`, and cleanup occurs on every success and failure path. A
+self-declared Evidence or native projection is not accepted as authority.
+Validation also requires the closed Protocol/conformance authority
+for every producer record and the suite digest at index 0 of every exact
+five-element Evidence input-digest surface, the proof-check-only
+formal mapping, and exact timestamp ordering
+`started_at <= completed_at <= created_at <= validated_at`. This is explicitly
+a producer-supplied, digest-bound assertion, not the current runner execution
+time. The native CLI receives it only as a deterministic reference required by
+the pinned interface. Runner validation is separately recorded as performed
+with no wall-clock timestamp in deterministic output; neither timestamp
+surface is external attestation.
+
+Previously generated Draft 0.1 Assurance packages without
+`input_producer_package` intentionally fail the corrected closed Schema. They
+must be regenerated from the original producer package. The embedded object is
+safe metadata under the existing producer Schema; it is not proof that the
+producer-supplied metadata is externally authentic.
+
 Validate repository assurance records:
 
 ```bash

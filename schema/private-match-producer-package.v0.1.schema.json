@@ -10,8 +10,10 @@
     "artifact_status",
     "mode",
     "created_at",
+    "validation_event",
     "source_revision_digest",
     "subject",
+    "protocol_conformance_authority",
     "tool_bindings",
     "records",
     "limitations",
@@ -122,7 +124,8 @@
           },
           "protocol_suite_digest": {
             "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "Must exactly equal the package Protocol/conformance authority suite digest for every producer role."
           },
           "protocol_case_digest": {
             "type": "string",
@@ -143,8 +146,8 @@
           "product_output_digest": {
             "anyOf": [
               {
-                "type": "string",
-                "pattern": "^sha256:[0-9a-f]{64}$"
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
               },
               {
                 "type": "null"
@@ -203,7 +206,8 @@
           }
         }
       },
-      "maxItems": 5
+      "maxItems": 5,
+      "description": "Exactly one record for each reviewed producer role; every record is bound to the package's one reviewed conformance-suite authority."
     },
     "limitations": {
       "type": "array",
@@ -255,6 +259,28 @@
       "items": {
         "$ref": "https://itdo.jp/schemas/private-match/assurance/ae-assurance-tool-binding.v0.1.schema.json"
       }
+    },
+    "protocol_conformance_authority": {
+      "$ref": "https://itdo.jp/schemas/private-match/assurance/private-match-protocol-authorities.v0.1.schema.json#/$defs/binding"
+    },
+    "validation_event": {
+      "description": "A producer-supplied, digest-bound event asserted before runner execution. It is not the Assurance runner's validation timestamp.",
+      "additionalProperties": false,
+      "properties": {
+        "timestamp_source": {
+          "const": "producer-supplied-digest-bound"
+        },
+        "validated_at": {
+          "description": "Canonical UTC time asserted by the producer package; the runner does not represent it as runner execution time.",
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "validated_at",
+        "timestamp_source"
+      ],
+      "type": "object"
     }
   },
   "allOf": [
@@ -274,11 +300,11 @@
           "records": {
             "items": {
               "properties": {
-                "test_only": {
-                  "const": true
-                },
                 "retention_classification": {
                   "const": "synthetic-public-fixture"
+                },
+                "test_only": {
+                  "const": true
                 }
               }
             }
@@ -306,6 +332,9 @@
           "artifact_status": {
             "const": "private-candidate"
           },
+          "package_id": {
+            "const": "PMAE-PRODUCER-PRIVATE-CANDIDATE-V0-1"
+          },
           "records": {
             "items": {
               "properties": {
@@ -317,9 +346,6 @@
                 }
               }
             }
-          },
-          "package_id": {
-            "const": "PMAE-PRODUCER-PRIVATE-CANDIDATE-V0-1"
           },
           "subject": {
             "properties": {

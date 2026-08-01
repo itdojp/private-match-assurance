@@ -69,8 +69,18 @@ synthetic fixtures, and keeps automated judgment structurally separate from
 human approval. Exact output-set manifests bind emitted JSON/Markdown bytes;
 private-candidate provenance uses a separate closed subject and trusted output
 root. Policy roles are separate from mode-specific execution-tool bindings,
-and one producer package is bound to one source revision, while native ae
-warnings remain policy-visible. The current runner cannot
+and one producer package is bound to one source revision. The exact validated
+safe-metadata producer package is embedded so stored Evidence, inventories,
+provenance, gates, counts, and the native input can be independently rederived.
+Stored native claims are recomputed with the exact pinned command, Protocol and
+conformance labels come from one closed reviewed authority, and every producer
+and Evidence record places that authority's suite digest in one closed position.
+Stored-package native validation uses a process-owned system temporary directory
+rather than an ignored repository-local path. The current
+formal-tool contract is proof-check-only rather than an unbounded model-check.
+A digest-bound validation event orders record completion, package creation,
+Evidence validation, and native generation, while native ae warnings remain
+policy-visible. The current runner cannot
 generate a live approval. It does not invoke the public exporter, process live
 Product Evidence in this repository, certify the Product, or authorize
 publication.

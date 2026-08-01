@@ -62,6 +62,12 @@ Do not transform:
 ae-framework may organize supplied Evidence and apply the reviewed automated
 policy. Native warnings and their reviewed blocking/nonblocking treatment must
 remain visible; `satisfied-with-warnings` is not plain satisfaction. The
+stored native projection is recomputed from the exact embedded producer package
+with the exact pinned command and cannot strengthen that Evidence.
+Protocol/conformance labels
+identify one reviewed authority but do not attest execution. A generic formal
+record is `proof-check`, not a bounded `model-check`, unless the required bounds
+and explored-state result are supplied under a future reviewed contract. The
 framework cannot create facts absent from Evidence, establish the absence of
 undiscovered defects, verify reviewer identity or authority, create human
 approval, or authorize publication.

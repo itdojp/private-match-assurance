@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/private-match-protocol-authorities.v0.1.schema.json",
+  "title": "Private Match Protocol and conformance authority",
+  "description": "Closed public Protocol authority used to label private Assurance conformance Evidence without a runtime repository dependency.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "authority_id",
+    "authority_version",
+    "repository",
+    "commit",
+    "protocol",
+    "conformance_suite",
+    "expected_results",
+    "normative_oracle",
+    "oracle_review",
+    "license",
+    "limitations",
+    "authority_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "const": "draft"
+    },
+    "authority_id": {
+      "const": "private-match-core-conformance"
+    },
+    "authority_version": {
+      "const": "0.1"
+    },
+    "repository": {
+      "const": "itdojp/private-match-protocol"
+    },
+    "commit": {
+      "const": "9bb59d3b5e1435885fdea60280d6602f937305c9"
+    },
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identifier",
+        "version",
+        "artifact_path",
+        "raw_file_digest",
+        "semantic_digest"
+      ],
+      "properties": {
+        "identifier": {
+          "const": "private-match-core"
+        },
+        "version": {
+          "const": "0.1"
+        },
+        "artifact_path": {
+          "const": "specs/state-machines/private-match-core-session-v0.1.yaml"
+        },
+        "raw_file_digest": {
+          "const": "sha256:3867508ec2584d377d000e2e2832c8a235818bf9e0fe6e9bb2de53099cc53f5f"
+        },
+        "semantic_digest": {
+          "const": "sha256:32e514a61a83aeb1593623eb1144f323d1115dc8c812b5fd72af93a3ae06ba16"
+        }
+      }
+    },
+    "conformance_suite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identifier",
+        "version",
+        "suite_manifest_path",
+        "suite_manifest_file_digest",
+        "semantic_digest",
+        "suite_tree_manifest_path",
+        "suite_tree_manifest_file_digest",
+        "complete_suite_tree_digest"
+      ],
+      "properties": {
+        "identifier": {
+          "const": "private-match-core"
+        },
+        "version": {
+          "const": "0.1"
+        },
+        "suite_manifest_path": {
+          "const": "conformance/suites/private-match-core-v0.1/suite-manifest.v0.1.json"
+        },
+        "suite_manifest_file_digest": {
+          "const": "sha256:268c6f3871d1a6b195bde36d514908cef37c97c9feff367cf8edb13dbb2b2cf7"
+        },
+        "semantic_digest": {
+          "const": "sha256:83787c69ec1128eb9ba4b8dcdfcb4ae218674b6158cd8c6c573d898a6f72ceba"
+        },
+        "suite_tree_manifest_path": {
+          "const": "conformance/suites/private-match-core-v0.1/suite-tree-manifest.v0.1.json"
+        },
+        "suite_tree_manifest_file_digest": {
+          "const": "sha256:4aca2688b495a85e6eb31df58a21ebe3aff4856c72a1c4b2a99874130184e3f3"
+        },
+        "complete_suite_tree_digest": {
+          "const": "sha256:a85f3fb73190a26f8e048ab764ff5fd5f051f2a96047087a096c4ee194a8ab28"
+        }
+      }
+    },
+    "expected_results": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "file_digest",
+        "suite_digest"
+      ],
+      "properties": {
+        "path": {
+          "const": "conformance/suites/private-match-core-v0.1/expected-results.v0.1.json"
+        },
+        "file_digest": {
+          "const": "sha256:6ace0b31a7583cbe5fa2c6edd5b26b2afbd50a9f9cc379478c1309d060d49137"
+        },
+        "suite_digest": {
+          "const": "sha256:83787c69ec1128eb9ba4b8dcdfcb4ae218674b6158cd8c6c573d898a6f72ceba"
+        }
+      }
+    },
+    "normative_oracle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "file_digest"
+      ],
+      "properties": {
+        "path": {
+          "const": "conformance/source/normative-expected-results.v0.1.json"
+        },
+        "file_digest": {
+          "const": "sha256:6c8a215373be760c98430972e351cec88fb5fe960975bc8e0e9d8c6a7da2eefb"
+        }
+      }
+    },
+    "oracle_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "file_digest"
+      ],
+      "properties": {
+        "path": {
+          "const": "conformance/source/evaluation-deadline-oracle-review.v0.1.json"
+        },
+        "file_digest": {
+          "const": "sha256:06cc331582f4dbd9fdc7df0274e55e6dc7b510dd214a1681d6aaa714df13e039"
+        }
+      }
+    },
+    "license": {
+      "const": "Apache-2.0"
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "authority_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_id",
+        "authority_version",
+        "authority_digest",
+        "protocol",
+        "conformance_suite"
+      ],
+      "properties": {
+        "authority_id": {
+          "const": "private-match-core-conformance"
+        },
+        "authority_version": {
+          "const": "0.1"
+        },
+        "authority_digest": {
+          "const": "sha256:ee864ffdc060eb9a34e308f323d0fd9e852512f502ddda3114da844b25041f01"
+        },
+        "protocol": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "identifier",
+            "version",
+            "digest"
+          ],
+          "properties": {
+            "identifier": {
+              "const": "private-match-core"
+            },
+            "version": {
+              "const": "0.1"
+            },
+            "digest": {
+              "const": "sha256:32e514a61a83aeb1593623eb1144f323d1115dc8c812b5fd72af93a3ae06ba16"
+            }
+          }
+        },
+        "conformance_suite": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "identifier",
+            "version",
+            "digest"
+          ],
+          "properties": {
+            "identifier": {
+              "const": "private-match-core"
+            },
+            "version": {
+              "const": "0.1"
+            },
+            "digest": {
+              "const": "sha256:83787c69ec1128eb9ba4b8dcdfcb4ae218674b6158cd8c6c573d898a6f72ceba"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -10,6 +10,7 @@
     "profile_version",
     "artifact_status",
     "ae_framework_authority",
+    "protocol_conformance_authority",
     "assurance_policy",
     "accepted_evidence",
     "accepted_producer_types",
@@ -20,6 +21,7 @@
     "native_ae_judgment_policy",
     "human_approval_policy",
     "tool_binding_contract",
+    "formal_tool_evidence_contract",
     "tool_absence_behavior",
     "report_contract",
     "reproducibility_contract",
@@ -281,7 +283,9 @@
         "native_summary_handling",
         "output_set_required",
         "exact_json_bytes_bound",
-        "exact_markdown_bytes_bound"
+        "exact_markdown_bytes_bound",
+        "producer_input_authority",
+        "producer_to_assurance_derivation"
       ],
       "properties": {
         "json_authority": {
@@ -301,6 +305,12 @@
         },
         "output_set_required": {
           "const": true
+        },
+        "producer_input_authority": {
+          "const": "embedded-exact-validated-producer-package"
+        },
+        "producer_to_assurance_derivation": {
+          "const": "shared-pure-mapping"
         }
       }
     },
@@ -309,15 +319,19 @@
       "additionalProperties": false,
       "required": [
         "deterministic",
-        "timestamp_source",
+        "native_reference_time_source",
+        "runner_validation_time_status",
         "network"
       ],
       "properties": {
         "deterministic": {
           "const": true
         },
-        "timestamp_source": {
-          "const": "producer-package"
+        "native_reference_time_source": {
+          "const": "producer-supplied-digest-bound"
+        },
+        "runner_validation_time_status": {
+          "const": "not-recorded-for-deterministic-offline-execution"
         },
         "network": {
           "const": "forbidden"
@@ -356,7 +370,8 @@
         "stdout_stderr_max_bytes",
         "trusted_output_root_required",
         "relative_output_directory_required",
-        "final_output_must_not_exist"
+        "final_output_must_not_exist",
+        "native_validation_temporary_boundary"
       ],
       "properties": {
         "relative_input_only": {
@@ -389,6 +404,9 @@
         },
         "trusted_output_root_required": {
           "const": true
+        },
+        "native_validation_temporary_boundary": {
+          "const": "process-owned-system-temporary-directory"
         }
       }
     },
@@ -524,6 +542,79 @@
           "const": false
         }
       }
+    },
+    "formal_tool_evidence_contract": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_type": {
+          "const": "proof-check"
+        },
+        "mode": {
+          "const": "proof-check-only"
+        },
+        "model_check_requires_bounded_contract": {
+          "const": true
+        },
+        "native_kind": {
+          "const": "proof-check"
+        },
+        "native_lane": {
+          "const": "proof"
+        },
+        "native_source_kind": {
+          "const": "model-derived"
+        }
+      },
+      "required": [
+        "mode",
+        "evidence_type",
+        "native_lane",
+        "native_kind",
+        "native_source_kind",
+        "model_check_requires_bounded_contract"
+      ],
+      "type": "object"
+    },
+    "protocol_conformance_authority": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "const": "sha256:ee864ffdc060eb9a34e308f323d0fd9e852512f502ddda3114da844b25041f01"
+        },
+        "path": {
+          "const": "config/private-match-protocol-authorities.v0.1.json"
+        },
+        "suite_binding_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "single_suite_per_package",
+            "producer_record_scope",
+            "evidence_input_digest_count",
+            "evidence_suite_digest_index"
+          ],
+          "properties": {
+            "single_suite_per_package": {
+              "const": true
+            },
+            "producer_record_scope": {
+              "const": "all-reviewed-producer-roles"
+            },
+            "evidence_input_digest_count": {
+              "const": 5
+            },
+            "evidence_suite_digest_index": {
+              "const": 0
+            }
+          }
+        }
+      },
+      "required": [
+        "path",
+        "digest",
+        "suite_binding_contract"
+      ],
+      "type": "object"
     }
   },
   "description": "Defines deterministic offline Evidence organization without creating facts, security proof, certification, human approval, publication approval, pilot readiness, or production readiness."

@@ -23,6 +23,23 @@ The vendored command is unmodified. Its raw native output is validated in a
 controlled staging directory, reduced to a path-free deterministic safe
 projection, and then removed. The raw output contains native execution
 metadata and absolute staging paths and is not an Assurance package surface.
+Package validation does not trust that stored projection or the stored Evidence
+as an independent authority. The internal Assurance package embeds the exact
+strictly validated safe-metadata producer package whose detached digest it
+names. Generation and stored-package validation share one pure derivation for
+Evidence records and references, producer and external-tool inventories,
+validation provenance, gate results, status counts, producer judgment, and the
+native input manifest. Validation revalidates the embedded producer package,
+rederives every surface, reruns the same exact vendored command in an ephemeral
+process-owned system temporary directory, and requires exact equality. The
+package also binds the domain-separated native input-manifest digest. Changing
+any derived Evidence field, native claim, warning, lane, Evidence-kind set, or
+counter while leaving the embedded producer package unchanged therefore fails
+even if every downstream digest and output-set byte binding is recomputed.
+Stored-package validation neither creates nor follows
+`.codex-local/tmp`; the process-owned directory has a private final component,
+is passed to Node's read/write permission allowlist, is absent from every report
+surface and bounded error, and is removed on success or failure.
 The exact runtime dependencies are Ajv 8.20.0, Ajv-formats 2.1.1, and YAML
 2.8.3. YAML 2.8.3 is the patched exact release within the reviewed
 ae-framework `^2.8.1` range; it avoids GHSA-48c2-rrv3-qjmp without changing the
@@ -109,6 +126,49 @@ every emitted Evidence subject is copied from that validated package subject.
 Producer identities are closed role IDs; customer, tenant, account,
 organization, user, repository, host, path, credential, email, and telephone
 identifiers are rejected.
+
+The complete validated producer object is embedded only because its closed
+contract already excludes raw Product input, source, logs, identifiers, and
+credentials. The JSON package is therefore independently reconstructible from
+its named input without adding a fourth output file. Embedding proves internal
+producer-to-Assurance consistency; it does not externally authenticate supplied
+source, case, input, Product, tool, output, or timestamp metadata. A wholly new
+private-candidate producer package remains acceptable only when it satisfies
+the closed contract and the runner regenerates every downstream surface.
+
+## Protocol and conformance authority
+
+`config/private-match-protocol-authorities.v0.1.json` is the closed authority
+for Protocol and conformance labels. Draft 0.1 pins public Protocol commit
+`9bb59d3b5e1435885fdea60280d6602f937305c9`, the `private-match-core/0.1`
+state-machine semantic digest, and the `private-match-core/0.1` conformance
+suite semantic/tree and reviewed-oracle digests. The profile, producer package,
+Assurance package, conformance record, implementation manifest, and generated
+report all bind the same authority.
+
+The adapter does not invent identifiers or versions and does not fetch the
+Protocol repository at runtime. Draft 0.1 is a strict one-package/one-suite
+contract: all five producer records must carry the bound reviewed suite digest,
+and every generated Evidence `input_digests` array has exactly five entries with
+that suite digest at index 0. Only conformance Evidence additionally carries the
+reviewed Protocol/suite identifier and version configuration. Unknown, stale,
+floating, mixed, or internally inconsistent authority metadata fails closed.
+The remaining four input digests are supplied case, input, Product
+implementation, and Product artifact metadata; the runner structurally binds
+but does not independently attest them. This metadata binding identifies the
+reviewed public authority; it is not runtime attestation and does not prove
+Protocol or Product correctness.
+
+## Formal Evidence boundary
+
+The current `formal-tool` producer contract emits Evidence type `proof-check`
+and native lane/kind `proof`/`proof-check`. `sourceKind` remains
+`model-derived` only as a source classification. The adapter does not emit a
+`model-check` claim because Draft 0.1 does not accept the checked-property,
+state-space, constraint, depth/state-count, or completeness-within-bounds
+surface required by the existing Evidence Schema `model_check` contract.
+Adding bounded model-check Evidence requires a future reviewed producer
+contract; synthetic bounds are not inferred.
 
 ## Automated judgment and human approval
 
@@ -216,8 +276,22 @@ The same profile, producer package, exact ae-framework pin, dependency locks,
 and implementation produce byte-identical JSON, Markdown, and output-set
 manifest. The runner does
 not add current time, random IDs, hostnames, usernames, local paths,
-environment values, network metadata, or floating tool versions. Any required
-timestamp is supplied and digest-bound by the producer package.
+environment values, network metadata, or floating tool versions. The producer
+package supplies a closed `validation_event.validated_at` after every record
+completion and package creation, together with the fixed source
+`producer-supplied-digest-bound`. It is a producer assertion included in the
+producer-package digest, copied to every producer-side Evidence `validated`
+lifecycle transition, and supplied to the pinned ae-framework only as its
+deterministic reference for the required `generated-at` argument.
+Chronology is enforced as `started_at <= completed_at <= created_at <=
+validated_at`. It is not represented as the Assurance runner's execution time.
+The package records runner validation as performed while setting its runner
+timestamp to null with status
+`not-recorded-for-deterministic-offline-execution`. This explicit separation
+preserves byte-identical offline output without inventing a clock fact. The
+producer assertion is digest-bound but not externally timestamp-attested;
+fixture values are synthetic, while private-candidate timestamp authority and
+external runner-time attestation remain private process responsibilities.
 
 ## Private/public boundary
 

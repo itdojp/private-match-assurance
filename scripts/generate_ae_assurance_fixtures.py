@@ -22,6 +22,8 @@ try:
         TOOL_INVENTORY_PATH,
         artifact_digest,
         fixture_tool_bindings,
+        load_protocol_authority,
+        protocol_authority_binding,
         verify_fixture_catalog,
     )
     from canonical_json import domain_digest, file_digest
@@ -42,6 +44,8 @@ except ImportError:  # pragma: no cover
         TOOL_INVENTORY_PATH,
         artifact_digest,
         fixture_tool_bindings,
+        load_protocol_authority,
+        protocol_authority_binding,
         verify_fixture_catalog,
     )
     from scripts.canonical_json import domain_digest, file_digest
@@ -129,7 +133,11 @@ def _synthetic_digest(label: str) -> str:
 
 
 def _build_input(
-    inventory: dict, fixture_id: str, slug: str, statuses: dict[str, str]
+    inventory: dict,
+    protocol_binding: dict,
+    fixture_id: str,
+    slug: str,
+    statuses: dict[str, str],
 ) -> dict:
     bindings = fixture_tool_bindings(inventory)
     bindings_by_role = {binding["tool_role_id"]: binding for binding in bindings}
@@ -157,7 +165,9 @@ def _build_input(
                 "tool_identity": binding["identity"],
                 "tool_version": binding["version"],
                 "tool_implementation_digest": binding["implementation_digest"],
-                "protocol_suite_digest": _synthetic_digest(f"{slug}:suite"),
+                "protocol_suite_digest": protocol_binding["conformance_suite"][
+                    "digest"
+                ],
                 "protocol_case_digest": _synthetic_digest(
                     f"{slug}:{tool['tool_id']}:case"
                 ),
@@ -190,6 +200,10 @@ def _build_input(
         "artifact_status": "test-only",
         "mode": "fixture-test",
         "created_at": "2030-01-01T00:01:00Z",
+        "validation_event": {
+            "validated_at": "2030-01-01T00:02:00Z",
+            "timestamp_source": "producer-supplied-digest-bound",
+        },
         "source_revision_digest": _synthetic_digest(f"{slug}:source"),
         "subject": {
             "type": "source-revision",
@@ -197,6 +211,7 @@ def _build_input(
             "version": "0.1",
             "digest": _synthetic_digest(f"{slug}:source"),
         },
+        "protocol_conformance_authority": protocol_binding,
         "tool_bindings": bindings,
         "records": records,
         "limitations": [
@@ -223,12 +238,15 @@ def write_fixtures(root: Path) -> None:
     (fixture_root / "input").mkdir(parents=True, exist_ok=True)
     (fixture_root / "expected").mkdir(parents=True, exist_ok=True)
     inventory = read_strict_json(resolve_regular_file(root, TOOL_INVENTORY_PATH))
+    protocol_binding = protocol_authority_binding(load_protocol_authority(root))
     entries = []
     for fixture_id, slug, statuses in FIXTURES:
         input_relative = f"input/{slug}.json"
         input_path = fixture_root / input_relative
         input_path.write_bytes(
-            canonical_json_bytes(_build_input(inventory, fixture_id, slug, statuses))
+            canonical_json_bytes(
+                _build_input(inventory, protocol_binding, fixture_id, slug, statuses)
+            )
         )
         entries.append(
             {

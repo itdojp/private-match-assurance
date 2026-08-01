@@ -93,6 +93,69 @@ using the implementation-derived lineage. It blocks the combined judgment when
 multiple observed entries share one lineage. The adapter does not strengthen
 that upstream rule for non-observed optional entries.
 
+### Stored native projection versus Evidence-derived recomputation
+
+Trusting either the stored native projection or stored Evidence would let a
+package author strengthen claims or change provenance and then recompute all
+package/output digests while retaining the old input digest. The selected
+package therefore embeds the complete safe-metadata producer package. The
+validator revalidates its Schema, detached digest, closed mode, authority,
+tools, source revision, statuses, privacy boundary, and chronology, then uses
+the same pure producer-to-Assurance derivation as generation. Evidence,
+inventories, validation provenance, gates, counts, producer judgment, and the
+native manifest must match exactly before the exact pinned command is rerun.
+A domain-separated native input-manifest digest records that input. A selected
+projection or Python approximation was rejected because the former could omit
+derived fields and the latter would create a second unreviewed judgment
+implementation. This establishes internal consistency, not external
+authentication of producer-supplied metadata.
+
+### Adapter constants versus reviewed Protocol authority
+
+Hard-coded Protocol and suite labels in adapter code were rejected because a
+producer previously supplied only a suite digest. Draft 0.1 now uses one closed
+authority artifact pinned to public Protocol commit
+`9bb59d3b5e1435885fdea60280d6602f937305c9`. It binds the Protocol and suite
+identifiers, versions, semantic/tree digests, and reviewed oracle artifacts.
+The profile, producer package, conformance Evidence, report, and runner
+implementation manifest must agree with that authority. No runtime Protocol
+checkout or network lookup is introduced.
+
+Draft 0.1 treats one producer package as one Protocol-suite scope. Requiring
+only the test-runner record to match the authority was rejected because other
+producer records could retain a conflicting suite digest. All five producer
+records must now equal the reviewed suite digest, and all generated Evidence
+records expose an exact five-element input-digest surface with that digest at
+index 0. Protocol/suite labels remain confined to conformance Evidence. The
+other supplied digests are structurally bound metadata, not independent
+attestation.
+
+### Proof-check metadata versus bounded model-check Evidence
+
+Calling the existing generic formal-tool record a `model-check` was rejected
+because its `model_check` surface is null and it carries no checked properties,
+state-space parameters, constraints, depth/state bounds, explored counts, or
+completeness-within-bounds result. Draft 0.1 maps this role to Evidence type and
+native kind `proof-check`; `model-derived` remains only a source classification.
+A future `model-check` producer contract must validate the existing typed
+bounded model-check surface rather than invent synthetic bounds.
+
+### Completion timestamp, producer assertion, and runner validation
+
+Using record completion as the validation time allowed a lifecycle to claim
+that a later producer-package digest had already been reviewed. Draft 0.1
+therefore requires a producer-supplied, digest-bound validation assertion and
+enforces `started_at <= completed_at <= package.created_at <= validated_at`.
+That assertion is used in the producer-side Evidence lifecycle and as the
+pinned native command's deterministic reference, but it is not labeled as the
+current runner's validation time. Runner validation is a separate closed
+surface: it records that validation was performed and deliberately records no
+wall-clock value (`not-recorded-for-deterministic-offline-execution`). This
+choice preserves byte-identical offline output without converting a
+caller-controlled time or wall clock into a reproducible authority. Neither
+surface is externally timestamp-attested; private-candidate time attestation
+remains a future private process concern.
+
 ### Required versus optional tool absence
 
 Silently omitting unavailable tools or promoting them to `pass` was rejected.
@@ -116,6 +179,14 @@ writable filesystem location. The selected interface accepts an existing,
 symlink-free trusted output root plus one validated POSIX-relative new
 directory. All intermediate directories exist under the root; staging and
 atomic rename remain in the same root, and failure leaves no partial output.
+
+Stored-package native recomputation has a separate, nonpersistent requirement.
+Using `.codex-local/tmp` was rejected because an ignored repository component
+could be replaced by a symlink before validation. The selected implementation
+uses Python's process-owned system `TemporaryDirectory` without a caller-supplied
+parent, verifies private permissions on POSIX, grants the exact final directory
+to Node's permission allowlist, emits no path in reports or bounded errors, and
+removes native input/JSON/Markdown on success and all failure paths.
 
 ### Private Assurance package versus public export bundle
 
@@ -145,12 +216,25 @@ Adopt:
 - exact output-set binding and trusted-root confinement;
 - separate producer/native/combined automated judgment and human-approval
   provenance;
+- Evidence-derived execution of the exact pinned native command during both
+  generation and stored-package validation;
+- a closed exact Protocol/conformance authority rather than adapter-invented
+  labels, with one reviewed suite digest across every producer and Evidence
+  record;
+- process-owned, private temporary storage for stored-package native
+  recomputation rather than repository-local ignored staging;
+- proof-check-only formal metadata until a bounded model-check producer
+  contract exists;
+- digest-bound validation-event chronology shared by Evidence lifecycle and
+  native execution;
 - synthetic fixture mode that cannot create live approval;
 - no automatic public export or proof/certification claim.
 
 The native command's raw output is validated but not retained because it
 contains implementation/runtime paths and metadata. The package stores a
-closed path-free safe projection and its domain-separated digest.
+closed path-free safe projection and its domain-separated digest, but validation
+recomputes that projection from the exact embedded producer package instead of
+trusting either stored Evidence or the projection.
 
 ## Consequences
 

@@ -11,6 +11,7 @@ import re
 import selectors
 import shutil
 import subprocess
+import tempfile
 import time
 from typing import Any
 
@@ -34,12 +35,15 @@ try:
         MARKDOWN_REPORT_DOMAIN,
         NATIVE_PROFILE_PATH,
         NATIVE_PROJECTION_DOMAIN,
+        NATIVE_INPUT_MANIFEST_DOMAIN,
         CANDIDATE_TOOL_IDENTITIES,
         CANDIDATE_TOOL_LIMITATION,
         FIXTURE_TOOL_BINDINGS,
         FIXTURE_TOOL_LIMITATION,
         load_authority,
+        load_protocol_authority,
         load_schemas,
+        protocol_authority_binding,
         tool_binding_digest,
         verify_producer_package,
     )
@@ -64,12 +68,15 @@ except ImportError:  # pragma: no cover
         MARKDOWN_REPORT_DOMAIN,
         NATIVE_PROFILE_PATH,
         NATIVE_PROJECTION_DOMAIN,
+        NATIVE_INPUT_MANIFEST_DOMAIN,
         CANDIDATE_TOOL_IDENTITIES,
         CANDIDATE_TOOL_LIMITATION,
         FIXTURE_TOOL_BINDINGS,
         FIXTURE_TOOL_LIMITATION,
         load_authority,
+        load_protocol_authority,
         load_schemas,
+        protocol_authority_binding,
         tool_binding_digest,
         verify_producer_package,
     )
@@ -131,7 +138,7 @@ TYPE_TO_EVIDENCE = {
 TYPE_TO_NATIVE = {
     "ci": ("runtime", "runtime-control", "runtime-derived"),
     "test-runner": ("behavior", "integration", "source-derived"),
-    "formal-tool": ("model", "model-check", "model-derived"),
+    "formal-tool": ("proof", "proof-check", "model-derived"),
     "security-tool": ("adversarial", "fuzz", "source-derived"),
     "human-review": ("spec", "schema", "manual"),
 }
@@ -207,6 +214,23 @@ def validate_producer_package(
     )
     verify_producer_package(package)
     _scan_private(package)
+    protocol_authority = load_protocol_authority(root)
+    expected_protocol_binding = protocol_authority_binding(protocol_authority)
+    if package["protocol_conformance_authority"] != expected_protocol_binding:
+        raise AssuranceIntegrationError(
+            "producer Protocol/conformance authority does not match"
+        )
+    created_at = _parse_time(package["created_at"])
+    validation_event = package["validation_event"]
+    if validation_event["timestamp_source"] != "producer-supplied-digest-bound":
+        raise AssuranceIntegrationError(
+            "producer validation timestamp source is unavailable"
+        )
+    producer_asserted_at = _parse_time(validation_event["validated_at"])
+    if producer_asserted_at < created_at:
+        raise AssuranceIntegrationError(
+            "producer validation assertion precedes package creation"
+        )
     if package["mode"] == "fixture-test" and package["artifact_status"] != "test-only":
         raise AssuranceIntegrationError("fixture mode artifact status does not match")
     if package["mode"] == "private-candidate" and any(
@@ -239,6 +263,17 @@ def validate_producer_package(
     if package["limitations"] != MODE_PACKAGE_LIMITATIONS[package["mode"]]:
         raise AssuranceIntegrationError("producer package limitations are not closed")
     tool_by_id = {tool["tool_id"]: tool for tool in inventory["tools"]}
+    expected_role_order = [tool["tool_id"] for tool in inventory["tools"]]
+    if [binding["tool_role_id"] for binding in package["tool_bindings"]] != (
+        expected_role_order
+    ):
+        raise AssuranceIntegrationError(
+            "producer tool bindings are not in reviewed policy order"
+        )
+    if [record["tool_id"] for record in package["records"]] != expected_role_order:
+        raise AssuranceIntegrationError(
+            "producer records are not in reviewed policy order"
+        )
     bindings = validate_tool_bindings(
         root, package["mode"], package["tool_bindings"], inventory
     )
@@ -283,8 +318,25 @@ def validate_producer_package(
         ) + f" {record['producer_type']} status record."
         if record["summary"] != expected_summary:
             raise AssuranceIntegrationError("producer summary is not a closed value")
-        if _parse_time(record["completed_at"]) < _parse_time(record["started_at"]):
+        started_at = _parse_time(record["started_at"])
+        completed_at = _parse_time(record["completed_at"])
+        if completed_at < started_at:
             raise AssuranceIntegrationError("producer timestamps are not ordered")
+        if completed_at > created_at:
+            raise AssuranceIntegrationError(
+                "producer completion follows package creation"
+            )
+        if completed_at > producer_asserted_at:
+            raise AssuranceIntegrationError(
+                "producer validation assertion precedes record completion"
+            )
+        if (
+            record["protocol_suite_digest"]
+            != expected_protocol_binding["conformance_suite"]["digest"]
+        ):
+            raise AssuranceIntegrationError(
+                "producer record does not match reviewed suite authority"
+            )
     if profile["accepted_producer_types"] != [
         "ci",
         "formal-tool",
@@ -364,6 +416,8 @@ def _evidence_record(
     binding: dict[str, Any],
     package_digest: str,
     subject: dict[str, Any],
+    protocol_binding: dict[str, Any],
+    producer_asserted_at: str,
     *,
     required: bool,
 ) -> dict[str, Any]:
@@ -382,15 +436,19 @@ def _evidence_record(
         "test_only": record["test_only"],
         "retention_classification": record["retention_classification"],
         "public_export_eligibility": False,
+        "validation_timestamp_source": "producer-supplied-digest-bound",
     }
     evidence_type = TYPE_TO_EVIDENCE[record["producer_type"]]
     if evidence_type == "conformance":
         configuration.update(
             {
-                "protocol": {"identifier": "private-match-core", "version": "0.1"},
+                "protocol": {
+                    "identifier": protocol_binding["protocol"]["identifier"],
+                    "version": protocol_binding["protocol"]["version"],
+                },
                 "conformance_suite": {
-                    "identifier": record["protocol_suite_digest"],
-                    "version": "0.1",
+                    "identifier": protocol_binding["conformance_suite"]["identifier"],
+                    "version": protocol_binding["conformance_suite"]["version"],
                 },
             }
         )
@@ -409,13 +467,13 @@ def _evidence_record(
             },
             {
                 "state": "validated",
-                "recorded_at": record["completed_at"],
+                "recorded_at": producer_asserted_at,
                 "review_digest": package_digest,
             },
         ],
         "subject": copy.deepcopy(subject),
         "input_digests": [
-            record["protocol_suite_digest"],
+            protocol_binding["conformance_suite"]["digest"],
             record["protocol_case_digest"],
             record["protocol_input_digest"],
             record["product_implementation_digest"],
@@ -459,32 +517,79 @@ def native_generator_lineage(binding: dict[str, Any]) -> str:
     return f"implementation/{implementation_digest}"
 
 
-def _native_manifest(package: dict[str, Any]) -> dict[str, Any]:
+def _native_entry(
+    *, producer_type: str, status: str, evidence_id: str, implementation_digest: str
+) -> dict[str, Any]:
+    if producer_type not in TYPE_TO_NATIVE:
+        raise AssuranceIntegrationError("native producer type is unavailable")
+    lane, kind, source_kind = TYPE_TO_NATIVE[producer_type]
+    return {
+        "lane": lane,
+        "kind": kind,
+        "sourceKind": source_kind,
+        "origin": "private-match-producer-package",
+        "status": "observed" if status == "pass" else "warning",
+        "artifactPath": f"producer-package/{evidence_id}",
+        "detail": f"status={status}",
+        "claimRefs": ["supplied-evidence-contract"],
+        "generatorLineage": native_generator_lineage(
+            {"implementation_digest": implementation_digest}
+        ),
+    }
+
+
+def build_native_manifest_from_producer_package(
+    package: dict[str, Any],
+) -> dict[str, Any]:
+    """Build native input only from validated producer records and bindings."""
+
     bindings = {
         binding["tool_role_id"]: binding for binding in package["tool_bindings"]
     }
-    entries = []
-    for record in package["records"]:
-        lane, kind, source_kind = TYPE_TO_NATIVE[record["producer_type"]]
-        entries.append(
-            {
-                "lane": lane,
-                "kind": kind,
-                "sourceKind": source_kind,
-                "origin": "private-match-producer-package",
-                "status": "observed" if record["status"] == "pass" else "warning",
-                "artifactPath": f"producer-package/{record['evidence_id']}",
-                "detail": f"status={record['status']}",
-                "claimRefs": ["supplied-evidence-contract"],
-                "generatorLineage": native_generator_lineage(
-                    bindings[record["tool_id"]]
-                ),
-            }
+    entries = [
+        _native_entry(
+            producer_type=record["producer_type"],
+            status=record["status"],
+            evidence_id=record["evidence_id"],
+            implementation_digest=bindings[record["tool_id"]]["implementation_digest"],
         )
+        for record in package["records"]
+    ]
     return {"schemaVersion": "assurance-evidence-manifest/v1", "entries": entries}
 
 
-def _native_projection(summary: dict[str, Any]) -> dict[str, Any]:
+def build_native_manifest_from_assurance_package(
+    package: dict[str, Any],
+) -> dict[str, Any]:
+    """Reconstruct native input from the exact embedded producer package."""
+
+    producer_package = package.get("input_producer_package")
+    if not isinstance(producer_package, dict):
+        raise AssuranceIntegrationError("embedded producer package is unavailable")
+    return build_native_manifest_from_producer_package(producer_package)
+
+
+# Kept as a compatibility alias for existing direct tests and callers.
+_native_manifest = build_native_manifest_from_producer_package
+
+
+def _native_projection(
+    summary: dict[str, Any], *, deterministic_reference_at: str
+) -> dict[str, Any]:
+    try:
+        native_generated_at = dt.datetime.fromisoformat(
+            summary["generatedAt"].replace("Z", "+00:00")
+        )
+    except (AttributeError, ValueError) as error:
+        raise AssuranceIntegrationError("native generated-at is invalid") from error
+    if (
+        native_generated_at.tzinfo is None
+        or native_generated_at.utcoffset() != dt.timedelta(0)
+        or native_generated_at != _parse_time(deterministic_reference_at)
+    ):
+        raise AssuranceIntegrationError(
+            "native generated-at does not match deterministic reference"
+        )
     claims = [
         {
             "claim_id": claim["claimId"],
@@ -501,7 +606,8 @@ def _native_projection(summary: dict[str, Any]) -> dict[str, Any]:
     ]
     return {
         "schema_version": "assurance-summary/v1-safe-projection",
-        "generated_at": summary["generatedAt"],
+        "deterministic_reference_at": deterministic_reference_at,
+        "deterministic_reference_source": "producer-supplied-digest-bound",
         "summary": summary["summary"],
         "lane_coverage": summary["laneCoverage"],
         "claims": claims,
@@ -575,9 +681,10 @@ def _run_bounded_process(
     )
 
 
-def _run_native(
+def run_pinned_ae_framework_manifest(
     root: Path,
-    producer_package: dict[str, Any],
+    native_manifest_value: dict[str, Any],
+    deterministic_reference_at: str,
     profile: dict[str, Any],
     staging: Path,
 ) -> dict[str, Any]:
@@ -612,9 +719,7 @@ def _run_native(
     native_manifest = staging / "native-evidence-manifest.json"
     native_json = staging / "native-summary.json"
     native_md = staging / "native-summary.md"
-    native_manifest.write_bytes(
-        canonical_json_bytes(_native_manifest(producer_package))
-    )
+    native_manifest.write_bytes(canonical_json_bytes(native_manifest_value))
     command = [
         node_executable,
         "--permission",
@@ -629,7 +734,7 @@ def _run_native(
         "--evidence-manifest",
         str(native_manifest.resolve()),
         "--generated-at",
-        producer_package["created_at"],
+        deterministic_reference_at,
         "--output-json",
         str(native_json.resolve()),
         "--output-md",
@@ -670,12 +775,62 @@ def _run_native(
         native_schemas[-1],
         registry=build_schema_registry(native_schemas),
     )
-    projection = _native_projection(native)
+    projection = _native_projection(
+        native, deterministic_reference_at=deterministic_reference_at
+    )
     if any(pattern.search(str(projection)) for pattern in PRIVATE_TEXT_PATTERNS):
         raise AssuranceIntegrationError(
             "native safe projection contains a private value"
         )
     return projection
+
+
+def _run_native(
+    root: Path,
+    producer_package: dict[str, Any],
+    profile: dict[str, Any],
+    staging: Path,
+) -> dict[str, Any]:
+    """Compatibility wrapper for the validated producer-package path."""
+
+    return run_pinned_ae_framework_manifest(
+        root,
+        build_native_manifest_from_producer_package(producer_package),
+        producer_package["validation_event"]["validated_at"],
+        profile,
+        staging,
+    )
+
+
+def recompute_native_projection_from_assurance_package(
+    root: Path, package: dict[str, Any], profile: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Run the exact pinned framework over a stored package's embedded input."""
+
+    native_manifest = build_native_manifest_from_assurance_package(package)
+    try:
+        with tempfile.TemporaryDirectory(
+            prefix="private-match-ae-native-validation-"
+        ) as temporary:
+            staging = Path(temporary)
+            if staging.is_symlink() or (
+                os.name == "posix" and staging.stat().st_mode & 0o077
+            ):
+                raise AssuranceIntegrationError(
+                    "stored native validation staging is not private"
+                )
+            projection = run_pinned_ae_framework_manifest(
+                root,
+                native_manifest,
+                package["validation_provenance"]["producer_validation_event"][
+                    "asserted_at"
+                ],
+                profile,
+                staging,
+            )
+    except Exception as error:
+        raise AssuranceIntegrationError("stored native recomputation failed") from error
+    return native_manifest, projection
 
 
 def _gate_results(
@@ -722,6 +877,120 @@ def _producer_gate_judgment(
             "Producer-gate judgment is limited to supplied validated Evidence statuses.",
             "Optional non-pass statuses remain visible and are not promoted.",
         ],
+    }
+
+
+def derive_assurance_surfaces_from_producer_package(
+    root: Path,
+    producer_package: dict[str, Any],
+    inventory: dict[str, Any],
+    profile: dict[str, Any],
+    protocol_binding: dict[str, Any],
+    ordered_bindings: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Derive every pre-native Assurance surface from one validated input.
+
+    This function performs no file writes and does not invoke ae-framework.  The
+    caller must first run ``validate_producer_package``; that validator enforces
+    the reviewed record and tool-binding order retained by the embedded package.
+    """
+
+    bindings_by_role = {
+        binding["tool_role_id"]: binding for binding in ordered_bindings
+    }
+    ordered_records = producer_package["records"]
+    producer_digest = producer_package["package_digest"]
+    tools_by_id = {tool["tool_id"]: tool for tool in inventory["tools"]}
+    evidence = [
+        _evidence_record(
+            record,
+            bindings_by_role[record["tool_id"]],
+            producer_digest,
+            producer_package["subject"],
+            protocol_binding,
+            producer_package["validation_event"]["validated_at"],
+            required=tools_by_id[record["tool_id"]]["requirement"] == "required",
+        )
+        for record in ordered_records
+    ]
+    evidence_refs = [
+        {
+            "evidence_id": record["id"],
+            "record_digest": domain_digest(EVIDENCE_RECORD_DOMAIN, record),
+            "status": record["status"],
+        }
+        for record in evidence
+    ]
+    producer_inventory = [
+        {
+            "evidence_id": record["evidence_id"],
+            "producer_type": record["producer_type"],
+            "producer_id": record["producer_id"],
+            "producer_version": record["producer_version"],
+            "tool_role_id": record["tool_id"],
+            "tool_id": bindings_by_role[record["tool_id"]]["identity"],
+            "tool_version": bindings_by_role[record["tool_id"]]["version"],
+            "tool_implementation_digest": bindings_by_role[record["tool_id"]][
+                "implementation_digest"
+            ],
+            "tool_binding_digest": bindings_by_role[record["tool_id"]][
+                "binding_digest"
+            ],
+            "status": record["status"],
+        }
+        for record in ordered_records
+    ]
+    external_tools = [
+        {
+            "tool_role_id": role["tool_id"],
+            "producer_type": role["producer_type"],
+            "requirement": role["requirement"],
+            "mode": binding["mode"],
+            "tool_id": binding["identity"],
+            "tool_version": binding["version"],
+            "tool_implementation_digest": binding["implementation_digest"],
+            "input_contract": binding["input_contract"],
+            "output_contract": binding["output_contract"],
+            "limitations": binding["limitations"],
+            "tool_binding_digest": binding["binding_digest"],
+        }
+        for role, binding in zip(inventory["tools"], ordered_bindings, strict=True)
+    ]
+    required, optional = _gate_results(producer_package, inventory)
+    counts = {status: 0 for status in STATUS_VALUES}
+    for record in ordered_records:
+        counts[record["status"]] += 1
+    producer_gate = _producer_gate_judgment(required, optional, counts)
+    validation_provenance = {
+        "producer_validation_event": {
+            "asserted_at": producer_package["validation_event"]["validated_at"],
+            "timestamp_source": producer_package["validation_event"][
+                "timestamp_source"
+            ],
+        },
+        "runner_validation": {
+            "performed": True,
+            "recorded_at": None,
+            "timestamp_status": "not-recorded-for-deterministic-offline-execution",
+        },
+        "producer_package_created_at": producer_package["created_at"],
+        "producer_package_digest": producer_digest,
+        "integration_profile_digest": profile["profile_digest"],
+        "adapter_implementation_digest": adapter_source_digest(root),
+    }
+    return {
+        "evidence_records": evidence,
+        "evidence_record_refs": evidence_refs,
+        "producer_inventory": producer_inventory,
+        "external_tool_inventory": external_tools,
+        "validation_provenance": validation_provenance,
+        "required_gate_results": required,
+        "optional_gate_results": optional,
+        "status_counts": counts,
+        "producer_gate_judgment": producer_gate,
+        "native_input_manifest": build_native_manifest_from_producer_package(
+            producer_package
+        ),
     }
 
 
@@ -805,98 +1074,59 @@ def build_assurance_package(
     root: Path, producer_package: dict[str, Any], staging: Path
 ) -> dict[str, Any]:
     pin, inventory, profile = load_authority(root)
-    bindings = validate_producer_package(root, producer_package, inventory, profile)
-    bindings_by_role = {binding["tool_role_id"]: binding for binding in bindings}
-    records_by_tool = {
-        record["tool_id"]: record for record in producer_package["records"]
-    }
-    ordered_records = [records_by_tool[tool["tool_id"]] for tool in inventory["tools"]]
-    normalized_producer_package = copy.deepcopy(producer_package)
-    normalized_producer_package["records"] = ordered_records
-    normalized_producer_package["tool_bindings"] = bindings
+    protocol_authority = load_protocol_authority(root)
+    protocol_binding = protocol_authority_binding(protocol_authority)
+    ordered_bindings = validate_producer_package(
+        root, producer_package, inventory, profile
+    )
+    embedded_producer_package = copy.deepcopy(producer_package)
+    surfaces = derive_assurance_surfaces_from_producer_package(
+        root,
+        embedded_producer_package,
+        inventory,
+        profile,
+        protocol_binding,
+        ordered_bindings,
+    )
     schemas = load_schemas(root)
-    producer_digest = producer_package["package_digest"]
-    tools_by_id = {tool["tool_id"]: tool for tool in inventory["tools"]}
-    evidence = [
-        _evidence_record(
-            record,
-            bindings_by_role[record["tool_id"]],
-            producer_digest,
-            normalized_producer_package["subject"],
-            required=tools_by_id[record["tool_id"]]["requirement"] == "required",
-        )
-        for record in ordered_records
-    ]
     registry = build_schema_registry(schemas.values())
-    for record in evidence:
+    for record in surfaces["evidence_records"]:
         validate_schema_instance(record, schemas["evidence"], registry=registry)
-    native_projection = _run_native(root, normalized_producer_package, profile, staging)
+
+    native_manifest = surfaces["native_input_manifest"]
+    native_input_digest = domain_digest(NATIVE_INPUT_MANIFEST_DOMAIN, native_manifest)
+    native_projection = run_pinned_ae_framework_manifest(
+        root,
+        native_manifest,
+        embedded_producer_package["validation_event"]["validated_at"],
+        profile,
+        staging,
+    )
     native_digest = domain_digest(NATIVE_PROJECTION_DOMAIN, native_projection)
-    required, optional = _gate_results(normalized_producer_package, inventory)
-    counts = {status: 0 for status in STATUS_VALUES}
-    for record in ordered_records:
-        counts[record["status"]] += 1
-    producer_gate = _producer_gate_judgment(required, optional, counts)
+    producer_gate = surfaces["producer_gate_judgment"]
     native_judgment = derive_native_judgment(native_projection, profile)
     automated = _combined_automated_judgment(producer_gate, native_judgment)
-    evidence_refs = [
-        {
-            "evidence_id": record["id"],
-            "record_digest": domain_digest(EVIDENCE_RECORD_DOMAIN, record),
-            "status": record["status"],
-        }
-        for record in evidence
-    ]
-    producer_inventory = [
-        {
-            "evidence_id": record["evidence_id"],
-            "producer_type": record["producer_type"],
-            "producer_id": record["producer_id"],
-            "producer_version": record["producer_version"],
-            "tool_role_id": record["tool_id"],
-            "tool_id": bindings_by_role[record["tool_id"]]["identity"],
-            "tool_version": bindings_by_role[record["tool_id"]]["version"],
-            "tool_implementation_digest": bindings_by_role[record["tool_id"]][
-                "implementation_digest"
-            ],
-            "tool_binding_digest": bindings_by_role[record["tool_id"]][
-                "binding_digest"
-            ],
-            "status": record["status"],
-        }
-        for record in ordered_records
-    ]
-    external_tools = [
-        {
-            "tool_role_id": role["tool_id"],
-            "producer_type": role["producer_type"],
-            "requirement": role["requirement"],
-            "mode": binding["mode"],
-            "tool_id": binding["identity"],
-            "tool_version": binding["version"],
-            "tool_implementation_digest": binding["implementation_digest"],
-            "input_contract": binding["input_contract"],
-            "output_contract": binding["output_contract"],
-            "limitations": binding["limitations"],
-            "tool_binding_digest": binding["binding_digest"],
-        }
-        for role, binding in zip(inventory["tools"], bindings, strict=True)
-    ]
+    producer_digest = embedded_producer_package["package_digest"]
+
     core: dict[str, Any] = {
         "schema_version": "0.1",
-        "artifact_status": producer_package["artifact_status"],
-        "execution_mode": producer_package["mode"],
+        "artifact_status": embedded_producer_package["artifact_status"],
+        "execution_mode": embedded_producer_package["mode"],
         "integration_profile": {
             "id": profile["profile_id"],
             "version": profile["profile_version"],
             "digest": profile["profile_digest"],
         },
+        "protocol_conformance_authority": copy.deepcopy(
+            embedded_producer_package["protocol_conformance_authority"]
+        ),
         "ae_framework": {
             "repository": pin["repository"],
             "commit": pin["commit"],
             "package_name": pin["package"]["name"],
             "package_version": pin["package"]["version"],
             "source_tree_digest": pin["source_manifest"]["source_tree_digest"],
+            "native_input_manifest_digest": native_input_digest,
             "native_projection_digest": native_digest,
         },
         "adapter": {
@@ -904,33 +1134,38 @@ def build_assurance_package(
             "version": "0.1",
             "implementation_digest": adapter_source_digest(root),
         },
+        "validation_provenance": surfaces["validation_provenance"],
         "input_producer_package_digest": producer_digest,
-        "evidence_records": evidence,
-        "evidence_record_refs": evidence_refs,
-        "producer_inventory": producer_inventory,
-        "external_tool_inventory": external_tools,
+        "input_producer_package": embedded_producer_package,
+        "evidence_records": surfaces["evidence_records"],
+        "evidence_record_refs": surfaces["evidence_record_refs"],
+        "producer_inventory": surfaces["producer_inventory"],
+        "external_tool_inventory": surfaces["external_tool_inventory"],
         "native_ae_summary_projection": native_projection,
         "native_ae_judgment": native_judgment,
         "producer_gate_judgment": producer_gate,
         "automated_judgment": automated,
-        "required_gate_results": required,
-        "optional_gate_results": optional,
-        "status_counts": counts,
+        "required_gate_results": surfaces["required_gate_results"],
+        "optional_gate_results": surfaces["optional_gate_results"],
+        "status_counts": surfaces["status_counts"],
         "limitations": [
             "ae-framework organizes supplied Evidence and is not an oracle of truth.",
             "This package is neither a security proof nor certification.",
             "Automated satisfaction is not human approval or publication approval.",
             (
                 "Synthetic fixtures do not establish Product or Protocol correctness."
-                if producer_package["mode"] == "fixture-test"
+                if embedded_producer_package["mode"] == "fixture-test"
                 else "Private-candidate digest metadata does not establish Product or Protocol correctness."
             ),
             (
                 "No live Product Evidence, private input, or public export is included."
-                if producer_package["mode"] == "fixture-test"
+                if embedded_producer_package["mode"] == "fixture-test"
                 else "No raw Product Evidence, private input, or public export is included."
             ),
             "Native ae-framework warnings remain visible and do not rewrite producer statuses.",
+            "Embedding proves internal producer-to-Assurance consistency but does not independently authenticate producer metadata.",
+            "Producer validation time is a supplied digest-bound assertion, not runner execution time.",
+            "Runner validation is performed but its wall-clock time is not recorded in deterministic output.",
         ],
         "lifecycle_boundary": {
             "maximum_lifecycle": "validated",
@@ -942,12 +1177,16 @@ def build_assurance_package(
     content_digest = domain_digest(ASSURANCE_CONTENT_DOMAIN, core)
     approval = {
         "schema_version": "0.1",
-        "state": "not-applicable-test-only"
-        if producer_package["mode"] == "fixture-test"
-        else "required-not-provided",
-        "reviewer_role": "synthetic-reviewer"
-        if producer_package["mode"] == "fixture-test"
-        else None,
+        "state": (
+            "not-applicable-test-only"
+            if embedded_producer_package["mode"] == "fixture-test"
+            else "required-not-provided"
+        ),
+        "reviewer_role": (
+            "synthetic-reviewer"
+            if embedded_producer_package["mode"] == "fixture-test"
+            else None
+        ),
         "reviewer_identity_verified": False,
         "bound_assurance_content_digest": content_digest,
         "boundary_artifact_generated_by_automation": True,

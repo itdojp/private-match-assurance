@@ -70,7 +70,7 @@
     },
     "schema_files": {
       "type": "array",
-      "minItems": 15,
+      "minItems": 16,
       "uniqueItems": true,
       "items": {
         "type": "object",
@@ -91,7 +91,7 @@
           }
         }
       },
-      "maxItems": 15
+      "maxItems": 16
     },
     "profile_files": {
       "type": "array",
@@ -120,7 +120,7 @@
     },
     "authority_files": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 3,
       "uniqueItems": true,
       "items": {
         "type": "object",
@@ -141,7 +141,7 @@
           }
         }
       },
-      "maxItems": 2
+      "maxItems": 3
     },
     "tool_inventory_files": {
       "type": "array",
@@ -250,6 +250,7 @@
         "ae_framework_pin_digest",
         "ae_framework_source_tree_digest",
         "tool_inventory_digest",
+        "protocol_authority_digest",
         "fixture_catalog_digest"
       ],
       "properties": {
@@ -272,6 +273,10 @@
         "fixture_catalog_digest": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "protocol_authority_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
         }
       }
     },

@@ -26,6 +26,10 @@ def render_markdown(package: dict[str, Any]) -> str:
 
     profile = package["integration_profile"]
     framework = package["ae_framework"]
+    protocol_authority = package["protocol_conformance_authority"]
+    producer_package = package["input_producer_package"]
+    producer_subject = producer_package["subject"]
+    validation = package["validation_provenance"]
     automated = package["automated_judgment"]
     producer_gate = package["producer_gate_judgment"]
     native_judgment = package["native_ae_judgment"]
@@ -42,6 +46,16 @@ def render_markdown(package: dict[str, Any]) -> str:
         f"- ae-framework commit: `{_cell(framework['commit'])}`",
         f"- ae-framework package: `{_cell(framework['package_name'])}@{_cell(framework['package_version'])}`",
         f"- ae-framework source tree: `{_cell(framework['source_tree_digest'])}`",
+        f"- native input manifest digest: `{_cell(framework['native_input_manifest_digest'])}`",
+        f"- Protocol authority: `{_cell(protocol_authority['authority_id'])}/{_cell(protocol_authority['authority_version'])}`",
+        f"- Protocol: `{_cell(protocol_authority['protocol']['identifier'])}/{_cell(protocol_authority['protocol']['version'])}`",
+        f"- conformance suite: `{_cell(protocol_authority['conformance_suite']['identifier'])}/{_cell(protocol_authority['conformance_suite']['version'])}`",
+        f"- conformance suite digest: `{_cell(protocol_authority['conformance_suite']['digest'])}`",
+        f"- producer package created at: `{_cell(validation['producer_package_created_at'])}`",
+        f"- producer validation asserted at: `{_cell(validation['producer_validation_event']['asserted_at'])}`",
+        f"- producer timestamp source: `{_cell(validation['producer_validation_event']['timestamp_source'])}`",
+        f"- runner validation: `performed={_cell(validation['runner_validation']['performed'])}; timestamp {_cell(validation['runner_validation']['timestamp_status'])}`",
+        f"- validation producer package digest: `{_cell(validation['producer_package_digest'])}`",
         f"- package digest: `{_cell(package['package_digest'])}`",
         f"- JSON report model digest: `{_cell(package['report_digests']['json_model_digest'])}`",
         f"- Markdown report model digest: `{_cell(package['report_digests']['markdown_model_digest'])}`",
@@ -51,6 +65,19 @@ def render_markdown(package: dict[str, Any]) -> str:
         "ae-framework is not a certification authority.",
         "",
         "Automated satisfaction is not human approval or publication approval.",
+        "",
+        "## Embedded producer package",
+        "",
+        f"- package ID: `{_cell(producer_package['package_id'])}`",
+        f"- mode: `{_cell(producer_package['mode'])}`",
+        f"- artifact status: `{_cell(producer_package['artifact_status'])}`",
+        f"- subject: `{_cell(producer_subject['identifier'])}/{_cell(producer_subject['version'])}`",
+        f"- subject digest: `{_cell(producer_subject['digest'])}`",
+        f"- producer package digest: `{_cell(producer_package['package_digest'])}`",
+        f"- created at: `{_cell(producer_package['created_at'])}`",
+        f"- producer validation asserted at: `{_cell(producer_package['validation_event']['validated_at'])}`",
+        f"- producer timestamp source: `{_cell(producer_package['validation_event']['timestamp_source'])}`",
+        f"- Protocol authority: `{_cell(producer_package['protocol_conformance_authority']['authority_id'])}/{_cell(producer_package['protocol_conformance_authority']['authority_version'])}`",
         "",
         "## Producer Evidence",
         "",

@@ -9,9 +9,12 @@
     "artifact_status",
     "execution_mode",
     "integration_profile",
+    "protocol_conformance_authority",
     "ae_framework",
     "adapter",
+    "validation_provenance",
     "input_producer_package_digest",
+    "input_producer_package",
     "evidence_records",
     "evidence_record_refs",
     "producer_inventory",
@@ -70,7 +73,8 @@
         "package_name",
         "package_version",
         "source_tree_digest",
-        "native_projection_digest"
+        "native_projection_digest",
+        "native_input_manifest_digest"
       ],
       "properties": {
         "repository": {
@@ -92,6 +96,10 @@
         "native_projection_digest": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "native_input_manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
         }
       }
     },
@@ -118,7 +126,12 @@
     },
     "input_producer_package_digest": {
       "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Detached digest of the exact embedded, validated producer package."
+    },
+    "input_producer_package": {
+      "$ref": "https://itdo.jp/schemas/private-match/assurance/private-match-producer-package.v0.1.schema.json",
+      "description": "Exact safe-metadata producer package validated by the runner and used to derive every stored Evidence and inventory surface."
     },
     "evidence_records": {
       "type": "array",
@@ -127,7 +140,8 @@
         "$ref": "https://itdo.jp/schemas/private-match/assurance/evidence-item-0.1.json"
       },
       "maxItems": 5,
-      "uniqueItems": true
+      "uniqueItems": true,
+      "description": "Exactly five Evidence records. Every input_digests array has exactly five entries and places the package's reviewed conformance-suite digest at index 0."
     },
     "evidence_record_refs": {
       "type": "array",
@@ -343,7 +357,8 @@
       "additionalProperties": false,
       "required": [
         "schema_version",
-        "generated_at",
+        "deterministic_reference_at",
+        "deterministic_reference_source",
         "summary",
         "lane_coverage",
         "claims",
@@ -353,9 +368,13 @@
         "schema_version": {
           "const": "assurance-summary/v1-safe-projection"
         },
-        "generated_at": {
+        "deterministic_reference_at": {
+          "description": "Producer-supplied deterministic reference passed to the pinned native command; not runner execution time.",
           "type": "string",
           "format": "date-time"
+        },
+        "deterministic_reference_source": {
+          "const": "producer-supplied-digest-bound"
         },
         "summary": {
           "type": "object",
@@ -828,6 +847,76 @@
     },
     "producer_gate_judgment": {
       "$ref": "https://itdo.jp/schemas/private-match/assurance/assurance-producer-gate-judgment.v0.1.schema.json"
+    },
+    "protocol_conformance_authority": {
+      "$ref": "https://itdo.jp/schemas/private-match/assurance/private-match-protocol-authorities.v0.1.schema.json#/$defs/binding"
+    },
+    "validation_provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter_implementation_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "integration_profile_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "producer_package_created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "producer_package_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "producer_validation_event": {
+          "additionalProperties": false,
+          "properties": {
+            "asserted_at": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "timestamp_source": {
+              "const": "producer-supplied-digest-bound"
+            }
+          },
+          "required": [
+            "asserted_at",
+            "timestamp_source"
+          ],
+          "type": "object"
+        },
+        "runner_validation": {
+          "additionalProperties": false,
+          "properties": {
+            "performed": {
+              "const": true
+            },
+            "recorded_at": {
+              "type": "null"
+            },
+            "timestamp_status": {
+              "const": "not-recorded-for-deterministic-offline-execution"
+            }
+          },
+          "required": [
+            "performed",
+            "recorded_at",
+            "timestamp_status"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "producer_validation_event",
+        "runner_validation",
+        "producer_package_created_at",
+        "producer_package_digest",
+        "integration_profile_digest",
+        "adapter_implementation_digest"
+      ],
+      "type": "object"
     }
   },
   "allOf": [

@@ -49,6 +49,7 @@ PIN_PATH = "config/ae-framework-pin.v0.1.json"
 PROFILE_PATH = "profiles/private-match-ae-assurance.v0.1.json"
 NATIVE_PROFILE_PATH = "profiles/private-match-ae-native-profile.v0.1.json"
 TOOL_INVENTORY_PATH = "config/ae-assurance-tools.v0.1.json"
+PROTOCOL_AUTHORITY_PATH = "config/private-match-protocol-authorities.v0.1.json"
 FIXTURE_CATALOG_PATH = "tests/fixtures/ae-framework/fixture-catalog.v0.1.json"
 
 PIN_DOMAIN = "private-match-ae-framework-pin/v0.1"
@@ -64,6 +65,8 @@ NATIVE_PROJECTION_DOMAIN = "private-match-ae-native-summary-projection/v0.1"
 EVIDENCE_RECORD_DOMAIN = "private-match-ae-evidence-record/v0.1"
 OUTPUT_SET_DOMAIN = "private-match-ae-assurance-output-set/v0.1"
 TOOL_BINDING_DOMAIN = "private-match-ae-producer-tool-binding/v0.1"
+PROTOCOL_AUTHORITY_DOMAIN = "private-match-protocol-authority/v0.1"
+NATIVE_INPUT_MANIFEST_DOMAIN = "private-match-ae-native-input-manifest/v0.1"
 
 FIXTURE_TOOL_BINDINGS = {
     "PMAE-CI-PIPELINE-V0-1": (
@@ -119,6 +122,7 @@ SCHEMA_PATHS = {
     "profile": "schema/ae-framework-integration-profile.v0.1.schema.json",
     "tools": "schema/ae-assurance-tool-inventory.v0.1.schema.json",
     "tool_binding": "schema/ae-assurance-tool-binding.v0.1.schema.json",
+    "protocol_authority": "schema/private-match-protocol-authorities.v0.1.schema.json",
     "producer": "schema/private-match-producer-package.v0.1.schema.json",
     "automated": "schema/assurance-automated-judgment.v0.1.schema.json",
     "producer_gate": "schema/assurance-producer-gate-judgment.v0.1.schema.json",
@@ -170,6 +174,26 @@ def fixture_tool_bindings(inventory: dict[str, Any]) -> list[dict[str, Any]]:
     return bindings
 
 
+def protocol_authority_binding(authority: dict[str, Any]) -> dict[str, Any]:
+    """Return the closed package-level projection of the reviewed authority."""
+
+    return {
+        "authority_id": authority["authority_id"],
+        "authority_version": authority["authority_version"],
+        "authority_digest": authority["authority_digest"],
+        "protocol": {
+            "identifier": authority["protocol"]["identifier"],
+            "version": authority["protocol"]["version"],
+            "digest": authority["protocol"]["semantic_digest"],
+        },
+        "conformance_suite": {
+            "identifier": authority["conformance_suite"]["identifier"],
+            "version": authority["conformance_suite"]["version"],
+            "digest": authority["conformance_suite"]["semantic_digest"],
+        },
+    }
+
+
 def load_schemas(root: Path) -> dict[str, dict[str, Any]]:
     return {name: load_schema(root, path) for name, path in SCHEMA_PATHS.items()}
 
@@ -206,6 +230,12 @@ def load_authority(root: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str
         root, TOOL_INVENTORY_PATH, schemas["tools"], schemas=schemas
     )
     profile = _load_validate(root, PROFILE_PATH, schemas["profile"], schemas=schemas)
+    protocol_authority = _load_validate(
+        root,
+        PROTOCOL_AUTHORITY_PATH,
+        schemas["protocol_authority"],
+        schemas=schemas,
+    )
 
     if pin["pin_digest"] != artifact_digest(PIN_DOMAIN, pin, "pin_digest"):
         raise AssuranceIntegrationError("ae-framework pin digest does not match")
@@ -217,6 +247,10 @@ def load_authority(root: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str
         PROFILE_DOMAIN, profile, "profile_digest"
     ):
         raise AssuranceIntegrationError("integration profile digest does not match")
+    if protocol_authority["authority_digest"] != artifact_digest(
+        PROTOCOL_AUTHORITY_DOMAIN, protocol_authority, "authority_digest"
+    ):
+        raise AssuranceIntegrationError("Protocol authority digest does not match")
 
     source_binding = pin["source_manifest"]
     source_bytes = resolve_regular_file(
@@ -249,6 +283,19 @@ def load_authority(root: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str
         "pin_digest": pin["pin_digest"],
     }:
         raise AssuranceIntegrationError("profile ae-framework binding does not match")
+    if profile["protocol_conformance_authority"] != {
+        "path": PROTOCOL_AUTHORITY_PATH,
+        "digest": protocol_authority["authority_digest"],
+        "suite_binding_contract": {
+            "single_suite_per_package": True,
+            "producer_record_scope": "all-reviewed-producer-roles",
+            "evidence_input_digest_count": 5,
+            "evidence_suite_digest_index": 0,
+        },
+    }:
+        raise AssuranceIntegrationError(
+            "profile Protocol authority binding does not match"
+        )
 
     tool_by_id: dict[str, dict[str, Any]] = {}
     mappings: dict[tuple[str, str], dict[str, Any]] = {}
@@ -322,7 +369,33 @@ def load_authority(root: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str
         or native_policy["unknown_warning_behavior"] != "fail-closed"
     ):
         raise AssuranceIntegrationError("native ae warning policy is not closed")
+    if profile["formal_tool_evidence_contract"] != {
+        "mode": "proof-check-only",
+        "evidence_type": "proof-check",
+        "native_lane": "proof",
+        "native_kind": "proof-check",
+        "native_source_kind": "model-derived",
+        "model_check_requires_bounded_contract": True,
+    }:
+        raise AssuranceIntegrationError("formal-tool Evidence contract is not closed")
     return pin, inventory, profile
+
+
+def load_protocol_authority(root: Path) -> dict[str, Any]:
+    """Load the exact reviewed public Protocol authority without network access."""
+
+    schemas = load_schemas(root)
+    authority = _load_validate(
+        root,
+        PROTOCOL_AUTHORITY_PATH,
+        schemas["protocol_authority"],
+        schemas=schemas,
+    )
+    if authority["authority_digest"] != artifact_digest(
+        PROTOCOL_AUTHORITY_DOMAIN, authority, "authority_digest"
+    ):
+        raise AssuranceIntegrationError("Protocol authority digest does not match")
+    return authority
 
 
 def verify_producer_package(value: dict[str, Any]) -> None:

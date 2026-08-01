@@ -41,8 +41,10 @@ from scripts.ae_assurance_policy import (
     FIXTURE_CATALOG_PATH,
     JSON_REPORT_DOMAIN,
     MARKDOWN_REPORT_DOMAIN,
+    NATIVE_PROJECTION_DOMAIN,
     OUTPUT_SET_DOMAIN,
     PIN_DOMAIN,
+    PROTOCOL_AUTHORITY_DOMAIN,
     PRODUCER_PACKAGE_DOMAIN,
     PROFILE_DOMAIN,
     TOOL_INVENTORY_DOMAIN,
@@ -51,16 +53,23 @@ from scripts.ae_assurance_policy import (
     FIXTURE_TOOL_BINDINGS,
     artifact_digest,
     load_authority,
+    load_protocol_authority,
     load_schemas,
+    protocol_authority_binding,
     tool_binding_digest,
 )
 from scripts.ae_framework_adapter import (
     _native_manifest,
+    _combined_automated_judgment,
+    _evidence_record,
     _run_bounded_process,
     _run_native,
     build_assurance_package,
+    build_native_manifest_from_assurance_package,
     derive_native_judgment,
     native_generator_lineage,
+    recompute_native_projection_from_assurance_package,
+    run_pinned_ae_framework_manifest,
     validate_producer_package,
 )
 from scripts.ae_framework_manifest import (
@@ -93,6 +102,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/ae-framework"
 class AeAssuranceAuthorityTests(unittest.TestCase):
     def test_exact_authority_profile_inventory_and_source_closure(self) -> None:
         pin, inventory, profile = load_authority(ROOT)
+        protocol_authority = load_protocol_authority(ROOT)
         self.assertEqual(pin["commit"], SOURCE_COMMIT)
         self.assertEqual(pin["repository"], "itdojp/ae-framework")
         self.assertEqual(pin["package"], {"name": "ae-framework", "version": "1.0.0"})
@@ -106,6 +116,38 @@ class AeAssuranceAuthorityTests(unittest.TestCase):
         self.assertFalse(
             profile["tool_binding_contract"]["digest_inequality_proves_independence"]
         )
+        self.assertEqual(
+            profile["report_contract"]["producer_input_authority"],
+            "embedded-exact-validated-producer-package",
+        )
+        self.assertEqual(
+            profile["report_contract"]["producer_to_assurance_derivation"],
+            "shared-pure-mapping",
+        )
+        self.assertEqual(
+            protocol_authority["commit"],
+            "9bb59d3b5e1435885fdea60280d6602f937305c9",
+        )
+        self.assertEqual(
+            protocol_authority["conformance_suite"]["semantic_digest"],
+            "sha256:83787c69ec1128eb9ba4b8dcdfcb4ae218674b6158cd8c6c573d898a6f72ceba",
+        )
+        self.assertEqual(
+            profile["protocol_conformance_authority"]["suite_binding_contract"],
+            {
+                "single_suite_per_package": True,
+                "producer_record_scope": "all-reviewed-producer-roles",
+                "evidence_input_digest_count": 5,
+                "evidence_suite_digest_index": 0,
+            },
+        )
+        self.assertEqual(
+            profile["path_execution_contract"]["native_validation_temporary_boundary"],
+            "process-owned-system-temporary-directory",
+        )
+        self.assertEqual(
+            profile["formal_tool_evidence_contract"]["mode"], "proof-check-only"
+        )
         for mapping in profile["producer_status_mapping"]:
             self.assertEqual(
                 mapping["raw_producer_status"], mapping["normalized_evidence_status"]
@@ -116,6 +158,7 @@ class AeAssuranceAuthorityTests(unittest.TestCase):
 
     def test_authority_digests_are_detached_and_current(self) -> None:
         pin, inventory, profile = load_authority(ROOT)
+        protocol_authority = load_protocol_authority(ROOT)
         self.assertEqual(
             pin["pin_digest"], artifact_digest(PIN_DOMAIN, pin, "pin_digest")
         )
@@ -127,6 +170,43 @@ class AeAssuranceAuthorityTests(unittest.TestCase):
             profile["profile_digest"],
             artifact_digest(PROFILE_DOMAIN, profile, "profile_digest"),
         )
+        self.assertEqual(
+            protocol_authority["authority_digest"],
+            artifact_digest(
+                PROTOCOL_AUTHORITY_DOMAIN,
+                protocol_authority,
+                "authority_digest",
+            ),
+        )
+
+    def test_protocol_authority_rejects_stale_or_floating_labels(self) -> None:
+        schemas = load_schemas(ROOT)
+        authority = load_protocol_authority(ROOT)
+        mutations = (
+            lambda value: value.__setitem__("commit", "0" * 40),
+            lambda value: value.__setitem__("ref", "main"),
+            lambda value: value["protocol"].__setitem__("identifier", "other"),
+            lambda value: value["protocol"].__setitem__("version", "0.2"),
+            lambda value: value["protocol"].__setitem__(
+                "semantic_digest", "sha256:" + "0" * 64
+            ),
+            lambda value: value["conformance_suite"].__setitem__("identifier", "other"),
+            lambda value: value["conformance_suite"].__setitem__("version", "0.2"),
+            lambda value: value["conformance_suite"].__setitem__(
+                "semantic_digest", "sha256:" + "0" * 64
+            ),
+        )
+        registry = build_schema_registry(schemas.values())
+        for mutation in mutations:
+            value = copy.deepcopy(authority)
+            mutation(value)
+            value["authority_digest"] = artifact_digest(
+                PROTOCOL_AUTHORITY_DOMAIN, value, "authority_digest"
+            )
+            with self.assertRaises(AssuranceIntegrationError):
+                validate_schema_instance(
+                    value, schemas["protocol_authority"], registry=registry
+                )
 
     def test_all_new_schemas_self_validate_with_complete_registry(self) -> None:
         schemas = load_schemas(ROOT)
@@ -232,6 +312,18 @@ class AeAssuranceFixtureTests(unittest.TestCase):
             observed, {"pass", "fail", "skip", "unsupported", "timeout", "tool-error"}
         )
 
+    def test_stored_validation_reuses_embedded_protocol_binding(self) -> None:
+        self.assertNotIn("load_protocol_authority", validate_package.__code__.co_names)
+        self.assertNotIn(
+            "protocol_authority_binding", validate_package.__code__.co_names
+        )
+        with mock.patch(
+            "scripts.ae_framework_adapter.load_protocol_authority",
+            wraps=load_protocol_authority,
+        ) as authority_loader:
+            validate_package(ROOT, self.packages["success"])
+        authority_loader.assert_called_once_with(ROOT)
+
     def test_success_and_optional_absence_are_satisfied_without_approval(self) -> None:
         for name in ("success", "optional-unavailable"):
             package = self.packages[name]
@@ -308,6 +400,74 @@ class AeAssuranceFixtureTests(unittest.TestCase):
         self.assertIn("## Native ae-framework judgment", markdown)
         self.assertIn("missing-spec-derived-evidence", markdown)
         self.assertIn("visible-nonblocking", markdown)
+        self.assertIn(
+            "producer validation asserted at: `2030-01-01T00:02:00Z`", markdown
+        )
+        self.assertIn(
+            "runner validation: `performed=True; timestamp not-recorded-for-deterministic-offline-execution`",
+            markdown,
+        )
+        self.assertNotIn("validation recorded at:", markdown)
+        self.assertIn("conformance suite: `private-match-core/0.1`", markdown)
+        self.assertIn("## Embedded producer package", markdown)
+        self.assertIn("package ID: `PMAE-PRODUCER-SUCCESS-V0-1`", markdown)
+        self.assertNotIn('"records"', markdown)
+
+    def test_fixture_protocol_and_validation_authority_are_exact(self) -> None:
+        authority = protocol_authority_binding(load_protocol_authority(ROOT))
+        for name, package in self.packages.items():
+            with self.subTest(name=name):
+                producer = self.inputs[name]
+                self.assertEqual(package["input_producer_package"], producer)
+                self.assertEqual(
+                    package["input_producer_package_digest"],
+                    producer["package_digest"],
+                )
+                self.assertEqual(
+                    package["validation_provenance"]["producer_package_digest"],
+                    producer["package_digest"],
+                )
+                self.assertEqual(producer["protocol_conformance_authority"], authority)
+                self.assertEqual(package["protocol_conformance_authority"], authority)
+                self.assertEqual(
+                    package["validation_provenance"]["producer_validation_event"][
+                        "asserted_at"
+                    ],
+                    producer["validation_event"]["validated_at"],
+                )
+                self.assertEqual(
+                    package["native_ae_summary_projection"][
+                        "deterministic_reference_at"
+                    ],
+                    producer["validation_event"]["validated_at"],
+                )
+                self.assertEqual(
+                    package["native_ae_summary_projection"][
+                        "deterministic_reference_source"
+                    ],
+                    "producer-supplied-digest-bound",
+                )
+                self.assertEqual(
+                    package["validation_provenance"]["runner_validation"],
+                    {
+                        "performed": True,
+                        "recorded_at": None,
+                        "timestamp_status": "not-recorded-for-deterministic-offline-execution",
+                    },
+                )
+                conformance = next(
+                    record
+                    for record in package["evidence_records"]
+                    if record["type"] == "conformance"
+                )
+                self.assertEqual(
+                    conformance["configuration"]["protocol"],
+                    {"identifier": "private-match-core", "version": "0.1"},
+                )
+                self.assertEqual(
+                    conformance["configuration"]["conformance_suite"],
+                    {"identifier": "private-match-core", "version": "0.1"},
+                )
 
     def test_native_warning_is_explicitly_policy_evaluated(self) -> None:
         package = self.packages["success"]
@@ -473,6 +633,60 @@ class AeAssuranceNegativeTests(unittest.TestCase):
         )
         return value
 
+    def _rebound_native_projection(self, source: dict, mutate) -> dict:
+        value = copy.deepcopy(source)
+        mutate(value["native_ae_summary_projection"])
+        value["ae_framework"]["native_projection_digest"] = domain_digest(
+            NATIVE_PROJECTION_DOMAIN, value["native_ae_summary_projection"]
+        )
+        value["native_ae_judgment"] = derive_native_judgment(
+            value["native_ae_summary_projection"], self.profile
+        )
+        value["automated_judgment"] = _combined_automated_judgment(
+            value["producer_gate_judgment"], value["native_ae_judgment"]
+        )
+        return self._result(lambda _: None, source=value)
+
+    def _rebound_evidence_inputs(self, mutate) -> dict:
+        """Mutate stored Evidence input digests and rebind every package digest."""
+
+        value = copy.deepcopy(self.success_expected)
+        mutate(value["evidence_records"])
+        refs = {item["evidence_id"]: item for item in value["evidence_record_refs"]}
+        for record in value["evidence_records"]:
+            refs[record["id"]]["record_digest"] = domain_digest(
+                EVIDENCE_RECORD_DOMAIN, record
+            )
+        return self._result(lambda _: None, source=value)
+
+    def _rebound_stored_evidence(self, mutate, source: dict | None = None) -> dict:
+        """Mutate derived stored surfaces and rebind all downstream digests."""
+
+        value = copy.deepcopy(source if source is not None else self.success_expected)
+        mutate(value)
+        refs = {item["evidence_id"]: item for item in value["evidence_record_refs"]}
+        for record in value["evidence_records"]:
+            refs[record["id"]]["record_digest"] = domain_digest(
+                EVIDENCE_RECORD_DOMAIN, record
+            )
+            refs[record["id"]]["status"] = record["status"]
+        return self._result(lambda _: None, source=value)
+
+    def _assert_rebound_output_rejected(self, package: dict) -> None:
+        """Rebind exact output bytes and require stored-package validation to fail."""
+
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "result"
+            output.mkdir()
+            json_bytes = canonicalize(package) + b"\n"
+            markdown_bytes = render_markdown(package).encode("utf-8")
+            output_set = build_output_set(ROOT, package, json_bytes, markdown_bytes)
+            (output / JSON_NAME).write_bytes(json_bytes)
+            (output / MARKDOWN_NAME).write_bytes(markdown_bytes)
+            (output / OUTPUT_SET_NAME).write_bytes(canonicalize(output_set) + b"\n")
+            with self.assertRaises(AssuranceIntegrationError):
+                validate_output_directory(ROOT, output)
+
     def test_native_manifest_lineage_uses_implementation_digest_not_role(self) -> None:
         candidate = self._private_candidate()
         shared_digest = "sha256:" + "e" * 64
@@ -530,6 +744,424 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 with self.assertRaises(AssuranceIntegrationError):
                     validate_package(ROOT, self._result(mutation))
 
+    def test_native_projection_is_recomputed_from_bound_evidence(self) -> None:
+        required_fail = read_strict_json(
+            FIXTURE_ROOT / "expected/required-fail" / JSON_NAME,
+            max_bytes=2_097_152,
+        )
+
+        def strengthen(value: dict) -> None:
+            claim = value["claims"][0]
+            claim["status"] = "satisfied"
+            claim["warning_codes"] = []
+            value["warning_codes"] = []
+            value["summary"]["warningClaims"] = 0
+            value["summary"]["satisfiedClaims"] = 1
+            value["summary"]["warningCount"] = 0
+
+        mutations = (
+            (self.success_expected, strengthen),
+            (
+                self.success_expected,
+                lambda value: value["claims"][0].__setitem__("status", "satisfied"),
+            ),
+            (
+                required_fail,
+                lambda value: value["claims"][0].__setitem__("missing_lanes", []),
+            ),
+            (
+                required_fail,
+                lambda value: value["claims"][0].__setitem__(
+                    "missing_evidence_kinds", []
+                ),
+            ),
+            (
+                self.success_expected,
+                lambda value: value["lane_coverage"]["runtime"].__setitem__(
+                    "observedClaims", 0
+                ),
+            ),
+            (
+                self.success_expected,
+                lambda value: value["summary"].__setitem__("warningCount", 0),
+            ),
+            (
+                self.success_expected,
+                lambda value: value.__setitem__("warning_codes", []),
+            ),
+        )
+        for source, mutation in mutations:
+            with self.subTest(mutation=mutation):
+                tampered = self._rebound_native_projection(source, mutation)
+                with self.assertRaisesRegex(
+                    AssuranceIntegrationError,
+                    "native ae projection does not match embedded producer input",
+                ):
+                    validate_package(ROOT, tampered)
+                with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
+                    output = Path(temp) / "result"
+                    output.mkdir()
+                    json_bytes = canonicalize(tampered) + b"\n"
+                    markdown_bytes = render_markdown(tampered).encode("utf-8")
+                    output_set = build_output_set(
+                        ROOT, tampered, json_bytes, markdown_bytes
+                    )
+                    (output / JSON_NAME).write_bytes(json_bytes)
+                    (output / MARKDOWN_NAME).write_bytes(markdown_bytes)
+                    (output / OUTPUT_SET_NAME).write_bytes(
+                        canonicalize(output_set) + b"\n"
+                    )
+                    with self.assertRaisesRegex(
+                        AssuranceIntegrationError,
+                        "native ae projection does not match embedded producer input",
+                    ):
+                        validate_output_directory(ROOT, output)
+
+    def test_bound_evidence_status_changes_recomputed_native_projection(self) -> None:
+        required_fail = read_strict_json(
+            FIXTURE_ROOT / "expected/required-fail" / JSON_NAME,
+            max_bytes=2_097_152,
+        )
+        self.assertNotEqual(
+            self.success_expected["native_ae_summary_projection"],
+            required_fail["native_ae_summary_projection"],
+        )
+        self.assertNotEqual(
+            build_native_manifest_from_assurance_package(self.success_expected),
+            build_native_manifest_from_assurance_package(required_fail),
+        )
+
+    def test_native_manifest_is_reconstructed_from_embedded_producer(self) -> None:
+        manifest = build_native_manifest_from_assurance_package(self.success_expected)
+        self.assertEqual(manifest, _native_manifest(self.success))
+        formal = next(
+            entry
+            for entry in manifest["entries"]
+            if entry["artifactPath"].endswith("PM-EVIDENCE-0003")
+        )
+        self.assertEqual(
+            (formal["lane"], formal["kind"], formal["sourceKind"]),
+            ("proof", "proof-check", "model-derived"),
+        )
+        self.assertNotIn("model-check", canonicalize(manifest).decode("utf-8"))
+
+    def test_stored_assurance_surfaces_cannot_diverge_from_embedded_input(self) -> None:
+        changed_digest = "sha256:" + "a" * 64
+        changed_subject = {
+            "type": "source-revision",
+            "identifier": "private-match-product",
+            "version": "0.1",
+            "digest": changed_digest,
+        }
+
+        def mutate_all_subjects(value: dict) -> None:
+            for record in value["evidence_records"]:
+                record["subject"] = copy.deepcopy(changed_subject)
+
+        def mutate_one_subject(value: dict) -> None:
+            value["evidence_records"][0]["subject"] = copy.deepcopy(changed_subject)
+
+        def mutate_tool(value: dict, field: str, replacement: str) -> None:
+            record = value["evidence_records"][0]
+            producer = value["producer_inventory"][0]
+            external = value["external_tool_inventory"][0]
+            if field == "identity":
+                record["tool"]["name"] = replacement
+                producer["tool_id"] = replacement
+                external["tool_id"] = replacement
+            elif field == "version":
+                record["tool"]["version"] = replacement
+                producer["tool_version"] = replacement
+                external["tool_version"] = replacement
+            else:
+                record["tool"]["source"] = replacement
+                producer["tool_implementation_digest"] = replacement
+                external["tool_implementation_digest"] = replacement
+            binding = {
+                "tool_role_id": external["tool_role_id"],
+                "producer_type": external["producer_type"],
+                "mode": external["mode"],
+                "identity": external["tool_id"],
+                "version": external["tool_version"],
+                "implementation_digest": external["tool_implementation_digest"],
+                "input_contract": external["input_contract"],
+                "output_contract": external["output_contract"],
+                "limitations": external["limitations"],
+            }
+            digest = tool_binding_digest(binding)
+            record["configuration"]["tool_binding_digest"] = digest
+            producer["tool_binding_digest"] = digest
+            external["tool_binding_digest"] = digest
+
+        mutations = (
+            ("all-subjects", mutate_all_subjects),
+            ("one-subject", mutate_one_subject),
+            (
+                "configuration-case",
+                lambda value: value["evidence_records"][0]["configuration"].__setitem__(
+                    "protocol_case_digest", changed_digest
+                ),
+            ),
+            (
+                "configuration-input",
+                lambda value: value["evidence_records"][0]["configuration"].__setitem__(
+                    "protocol_input_digest", changed_digest
+                ),
+            ),
+            *tuple(
+                (
+                    f"input-digest-{index}",
+                    lambda value, index=index: value["evidence_records"][0][
+                        "input_digests"
+                    ].__setitem__(index, changed_digest),
+                )
+                for index in range(1, 5)
+            ),
+            (
+                "output-digest",
+                lambda value: value["evidence_records"][0].__setitem__(
+                    "output_digest", changed_digest
+                ),
+            ),
+            (
+                "started-at",
+                lambda value: value["evidence_records"][0].__setitem__(
+                    "started_at", "2029-12-31T23:59:59Z"
+                ),
+            ),
+            (
+                "completed-at",
+                lambda value: value["evidence_records"][0].__setitem__(
+                    "completed_at", "2030-01-01T00:00:00Z"
+                ),
+            ),
+            (
+                "summary",
+                lambda value: value["evidence_records"][0].__setitem__(
+                    "summary", "Changed safe summary."
+                ),
+            ),
+            (
+                "limitations",
+                lambda value: value["evidence_records"][0].__setitem__(
+                    "limitations", ["Changed safe limitation."]
+                ),
+            ),
+            (
+                "producer-identity",
+                lambda value: (
+                    value["evidence_records"][0]["producer"].__setitem__(
+                        "identity", "synthetic-ci-producer-v2"
+                    ),
+                    value["producer_inventory"][0].__setitem__(
+                        "producer_id", "synthetic-ci-producer-v2"
+                    ),
+                ),
+            ),
+            (
+                "tool-identity",
+                lambda value: mutate_tool(
+                    value, "identity", "private-match-synthetic-ci-v2"
+                ),
+            ),
+            (
+                "tool-version",
+                lambda value: mutate_tool(value, "version", "2.0.0"),
+            ),
+            (
+                "tool-digest",
+                lambda value: mutate_tool(value, "digest", changed_digest),
+            ),
+        )
+        for name, mutation in mutations:
+            with self.subTest(name=name):
+                rebound = self._rebound_stored_evidence(mutation)
+                self._assert_rebound_output_rejected(rebound)
+
+        required_fail = read_strict_json(
+            FIXTURE_ROOT / "expected/required-fail" / JSON_NAME,
+            max_bytes=2_097_152,
+        )
+
+        def retain_success_input(value: dict) -> None:
+            producer = copy.deepcopy(self.success)
+            producer_digest = producer["package_digest"]
+            value["input_producer_package"] = producer
+            value["input_producer_package_digest"] = producer_digest
+            value["validation_provenance"]["producer_package_digest"] = producer_digest
+            for record in value["evidence_records"]:
+                record["lifecycle_history"][1]["review_digest"] = producer_digest
+
+        fully_rebound_status = self._rebound_stored_evidence(
+            retain_success_input, source=required_fail
+        )
+        self.assertEqual(fully_rebound_status["automated_judgment"]["state"], "blocked")
+        self._assert_rebound_output_rejected(fully_rebound_status)
+
+    def test_embedded_producer_package_is_required_and_digest_bound(self) -> None:
+        changed_digest = "sha256:" + "b" * 64
+
+        def rebind_embedded(value: dict, mutate) -> None:
+            embedded = value["input_producer_package"]
+            mutate(embedded)
+            embedded["package_digest"] = artifact_digest(
+                PRODUCER_PACKAGE_DOMAIN, embedded, "package_digest"
+            )
+            value["input_producer_package_digest"] = embedded["package_digest"]
+            value["validation_provenance"]["producer_package_digest"] = embedded[
+                "package_digest"
+            ]
+
+        mutations = (
+            (
+                "embedded-digest",
+                lambda value: value["input_producer_package"].__setitem__(
+                    "package_digest", changed_digest
+                ),
+            ),
+            (
+                "input-digest",
+                lambda value: value.__setitem__(
+                    "input_producer_package_digest", changed_digest
+                ),
+            ),
+            (
+                "validation-digest",
+                lambda value: value["validation_provenance"].__setitem__(
+                    "producer_package_digest", changed_digest
+                ),
+            ),
+            ("missing", lambda value: value.pop("input_producer_package")),
+            (
+                "malformed",
+                lambda value: value["input_producer_package"].__setitem__(
+                    "records", {}
+                ),
+            ),
+            (
+                "private-field",
+                lambda value: value["input_producer_package"].__setitem__(
+                    "customer_id", "customer-123"
+                ),
+            ),
+            (
+                "protocol-authority",
+                lambda value: rebind_embedded(
+                    value,
+                    lambda embedded: embedded["protocol_conformance_authority"][
+                        "protocol"
+                    ].__setitem__("digest", changed_digest),
+                ),
+            ),
+            (
+                "source-revision",
+                lambda value: rebind_embedded(
+                    value,
+                    lambda embedded: (
+                        embedded.__setitem__("source_revision_digest", changed_digest),
+                        embedded["subject"].__setitem__("digest", changed_digest),
+                    ),
+                ),
+            ),
+            (
+                "validation-event",
+                lambda value: rebind_embedded(
+                    value,
+                    lambda embedded: embedded["validation_event"].__setitem__(
+                        "validated_at", "2030-01-01T00:03:00Z"
+                    ),
+                ),
+            ),
+            (
+                "producer-record",
+                lambda value: rebind_embedded(
+                    value,
+                    lambda embedded: embedded["records"][0].__setitem__(
+                        "protocol_case_digest", changed_digest
+                    ),
+                ),
+            ),
+            (
+                "producer-record-order",
+                lambda value: rebind_embedded(
+                    value,
+                    lambda embedded: embedded["records"].__setitem__(
+                        slice(0, 2), list(reversed(embedded["records"][:2]))
+                    ),
+                ),
+            ),
+            (
+                "tool-binding-order",
+                lambda value: rebind_embedded(
+                    value,
+                    lambda embedded: embedded["tool_bindings"].__setitem__(
+                        slice(0, 2), list(reversed(embedded["tool_bindings"][:2]))
+                    ),
+                ),
+            ),
+        )
+        for name, mutation in mutations:
+            with self.subTest(name=name):
+                rebound = self._result(mutation)
+                if name == "missing":
+                    with self.assertRaises(AssuranceIntegrationError):
+                        validate_package(ROOT, rebound)
+                else:
+                    self._assert_rebound_output_rejected(rebound)
+
+    def test_formal_tool_uses_proof_check_and_preserves_every_status(self) -> None:
+        authority = protocol_authority_binding(load_protocol_authority(ROOT))
+        formal_role = next(
+            role
+            for role in self.inventory["tools"]
+            if role["producer_type"] == "formal-tool"
+        )
+        formal_binding = next(
+            binding
+            for binding in self.success["tool_bindings"]
+            if binding["producer_type"] == "formal-tool"
+        )
+        formal_record = next(
+            record
+            for record in self.success["records"]
+            if record["producer_type"] == "formal-tool"
+        )
+        for status in ("pass", "fail", "skip", "unsupported", "timeout", "tool-error"):
+            record = copy.deepcopy(formal_record)
+            mapping = next(
+                item
+                for item in formal_role["status_mappings"]
+                if item["raw_producer_status"] == status
+            )
+            record["status"] = status
+            record["product_output_digest"] = (
+                "sha256:" + "a" * 64 if status in {"pass", "fail"} else None
+            )
+            record["limitations"][0] = mapping["required_limitation"]
+            evidence = _evidence_record(
+                record,
+                formal_binding,
+                self.success["package_digest"],
+                self.success["subject"],
+                authority,
+                self.success["validation_event"]["validated_at"],
+                required=False,
+            )
+            self.assertEqual(evidence["status"], status)
+            self.assertEqual(evidence["type"], "proof-check")
+            self.assertIsNone(evidence["model_check"])
+        with self.assertRaises(AssuranceIntegrationError):
+            validate_producer_package(
+                ROOT,
+                self._producer(
+                    lambda value: value["records"][2].__setitem__(
+                        "native_kind", "model-check"
+                    )
+                ),
+                self.inventory,
+                self.profile,
+            )
+
     def test_unknown_producer_type_and_status_fail_closed(self) -> None:
         for mutate in (
             lambda value: value["records"][0].__setitem__("producer_type", "unknown"),
@@ -539,6 +1171,230 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 validate_producer_package(
                     ROOT, self._producer(mutate), self.inventory, self.profile
                 )
+
+    def test_producer_protocol_authority_and_suite_digest_fail_closed(self) -> None:
+        mutations = (
+            lambda value: value["protocol_conformance_authority"][
+                "protocol"
+            ].__setitem__("identifier", "other"),
+            lambda value: value["protocol_conformance_authority"][
+                "protocol"
+            ].__setitem__("version", "0.2"),
+            lambda value: value["protocol_conformance_authority"][
+                "protocol"
+            ].__setitem__("digest", "sha256:" + "0" * 64),
+            lambda value: value["protocol_conformance_authority"][
+                "conformance_suite"
+            ].__setitem__("identifier", "other"),
+            lambda value: value["protocol_conformance_authority"][
+                "conformance_suite"
+            ].__setitem__("version", "0.2"),
+            lambda value: value["protocol_conformance_authority"][
+                "conformance_suite"
+            ].__setitem__("digest", "sha256:" + "0" * 64),
+            lambda value: value["protocol_conformance_authority"].__setitem__(
+                "authority_id", "unknown"
+            ),
+            lambda value: next(
+                record
+                for record in value["records"]
+                if record["producer_type"] == "test-runner"
+            ).__setitem__("protocol_suite_digest", "sha256:" + "0" * 64),
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                package = self._producer(mutation)
+                with self.assertRaises(AssuranceIntegrationError):
+                    validate_producer_package(
+                        ROOT, package, self.inventory, self.profile
+                    )
+
+    def test_every_producer_role_is_bound_to_one_reviewed_suite(self) -> None:
+        expected = protocol_authority_binding(load_protocol_authority(ROOT))[
+            "conformance_suite"
+        ]["digest"]
+        self.assertEqual(
+            {record["protocol_suite_digest"] for record in self.success["records"]},
+            {expected},
+        )
+        for index, record in enumerate(self.success["records"]):
+            with self.subTest(producer_type=record["producer_type"]):
+                package = self._producer(
+                    lambda value, index=index: value["records"][index].__setitem__(
+                        "protocol_suite_digest", "sha256:" + "0" * 64
+                    )
+                )
+                with self.assertRaisesRegex(
+                    AssuranceIntegrationError,
+                    "producer record does not match reviewed suite authority",
+                ):
+                    validate_producer_package(
+                        ROOT, package, self.inventory, self.profile
+                    )
+
+        all_unreviewed = self._producer(
+            lambda value: [
+                record.__setitem__("protocol_suite_digest", "sha256:" + "1" * 64)
+                for record in value["records"]
+            ]
+        )
+        with self.assertRaisesRegex(
+            AssuranceIntegrationError,
+            "producer record does not match reviewed suite authority",
+        ):
+            validate_producer_package(
+                ROOT, all_unreviewed, self.inventory, self.profile
+            )
+
+    def test_producer_suite_digest_missing_malformed_or_stale_authority_fails(
+        self,
+    ) -> None:
+        mutations = (
+            lambda value: value["records"][0].pop("protocol_suite_digest"),
+            lambda value: value["records"][0].__setitem__(
+                "protocol_suite_digest", "sha256:invalid"
+            ),
+            lambda value: value["protocol_conformance_authority"].__setitem__(
+                "authority_digest", "sha256:" + "0" * 64
+            ),
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                with self.assertRaises(AssuranceIntegrationError):
+                    validate_producer_package(
+                        ROOT,
+                        self._producer(mutation),
+                        self.inventory,
+                        self.profile,
+                    )
+
+    def test_every_stored_evidence_record_has_closed_suite_digest_position(
+        self,
+    ) -> None:
+        expected = protocol_authority_binding(load_protocol_authority(ROOT))[
+            "conformance_suite"
+        ]["digest"]
+        for record in self.success_expected["evidence_records"]:
+            self.assertEqual(len(record["input_digests"]), 5)
+            self.assertEqual(record["input_digests"][0], expected)
+
+        mutations = (
+            lambda records: records[0]["input_digests"].__setitem__(
+                0, "sha256:" + "0" * 64
+            ),
+            lambda records: records[0]["input_digests"].append("sha256:" + "0" * 64),
+            lambda records: records[0].__setitem__(
+                "input_digests",
+                [
+                    records[0]["input_digests"][1],
+                    records[0]["input_digests"][0],
+                    *records[0]["input_digests"][2:],
+                ],
+            ),
+            lambda records: records[0]["input_digests"].pop(0),
+            lambda records: [
+                record["input_digests"].__setitem__(0, "sha256:" + "1" * 64)
+                for record in records
+            ],
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                package = self._rebound_evidence_inputs(mutation)
+                with self.assertRaisesRegex(
+                    AssuranceIntegrationError,
+                    "Assurance surfaces do not match embedded producer package",
+                ):
+                    validate_package(ROOT, package)
+                self._assert_rebound_output_rejected(package)
+
+    def test_validation_event_orders_records_creation_and_validation(self) -> None:
+        validate_producer_package(ROOT, self.success, self.inventory, self.profile)
+        mutations = (
+            lambda value: value["validation_event"].__setitem__(
+                "validated_at", "2030-01-01T00:00:01Z"
+            ),
+            lambda value: value.update(
+                {
+                    "created_at": "2030-01-01T00:00:00Z",
+                    "validation_event": {
+                        "validated_at": "2030-01-01T00:00:00Z",
+                        "timestamp_source": "producer-supplied-digest-bound",
+                    },
+                }
+            ),
+            lambda value: value["records"][0].__setitem__(
+                "completed_at", "2030-01-01T00:01:01Z"
+            ),
+            lambda value: value["validation_event"].__setitem__(
+                "validated_at", "2030-01-01T00:02:00+00:00"
+            ),
+            lambda value: value["validation_event"].__setitem__(
+                "timestamp_source", "runner-clock"
+            ),
+            lambda value: value["validation_event"].pop("timestamp_source"),
+            lambda value: value.pop("validation_event"),
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                with self.assertRaises(AssuranceIntegrationError):
+                    validate_producer_package(
+                        ROOT,
+                        self._producer(mutation),
+                        self.inventory,
+                        self.profile,
+                    )
+
+    def test_evidence_lifecycle_is_bound_to_validation_provenance(self) -> None:
+        value = copy.deepcopy(self.success_expected)
+        record = value["evidence_records"][0]
+        record["lifecycle_history"][1]["recorded_at"] = record["completed_at"]
+        ref = next(
+            item
+            for item in value["evidence_record_refs"]
+            if item["evidence_id"] == record["id"]
+        )
+        ref["record_digest"] = domain_digest(EVIDENCE_RECORD_DOMAIN, record)
+        value = self._result(lambda _: None, source=value)
+        with self.assertRaisesRegex(
+            AssuranceIntegrationError,
+            "Assurance surfaces do not match embedded producer package",
+        ):
+            validate_package(ROOT, value)
+
+    def test_producer_time_is_separate_from_runner_validation_time(self) -> None:
+        candidate = self._private_candidate()
+        candidate["validation_event"]["validated_at"] = "2030-01-01T00:02:00Z"
+        candidate["package_digest"] = artifact_digest(
+            PRODUCER_PACKAGE_DOMAIN, candidate, "package_digest"
+        )
+        with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
+            package = build_assurance_package(ROOT, candidate, Path(temp))
+        self.assertEqual(
+            package["validation_provenance"]["producer_validation_event"],
+            {
+                "asserted_at": "2030-01-01T00:02:00Z",
+                "timestamp_source": "producer-supplied-digest-bound",
+            },
+        )
+        self.assertEqual(
+            package["validation_provenance"]["runner_validation"],
+            {
+                "performed": True,
+                "recorded_at": None,
+                "timestamp_status": "not-recorded-for-deterministic-offline-execution",
+            },
+        )
+        self.assertNotIn("generated_at", package["native_ae_summary_projection"])
+        self.assertEqual(
+            package["native_ae_summary_projection"]["deterministic_reference_at"],
+            candidate["validation_event"]["validated_at"],
+        )
+        markdown = render_markdown(package)
+        self.assertIn("producer validation asserted at", markdown)
+        self.assertIn(
+            "runner validation: `performed=True; timestamp not-recorded", markdown
+        )
+        self.assertNotIn("validation recorded at", markdown)
 
     def test_missing_required_or_optional_record_remains_an_error(self) -> None:
         for index in (0, 2):
@@ -904,6 +1760,190 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 max_output_bytes=65536,
             )
 
+    def test_stored_validation_uses_private_process_temp_without_output_leak(
+        self,
+    ) -> None:
+        captured: list[Path] = []
+
+        def invoke(*args, **kwargs):
+            staging = Path(args[4])
+            captured.append(staging)
+            self.assertTrue(staging.exists())
+            if sys.platform != "win32":
+                self.assertEqual(staging.stat().st_mode & 0o077, 0)
+            return run_pinned_ae_framework_manifest(*args, **kwargs)
+
+        with mock.patch(
+            "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
+            side_effect=invoke,
+        ):
+            validate_package(ROOT, self.success_expected)
+        self.assertEqual(len(captured), 1)
+        staging = captured[0]
+        self.assertTrue(staging.name.startswith("private-match-ae-native-validation-"))
+        self.assertFalse(staging.exists())
+
+        json_bytes = canonicalize(self.success_expected) + b"\n"
+        markdown_bytes = render_markdown(self.success_expected).encode("utf-8")
+        output_set = canonicalize(
+            build_output_set(ROOT, self.success_expected, json_bytes, markdown_bytes)
+        )
+        encoded_path = str(staging).encode("utf-8")
+        for output in (json_bytes, markdown_bytes, output_set):
+            self.assertNotIn(encoded_path, output)
+
+    def test_stored_validation_ignores_repository_local_codex_symlinks(self) -> None:
+        projection = self.success_expected["native_ae_summary_projection"]
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            scenarios: list[tuple[str, Path, Path]] = []
+
+            outside_a = base / "outside-a"
+            outside_a.mkdir()
+            (outside_a / "sentinel").write_text("untouched", encoding="utf-8")
+            root_a = base / "repo-a"
+            root_a.mkdir()
+            (root_a / ".codex-local").symlink_to(outside_a, target_is_directory=True)
+            scenarios.append(("codex-local-symlink", root_a, outside_a))
+
+            outside_b = base / "outside-b"
+            outside_b.mkdir()
+            (outside_b / "sentinel").write_text("untouched", encoding="utf-8")
+            root_b = base / "repo-b"
+            (root_b / ".codex-local").mkdir(parents=True)
+            (root_b / ".codex-local/tmp").symlink_to(
+                outside_b, target_is_directory=True
+            )
+            scenarios.append(("tmp-symlink", root_b, outside_b))
+
+            root_c = base / "repo-c"
+            local_tmp = root_c / ".codex-local/tmp"
+            local_tmp.mkdir(parents=True)
+            (local_tmp / "sentinel").write_text("untouched", encoding="utf-8")
+            scenarios.append(("preexisting-content", root_c, local_tmp))
+
+            for name, fake_root, sentinel_root in scenarios:
+                captured: list[Path] = []
+
+                def invoke(*args, **_kwargs):
+                    captured.append(Path(args[4]))
+                    return copy.deepcopy(projection)
+
+                with (
+                    self.subTest(name=name),
+                    mock.patch(
+                        "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
+                        side_effect=invoke,
+                    ),
+                ):
+                    _, result = recompute_native_projection_from_assurance_package(
+                        fake_root, self.success_expected, self.profile
+                    )
+                    self.assertEqual(result, projection)
+                self.assertEqual(len(captured), 1)
+                self.assertFalse(captured[0].is_relative_to(fake_root))
+                self.assertFalse(captured[0].exists())
+                self.assertEqual(
+                    (sentinel_root / "sentinel").read_text(encoding="utf-8"),
+                    "untouched",
+                )
+                self.assertEqual(
+                    sorted(path.name for path in sentinel_root.iterdir()), ["sentinel"]
+                )
+
+    def test_stored_validation_temp_cleans_all_failure_paths_and_bounds_errors(
+        self,
+    ) -> None:
+        failures = (
+            ("native-schema", AssuranceIntegrationError("native Schema is invalid")),
+            ("nonzero", AssuranceIntegrationError("native process failed")),
+            ("timeout", subprocess.TimeoutExpired(["node"], 1)),
+            ("output-bound", AssuranceIntegrationError("native output exceeded")),
+        )
+        for name, failure in failures:
+            captured: list[Path] = []
+
+            def fail(*args, failure=failure, **_kwargs):
+                captured.append(Path(args[4]))
+                raise failure
+
+            with (
+                self.subTest(name=name),
+                mock.patch(
+                    "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
+                    side_effect=fail,
+                ),
+                self.assertRaisesRegex(
+                    AssuranceIntegrationError, "stored native recomputation failed"
+                ) as raised,
+            ):
+                recompute_native_projection_from_assurance_package(
+                    ROOT, self.success_expected, self.profile
+                )
+            self.assertEqual(len(captured), 1)
+            self.assertFalse(captured[0].exists())
+            self.assertNotIn(str(captured[0]), str(raised.exception))
+
+        captured = []
+
+        def unexpected(*args, **_kwargs):
+            staging = Path(args[4])
+            captured.append(staging)
+            raise RuntimeError(f"unexpected failure at {staging}")
+
+        with (
+            mock.patch(
+                "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
+                side_effect=unexpected,
+            ),
+            self.assertRaisesRegex(
+                AssuranceIntegrationError, "stored native recomputation failed"
+            ) as raised,
+        ):
+            recompute_native_projection_from_assurance_package(
+                ROOT, self.success_expected, self.profile
+            )
+        self.assertFalse(captured[0].exists())
+        self.assertNotIn(str(captured[0]), str(raised.exception))
+
+    def test_projection_mismatch_cleans_temp_and_malformed_package_creates_none(
+        self,
+    ) -> None:
+        captured: list[Path] = []
+        projection = copy.deepcopy(
+            self.success_expected["native_ae_summary_projection"]
+        )
+        projection["summary"]["warningCount"] += 1
+
+        def mismatch(*args, **_kwargs):
+            captured.append(Path(args[4]))
+            return projection
+
+        with (
+            mock.patch(
+                "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
+                side_effect=mismatch,
+            ),
+            self.assertRaisesRegex(
+                AssuranceIntegrationError,
+                "native ae projection does not match embedded producer input",
+            ),
+        ):
+            validate_package(ROOT, self.success_expected)
+        self.assertEqual(len(captured), 1)
+        self.assertFalse(captured[0].exists())
+
+        malformed = copy.deepcopy(self.success_expected)
+        malformed.pop("evidence_records")
+        with (
+            mock.patch(
+                "scripts.ae_framework_adapter.tempfile.TemporaryDirectory"
+            ) as temporary,
+            self.assertRaises(AssuranceIntegrationError),
+        ):
+            validate_package(ROOT, malformed)
+        temporary.assert_not_called()
+
     def test_native_subprocess_uses_fixed_arguments_no_shell_and_allowlisted_environment(
         self,
     ) -> None:
@@ -1020,12 +2060,12 @@ class AeAssuranceNegativeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
             staging = Path(temp)
             with mock.patch(
-                "scripts.ae_framework_adapter._run_native",
+                "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
                 return_value=baseline_projection,
             ):
                 baseline = build_assurance_package(ROOT, self.success, staging)
             with mock.patch(
-                "scripts.ae_framework_adapter._run_native",
+                "scripts.ae_framework_adapter.run_pinned_ae_framework_manifest",
                 return_value=changed_projection,
             ):
                 changed = build_assurance_package(ROOT, self.success, staging)
@@ -1290,6 +2330,14 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 validate_output_directory(ROOT, mutated)
             package = read_strict_json(base / "first" / JSON_NAME)
         self.assertEqual(package["artifact_status"], "private-candidate")
+        self.assertEqual(package["input_producer_package"], candidate)
+        self.assertEqual(
+            package["input_producer_package_digest"], candidate["package_digest"]
+        )
+        self.assertEqual(
+            package["validation_provenance"]["producer_package_digest"],
+            candidate["package_digest"],
+        )
         self.assertEqual(package["human_approval"]["state"], "required-not-provided")
         self.assertFalse(package["human_approval"]["reviewer_identity_verified"])
         self.assertFalse(package["lifecycle_boundary"]["public_export_eligible"])
@@ -1379,6 +2427,22 @@ class AeAssuranceNegativeTests(unittest.TestCase):
                 ),
             )
         validate_package(ROOT, package)
+
+        changed = copy.deepcopy(package)
+        embedded = changed["input_producer_package"]
+        binding = embedded["tool_bindings"][0]
+        binding["version"] = "0.9.0"
+        binding["binding_digest"] = tool_binding_digest(binding)
+        embedded["records"][0]["tool_version"] = binding["version"]
+        embedded["package_digest"] = artifact_digest(
+            PRODUCER_PACKAGE_DOMAIN, embedded, "package_digest"
+        )
+        changed["input_producer_package_digest"] = embedded["package_digest"]
+        changed["validation_provenance"]["producer_package_digest"] = embedded[
+            "package_digest"
+        ]
+        changed = self._result(lambda _: None, source=changed)
+        self._assert_rebound_output_rejected(changed)
 
     def test_same_implementation_lineage_blocks_without_status_rewrite(self) -> None:
         candidate = self._private_candidate()

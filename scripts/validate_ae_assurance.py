@@ -45,9 +45,7 @@ try:
         NATIVE_PROJECTION_DOMAIN,
         NATIVE_INPUT_MANIFEST_DOMAIN,
         load_authority,
-        load_protocol_authority,
         load_schemas,
-        protocol_authority_binding,
         verify_fixture_catalog,
     )
     from canonical_json import domain_digest, file_digest, strict_loads
@@ -89,9 +87,7 @@ except ImportError:  # pragma: no cover
         NATIVE_PROJECTION_DOMAIN,
         NATIVE_INPUT_MANIFEST_DOMAIN,
         load_authority,
-        load_protocol_authority,
         load_schemas,
-        protocol_authority_binding,
         verify_fixture_catalog,
     )
     from scripts.canonical_json import domain_digest, file_digest, strict_loads
@@ -114,8 +110,6 @@ def validate_judgment_approval_boundary(
 
 def validate_package(root: Path, package: dict[str, Any]) -> None:
     pin, inventory, profile = load_authority(root)
-    protocol_authority = load_protocol_authority(root)
-    expected_protocol_binding = protocol_authority_binding(protocol_authority)
     schemas = load_schemas(root)
     registry = build_schema_registry(schemas.values())
     validate_schema_instance(package, schemas["package"], registry=registry)
@@ -123,6 +117,7 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
     ordered_bindings = validate_producer_package(
         root, producer_package, inventory, profile
     )
+    expected_protocol_binding = producer_package["protocol_conformance_authority"]
     expected_surfaces = derive_assurance_surfaces_from_producer_package(
         root,
         producer_package,

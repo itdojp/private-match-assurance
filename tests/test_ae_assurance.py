@@ -312,6 +312,18 @@ class AeAssuranceFixtureTests(unittest.TestCase):
             observed, {"pass", "fail", "skip", "unsupported", "timeout", "tool-error"}
         )
 
+    def test_stored_validation_reuses_embedded_protocol_binding(self) -> None:
+        self.assertNotIn("load_protocol_authority", validate_package.__code__.co_names)
+        self.assertNotIn(
+            "protocol_authority_binding", validate_package.__code__.co_names
+        )
+        with mock.patch(
+            "scripts.ae_framework_adapter.load_protocol_authority",
+            wraps=load_protocol_authority,
+        ) as authority_loader:
+            validate_package(ROOT, self.packages["success"])
+        authority_loader.assert_called_once_with(ROOT)
+
     def test_success_and_optional_absence_are_satisfied_without_approval(self) -> None:
         for name in ("success", "optional-unavailable"):
             package = self.packages[name]

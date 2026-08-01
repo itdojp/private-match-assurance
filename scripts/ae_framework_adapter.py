@@ -221,9 +221,16 @@ def validate_producer_package(
             "producer Protocol/conformance authority does not match"
         )
     created_at = _parse_time(package["created_at"])
-    validated_at = _parse_time(package["validation_event"]["validated_at"])
-    if validated_at < created_at:
-        raise AssuranceIntegrationError("producer validation precedes package creation")
+    validation_event = package["validation_event"]
+    if validation_event["timestamp_source"] != "producer-supplied-digest-bound":
+        raise AssuranceIntegrationError(
+            "producer validation timestamp source is unavailable"
+        )
+    producer_asserted_at = _parse_time(validation_event["validated_at"])
+    if producer_asserted_at < created_at:
+        raise AssuranceIntegrationError(
+            "producer validation assertion precedes package creation"
+        )
     if package["mode"] == "fixture-test" and package["artifact_status"] != "test-only":
         raise AssuranceIntegrationError("fixture mode artifact status does not match")
     if package["mode"] == "private-candidate" and any(
@@ -319,9 +326,9 @@ def validate_producer_package(
             raise AssuranceIntegrationError(
                 "producer completion follows package creation"
             )
-        if completed_at > validated_at:
+        if completed_at > producer_asserted_at:
             raise AssuranceIntegrationError(
-                "producer validation precedes record completion"
+                "producer validation assertion precedes record completion"
             )
         if (
             record["protocol_suite_digest"]
@@ -410,7 +417,7 @@ def _evidence_record(
     package_digest: str,
     subject: dict[str, Any],
     protocol_binding: dict[str, Any],
-    validated_at: str,
+    producer_asserted_at: str,
     *,
     required: bool,
 ) -> dict[str, Any]:
@@ -429,6 +436,7 @@ def _evidence_record(
         "test_only": record["test_only"],
         "retention_classification": record["retention_classification"],
         "public_export_eligibility": False,
+        "validation_timestamp_source": "producer-supplied-digest-bound",
     }
     evidence_type = TYPE_TO_EVIDENCE[record["producer_type"]]
     if evidence_type == "conformance":
@@ -459,7 +467,7 @@ def _evidence_record(
             },
             {
                 "state": "validated",
-                "recorded_at": validated_at,
+                "recorded_at": producer_asserted_at,
                 "review_digest": package_digest,
             },
         ],
@@ -566,7 +574,7 @@ _native_manifest = build_native_manifest_from_producer_package
 
 
 def _native_projection(
-    summary: dict[str, Any], *, validated_generated_at: str
+    summary: dict[str, Any], *, deterministic_reference_at: str
 ) -> dict[str, Any]:
     try:
         native_generated_at = dt.datetime.fromisoformat(
@@ -577,10 +585,10 @@ def _native_projection(
     if (
         native_generated_at.tzinfo is None
         or native_generated_at.utcoffset() != dt.timedelta(0)
-        or native_generated_at != _parse_time(validated_generated_at)
+        or native_generated_at != _parse_time(deterministic_reference_at)
     ):
         raise AssuranceIntegrationError(
-            "native generated-at does not match validation event"
+            "native generated-at does not match deterministic reference"
         )
     claims = [
         {
@@ -598,7 +606,8 @@ def _native_projection(
     ]
     return {
         "schema_version": "assurance-summary/v1-safe-projection",
-        "generated_at": validated_generated_at,
+        "deterministic_reference_at": deterministic_reference_at,
+        "deterministic_reference_source": "producer-supplied-digest-bound",
         "summary": summary["summary"],
         "lane_coverage": summary["laneCoverage"],
         "claims": claims,
@@ -675,7 +684,7 @@ def _run_bounded_process(
 def run_pinned_ae_framework_manifest(
     root: Path,
     native_manifest_value: dict[str, Any],
-    generated_at: str,
+    deterministic_reference_at: str,
     profile: dict[str, Any],
     staging: Path,
 ) -> dict[str, Any]:
@@ -725,7 +734,7 @@ def run_pinned_ae_framework_manifest(
         "--evidence-manifest",
         str(native_manifest.resolve()),
         "--generated-at",
-        generated_at,
+        deterministic_reference_at,
         "--output-json",
         str(native_json.resolve()),
         "--output-md",
@@ -766,7 +775,9 @@ def run_pinned_ae_framework_manifest(
         native_schemas[-1],
         registry=build_schema_registry(native_schemas),
     )
-    projection = _native_projection(native, validated_generated_at=generated_at)
+    projection = _native_projection(
+        native, deterministic_reference_at=deterministic_reference_at
+    )
     if any(pattern.search(str(projection)) for pattern in PRIVATE_TEXT_PATTERNS):
         raise AssuranceIntegrationError(
             "native safe projection contains a private value"
@@ -811,7 +822,9 @@ def recompute_native_projection_from_assurance_package(
             projection = run_pinned_ae_framework_manifest(
                 root,
                 native_manifest,
-                package["validation_provenance"]["validated_at"],
+                package["validation_provenance"]["producer_validation_event"][
+                    "asserted_at"
+                ],
                 profile,
                 staging,
             )
@@ -949,7 +962,17 @@ def derive_assurance_surfaces_from_producer_package(
         counts[record["status"]] += 1
     producer_gate = _producer_gate_judgment(required, optional, counts)
     validation_provenance = {
-        "validated_at": producer_package["validation_event"]["validated_at"],
+        "producer_validation_event": {
+            "asserted_at": producer_package["validation_event"]["validated_at"],
+            "timestamp_source": producer_package["validation_event"][
+                "timestamp_source"
+            ],
+        },
+        "runner_validation": {
+            "performed": True,
+            "recorded_at": None,
+            "timestamp_status": "not-recorded-for-deterministic-offline-execution",
+        },
         "producer_package_created_at": producer_package["created_at"],
         "producer_package_digest": producer_digest,
         "integration_profile_digest": profile["profile_digest"],
@@ -1141,6 +1164,8 @@ def build_assurance_package(
             ),
             "Native ae-framework warnings remain visible and do not rewrite producer statuses.",
             "Embedding proves internal producer-to-Assurance consistency but does not independently authenticate producer metadata.",
+            "Producer validation time is a supplied digest-bound assertion, not runner execution time.",
+            "Runner validation is performed but its wall-clock time is not recorded in deterministic output.",
         ],
         "lifecycle_boundary": {
             "maximum_lifecycle": "validated",

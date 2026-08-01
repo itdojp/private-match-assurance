@@ -264,15 +264,21 @@
       "$ref": "https://itdo.jp/schemas/private-match/assurance/private-match-protocol-authorities.v0.1.schema.json#/$defs/binding"
     },
     "validation_event": {
+      "description": "A producer-supplied, digest-bound event asserted before runner execution. It is not the Assurance runner's validation timestamp.",
       "additionalProperties": false,
       "properties": {
+        "timestamp_source": {
+          "const": "producer-supplied-digest-bound"
+        },
         "validated_at": {
+          "description": "Canonical UTC time asserted by the producer package; the runner does not represent it as runner execution time.",
           "format": "date-time",
           "type": "string"
         }
       },
       "required": [
-        "validated_at"
+        "validated_at",
+        "timestamp_source"
       ],
       "type": "object"
     }

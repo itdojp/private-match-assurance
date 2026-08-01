@@ -206,12 +206,23 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
     expected_validation_provenance = expected_surfaces["validation_provenance"]
     if validation_provenance != expected_validation_provenance:
         raise AssuranceIntegrationError("validation provenance binding does not match")
-    validated_at = _parse_time(validation_provenance["validated_at"])
+    producer_validation_event = validation_provenance["producer_validation_event"]
+    producer_asserted_at = _parse_time(producer_validation_event["asserted_at"])
     producer_created_at = _parse_time(
         validation_provenance["producer_package_created_at"]
     )
-    if validated_at < producer_created_at:
-        raise AssuranceIntegrationError("validation precedes producer package creation")
+    if producer_asserted_at < producer_created_at:
+        raise AssuranceIntegrationError(
+            "producer validation assertion precedes producer package creation"
+        )
+    if validation_provenance["runner_validation"] != {
+        "performed": True,
+        "recorded_at": None,
+        "timestamp_status": "not-recorded-for-deterministic-offline-execution",
+    }:
+        raise AssuranceIntegrationError(
+            "runner validation provenance is not the deterministic boundary"
+        )
 
     external_by_role = {
         item["tool_role_id"]: item for item in package["external_tool_inventory"]
@@ -310,8 +321,12 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
             raise AssuranceIntegrationError("Evidence tool binding does not match")
         started_at = _parse_time(record["started_at"])
         completed_at = _parse_time(record["completed_at"])
-        if not (started_at <= completed_at <= producer_created_at <= validated_at):
-            raise AssuranceIntegrationError("Evidence validation chronology is invalid")
+        if not (
+            started_at <= completed_at <= producer_created_at <= producer_asserted_at
+        ):
+            raise AssuranceIntegrationError(
+                "Evidence producer validation chronology is invalid"
+            )
         if record["lifecycle_history"] != [
             {
                 "state": "collected",
@@ -320,7 +335,7 @@ def validate_package(root: Path, package: dict[str, Any]) -> None:
             },
             {
                 "state": "validated",
-                "recorded_at": validation_provenance["validated_at"],
+                "recorded_at": producer_validation_event["asserted_at"],
                 "review_digest": package["input_producer_package_digest"],
             },
         ]:

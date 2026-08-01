@@ -140,17 +140,21 @@ native kind `proof-check`; `model-derived` remains only a source classification.
 A future `model-check` producer contract must validate the existing typed
 bounded model-check surface rather than invent synthetic bounds.
 
-### Completion timestamp versus digest-bound validation event
+### Completion timestamp, producer assertion, and runner validation
 
 Using record completion as the validation time allowed a lifecycle to claim
 that a later producer-package digest had already been reviewed. Draft 0.1
-therefore requires a producer-supplied, digest-bound validation event and
+therefore requires a producer-supplied, digest-bound validation assertion and
 enforces `started_at <= completed_at <= package.created_at <= validated_at`.
-The same `validated_at` is used in Evidence lifecycle history, package
-validation provenance, generated Markdown, and the pinned native command's
-`generated-at` argument. This timestamp is deterministic and bound, but it is
-not externally timestamp-attested; private-candidate timestamp authority is a
-private process concern.
+That assertion is used in the producer-side Evidence lifecycle and as the
+pinned native command's deterministic reference, but it is not labeled as the
+current runner's validation time. Runner validation is a separate closed
+surface: it records that validation was performed and deliberately records no
+wall-clock value (`not-recorded-for-deterministic-offline-execution`). This
+choice preserves byte-identical offline output without converting a
+caller-controlled time or wall clock into a reproducible authority. Neither
+surface is externally timestamp-attested; private-candidate time attestation
+remains a future private process concern.
 
 ### Required versus optional tool absence
 

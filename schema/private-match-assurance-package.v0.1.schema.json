@@ -357,7 +357,8 @@
       "additionalProperties": false,
       "required": [
         "schema_version",
-        "generated_at",
+        "deterministic_reference_at",
+        "deterministic_reference_source",
         "summary",
         "lane_coverage",
         "claims",
@@ -367,9 +368,13 @@
         "schema_version": {
           "const": "assurance-summary/v1-safe-projection"
         },
-        "generated_at": {
+        "deterministic_reference_at": {
+          "description": "Producer-supplied deterministic reference passed to the pinned native command; not runner execution time.",
           "type": "string",
           "format": "date-time"
+        },
+        "deterministic_reference_source": {
+          "const": "producer-supplied-digest-bound"
         },
         "summary": {
           "type": "object",
@@ -865,13 +870,47 @@
           "pattern": "^sha256:[0-9a-f]{64}$",
           "type": "string"
         },
-        "validated_at": {
-          "format": "date-time",
-          "type": "string"
+        "producer_validation_event": {
+          "additionalProperties": false,
+          "properties": {
+            "asserted_at": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "timestamp_source": {
+              "const": "producer-supplied-digest-bound"
+            }
+          },
+          "required": [
+            "asserted_at",
+            "timestamp_source"
+          ],
+          "type": "object"
+        },
+        "runner_validation": {
+          "additionalProperties": false,
+          "properties": {
+            "performed": {
+              "const": true
+            },
+            "recorded_at": {
+              "type": "null"
+            },
+            "timestamp_status": {
+              "const": "not-recorded-for-deterministic-offline-execution"
+            }
+          },
+          "required": [
+            "performed",
+            "recorded_at",
+            "timestamp_status"
+          ],
+          "type": "object"
         }
       },
       "required": [
-        "validated_at",
+        "producer_validation_event",
+        "runner_validation",
         "producer_package_created_at",
         "producer_package_digest",
         "integration_profile_digest",

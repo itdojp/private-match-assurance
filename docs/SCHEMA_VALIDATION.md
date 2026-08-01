@@ -82,9 +82,12 @@ Validation also requires the closed Protocol/conformance authority
 for every producer record and the suite digest at index 0 of every exact
 five-element Evidence input-digest surface, the proof-check-only
 formal mapping, and exact timestamp ordering
-`started_at <= completed_at <= created_at <= validated_at`. The validation
-event is digest-bound and reused as the native generation time, but is not an
-external timestamp attestation.
+`started_at <= completed_at <= created_at <= validated_at`. This is explicitly
+a producer-supplied, digest-bound assertion, not the current runner execution
+time. The native CLI receives it only as a deterministic reference required by
+the pinned interface. Runner validation is separately recorded as performed
+with no wall-clock timestamp in deterministic output; neither timestamp
+surface is external attestation.
 
 Previously generated Draft 0.1 Assurance packages without
 `input_producer_package` intentionally fail the corrected closed Schema. They

@@ -278,13 +278,20 @@ manifest. The runner does
 not add current time, random IDs, hostnames, usernames, local paths,
 environment values, network metadata, or floating tool versions. The producer
 package supplies a closed `validation_event.validated_at` after every record
-completion and package creation. It is included in the producer-package digest,
-copied to every Evidence `validated` lifecycle transition and package validation
-provenance, and supplied to the pinned ae-framework as `generated-at`.
+completion and package creation, together with the fixed source
+`producer-supplied-digest-bound`. It is a producer assertion included in the
+producer-package digest, copied to every producer-side Evidence `validated`
+lifecycle transition, and supplied to the pinned ae-framework only as its
+deterministic reference for the required `generated-at` argument.
 Chronology is enforced as `started_at <= completed_at <= created_at <=
-validated_at`. The timestamp is digest-bound but not externally timestamp-
-attested; fixture values are synthetic, while private-candidate timestamp
-authority remains a private execution/process responsibility.
+validated_at`. It is not represented as the Assurance runner's execution time.
+The package records runner validation as performed while setting its runner
+timestamp to null with status
+`not-recorded-for-deterministic-offline-execution`. This explicit separation
+preserves byte-identical offline output without inventing a clock fact. The
+producer assertion is digest-bound but not externally timestamp-attested;
+fixture values are synthetic, while private-candidate timestamp authority and
+external runner-time attestation remain private process responsibilities.
 
 ## Private/public boundary
 

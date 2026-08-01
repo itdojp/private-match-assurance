@@ -200,7 +200,10 @@ def _build_input(
         "artifact_status": "test-only",
         "mode": "fixture-test",
         "created_at": "2030-01-01T00:01:00Z",
-        "validation_event": {"validated_at": "2030-01-01T00:02:00Z"},
+        "validation_event": {
+            "validated_at": "2030-01-01T00:02:00Z",
+            "timestamp_source": "producer-supplied-digest-bound",
+        },
         "source_revision_digest": _synthetic_digest(f"{slug}:source"),
         "subject": {
             "type": "source-revision",

@@ -400,7 +400,14 @@ class AeAssuranceFixtureTests(unittest.TestCase):
         self.assertIn("## Native ae-framework judgment", markdown)
         self.assertIn("missing-spec-derived-evidence", markdown)
         self.assertIn("visible-nonblocking", markdown)
-        self.assertIn("validation recorded at: `2030-01-01T00:02:00Z`", markdown)
+        self.assertIn(
+            "producer validation asserted at: `2030-01-01T00:02:00Z`", markdown
+        )
+        self.assertIn(
+            "runner validation: `performed=True; timestamp not-recorded-for-deterministic-offline-execution`",
+            markdown,
+        )
+        self.assertNotIn("validation recorded at:", markdown)
         self.assertIn("conformance suite: `private-match-core/0.1`", markdown)
         self.assertIn("## Embedded producer package", markdown)
         self.assertIn("package ID: `PMAE-PRODUCER-SUCCESS-V0-1`", markdown)
@@ -423,12 +430,30 @@ class AeAssuranceFixtureTests(unittest.TestCase):
                 self.assertEqual(producer["protocol_conformance_authority"], authority)
                 self.assertEqual(package["protocol_conformance_authority"], authority)
                 self.assertEqual(
-                    package["validation_provenance"]["validated_at"],
+                    package["validation_provenance"]["producer_validation_event"][
+                        "asserted_at"
+                    ],
                     producer["validation_event"]["validated_at"],
                 )
                 self.assertEqual(
-                    package["native_ae_summary_projection"]["generated_at"],
+                    package["native_ae_summary_projection"][
+                        "deterministic_reference_at"
+                    ],
                     producer["validation_event"]["validated_at"],
+                )
+                self.assertEqual(
+                    package["native_ae_summary_projection"][
+                        "deterministic_reference_source"
+                    ],
+                    "producer-supplied-digest-bound",
+                )
+                self.assertEqual(
+                    package["validation_provenance"]["runner_validation"],
+                    {
+                        "performed": True,
+                        "recorded_at": None,
+                        "timestamp_status": "not-recorded-for-deterministic-offline-execution",
+                    },
                 )
                 conformance = next(
                     record
@@ -1291,7 +1316,10 @@ class AeAssuranceNegativeTests(unittest.TestCase):
             lambda value: value.update(
                 {
                     "created_at": "2030-01-01T00:00:00Z",
-                    "validation_event": {"validated_at": "2030-01-01T00:00:00Z"},
+                    "validation_event": {
+                        "validated_at": "2030-01-01T00:00:00Z",
+                        "timestamp_source": "producer-supplied-digest-bound",
+                    },
                 }
             ),
             lambda value: value["records"][0].__setitem__(
@@ -1300,6 +1328,10 @@ class AeAssuranceNegativeTests(unittest.TestCase):
             lambda value: value["validation_event"].__setitem__(
                 "validated_at", "2030-01-01T00:02:00+00:00"
             ),
+            lambda value: value["validation_event"].__setitem__(
+                "timestamp_source", "runner-clock"
+            ),
+            lambda value: value["validation_event"].pop("timestamp_source"),
             lambda value: value.pop("validation_event"),
         )
         for mutation in mutations:
@@ -1328,6 +1360,41 @@ class AeAssuranceNegativeTests(unittest.TestCase):
             "Assurance surfaces do not match embedded producer package",
         ):
             validate_package(ROOT, value)
+
+    def test_producer_time_is_separate_from_runner_validation_time(self) -> None:
+        candidate = self._private_candidate()
+        candidate["validation_event"]["validated_at"] = "2030-01-01T00:02:00Z"
+        candidate["package_digest"] = artifact_digest(
+            PRODUCER_PACKAGE_DOMAIN, candidate, "package_digest"
+        )
+        with tempfile.TemporaryDirectory(dir=ROOT / ".codex-local/tmp") as temp:
+            package = build_assurance_package(ROOT, candidate, Path(temp))
+        self.assertEqual(
+            package["validation_provenance"]["producer_validation_event"],
+            {
+                "asserted_at": "2030-01-01T00:02:00Z",
+                "timestamp_source": "producer-supplied-digest-bound",
+            },
+        )
+        self.assertEqual(
+            package["validation_provenance"]["runner_validation"],
+            {
+                "performed": True,
+                "recorded_at": None,
+                "timestamp_status": "not-recorded-for-deterministic-offline-execution",
+            },
+        )
+        self.assertNotIn("generated_at", package["native_ae_summary_projection"])
+        self.assertEqual(
+            package["native_ae_summary_projection"]["deterministic_reference_at"],
+            candidate["validation_event"]["validated_at"],
+        )
+        markdown = render_markdown(package)
+        self.assertIn("producer validation asserted at", markdown)
+        self.assertIn(
+            "runner validation: `performed=True; timestamp not-recorded", markdown
+        )
+        self.assertNotIn("validation recorded at", markdown)
 
     def test_missing_required_or_optional_record_remains_an_error(self) -> None:
         for index in (0, 2):

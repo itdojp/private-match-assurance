@@ -319,15 +319,19 @@
       "additionalProperties": false,
       "required": [
         "deterministic",
-        "timestamp_source",
+        "native_reference_time_source",
+        "runner_validation_time_status",
         "network"
       ],
       "properties": {
         "deterministic": {
           "const": true
         },
-        "timestamp_source": {
-          "const": "producer-validation-event"
+        "native_reference_time_source": {
+          "const": "producer-supplied-digest-bound"
+        },
+        "runner_validation_time_status": {
+          "const": "not-recorded-for-deterministic-offline-execution"
         },
         "network": {
           "const": "forbidden"

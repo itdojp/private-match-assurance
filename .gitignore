@@ -3,4 +3,6 @@ __pycache__/
 .venv/
 node_modules/
 artifacts/
+!tests/fixtures/public-release/expected/active/artifacts/
+!tests/fixtures/public-release/expected/active/artifacts/*.json
 .codex-local/

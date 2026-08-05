@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-release-dsse-envelope.v0.1.schema.json",
+  "title": "Closed DSSE fixture envelope v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "payload",
+    "payloadType",
+    "signatures",
+    "signingProfile"
+  ],
+  "properties": {
+    "payload": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+    },
+    "payloadType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "signatures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "keyid",
+          "sig"
+        ],
+        "properties": {
+          "keyid": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "sig": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "signingProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "algorithm"
+      ],
+      "properties": {
+        "id": {
+          "const": "private-match-public-release-signing"
+        },
+        "version": {
+          "const": "0.1"
+        },
+        "algorithm": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

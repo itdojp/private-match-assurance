@@ -120,3 +120,17 @@ Claims should expire when any of the following changes materially:
 ## Known limitations
 
 Every release report must include a prominent limitations section. Absence of a limitation entry is not evidence that the limitation does not exist.
+
+## Signed fixture evaluation
+
+The public release verifier evaluates claims after signature, trust,
+structure, digest, lifecycle, and report checks. Signature validity is only a
+mechanical origin/integrity result relative to the supplied trust input.
+
+The closed result vocabulary is `supported`,
+`supported-with-assumptions`, `not-supported`, `not-evaluated`, and
+`invalid-reference`. All referenced Evidence, Assumptions, and Limitations must
+exist and share the reviewed subject where applicable. Only `pass` Evidence can
+support a positive result. Unsupported or unavailable Evidence remains visible
+and never becomes `pass`. The fixture claims only mechanical properties and do
+not state Product security, correctness, certification, or readiness.

@@ -82,6 +82,18 @@ If evidence or a claim is later found invalid:
 4. retain an auditable history where safe
 5. issue replacement evidence or mark the claim unsupported
 
+Signed Draft 0.1 bundles are immutable. Correction or supersession requires a
+new release and bundle revision with an explicit predecessor reference, plus a
+status-authority-signed entry for the old release. Withdrawal is also a
+status-authority decision and never requires the affected release key to revoke
+itself. Without trusted timestamps, compromise revocation applies
+conservatively to every signature under the affected key.
+
+The committed release and status keys are separate synthetic fixture keys.
+Neither is a production authority. Trust-root authenticity, status-set
+distribution, production key custody, signing, and publication approval remain
+external human-governed decisions.
+
 ## Private evidence references
 
 Public manifests may refer to private evidence by digest and approved metadata. They must not create an inference that the public can independently inspect private content.

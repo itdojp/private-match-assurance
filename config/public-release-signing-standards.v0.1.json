@@ -1,0 +1,54 @@
+{
+  "schema_version": "0.1",
+  "artifact_status": "test-only",
+  "authority_id": "private-match-public-release-signing-standards",
+  "standards": [
+    {
+      "standard_id": "RFC-8785",
+      "version": "June-2020",
+      "official_source": "https://www.rfc-editor.org/rfc/rfc8785.html",
+      "reviewed_identifier": "RFC 8785",
+      "profile_usage": "Exact JSON Canonicalization Scheme bytes for release manifests and deterministic bundle JSON.",
+      "limitations": [
+        "JCS does not authenticate the parsed semantic content."
+      ]
+    },
+    {
+      "standard_id": "RFC-8032",
+      "version": "January-2017",
+      "official_source": "https://www.rfc-editor.org/rfc/rfc8032.html",
+      "reviewed_identifier": "RFC 8032",
+      "profile_usage": "PureEdDSA Ed25519 fixture signatures and RFC Section 7.1 test vectors.",
+      "limitations": [
+        "Production key generation and custody are outside this fixture profile."
+      ]
+    },
+    {
+      "standard_id": "DSSE",
+      "version": "1.0.2",
+      "official_source": "https://github.com/secure-systems-lab/dsse/blob/440901313676fedd0e31f16125c302b0df81e006/protocol.md",
+      "reviewed_identifier": "v1.0.2",
+      "repository": "secure-systems-lab/dsse",
+      "tag": "v1.0.2",
+      "commit": "440901313676fedd0e31f16125c302b0df81e006",
+      "profile_usage": "DSSEv1 PAE and JSON envelope for manifest and status payload signatures.",
+      "limitations": [
+        "DSSE deliberately leaves trust and key management out of band."
+      ]
+    },
+    {
+      "standard_id": "NODE-CRYPTO",
+      "version": "22.22.2",
+      "official_source": "https://nodejs.org/download/release/v22.22.2/docs/api/crypto.html",
+      "reviewed_identifier": "Node.js v22.22.2 crypto",
+      "profile_usage": "Built-in Ed25519 sign/verify primitive; no additional crypto dependency.",
+      "limitations": [
+        "Draft v0.1 is tested only with the exact reviewed Node.js line."
+      ]
+    }
+  ],
+  "limitations": [
+    "Standards authority is pinned for offline use; no specification is fetched during generation or verification."
+  ],
+  "standards_digest": "sha256:23f40e849828820fbb2e3f4fdc27e214b601e644c0f4ad382ff2c81d41eb8913"
+}

@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-release-fixture-catalog.v0.1.schema.json",
+  "title": "Public release fixture catalog v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "fixtures",
+    "negative_cases",
+    "catalog_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "const": "test-only"
+    },
+    "fixtures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fixture_id",
+          "artifact_status",
+          "bundle_path",
+          "trust_root_digest",
+          "release_key_id",
+          "status_key_id",
+          "manifest_digest",
+          "release_signature_digest",
+          "status_set_digest",
+          "status_signature_digest",
+          "output_set_digest",
+          "verification_result_digest",
+          "expected_overall",
+          "verification_time"
+        ],
+        "properties": {
+          "fixture_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "artifact_status": {
+            "const": "test-only"
+          },
+          "bundle_path": {
+            "type": "string",
+            "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\\\\\)(?!.*(?:^|/)\\.\\.?/)(?!.*//)[A-Za-z0-9._/-]+$"
+          },
+          "trust_root_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "release_key_id": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "status_key_id": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "manifest_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "release_signature_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "status_set_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "status_signature_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "output_set_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "verification_result_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "expected_overall": {
+            "type": "string",
+            "minLength": 1
+          },
+          "verification_time": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "negative_cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "expected_overall",
+          "expected_exit_code"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expected_overall": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expected_exit_code": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          }
+        }
+      },
+      "minItems": 20
+    },
+    "catalog_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

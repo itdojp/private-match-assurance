@@ -170,6 +170,22 @@ or CI success does not create that approval.
 
 Only `pass` supports a positive statement about that specific check. Other statuses remain visible.
 
+## Signed public release projection
+
+Draft 0.1 public release bundles reuse the A1 Claim, Assumption, Evidence, and
+Known Limitation Schemas without rewriting status or lifecycle. A manifest
+binds canonical complete record-set digests, each Evidence record digest, and
+each non-null Evidence output digest. Its DSSE signature protects those exact
+RFC 8785 manifest bytes, but signature validity is evaluated separately from
+claim support.
+
+For signed fixture verification, a `fail` Evidence reference makes the claim
+`not-supported`; `skip`, `unsupported`, `timeout`, or `tool-error` makes it
+`not-evaluated`; and a missing, duplicate, digest-inconsistent, or
+subject-inconsistent reference is `invalid-reference`. A supported signature
+does not promote any of these outcomes. See
+[`SIGNED_PUBLIC_RELEASE.md`](SIGNED_PUBLIC_RELEASE.md).
+
 The Draft ae-framework integration preserves this exact vocabulary for every
 producer and external tool. It does not collapse or promote statuses: in
 particular, `skip` and `unsupported` do not become `pass`, while `timeout` and

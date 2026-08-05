@@ -44,6 +44,39 @@ jobs:
           python scripts/ae_assurance_implementation.py --check
           python scripts/validate_ae_assurance.py
           python scripts/generate_ae_assurance_fixtures.py --check
+      - name: Validate signed public release fixture offline
+        env:
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: localhost,127.0.0.1
+          GITHUB_TOKEN: ''
+        run: |
+          python scripts/public_release_implementation.py --check
+          python scripts/generate_public_release_fixture.py --check
+          python scripts/validate_public_release.py
+          mkdir -p .codex-local/tmp/public-release-ci
+          python scripts/generate_public_release_fixture.py \
+            --output-root .codex-local/tmp/public-release-ci \
+            --output bundle-a
+          python scripts/generate_public_release_fixture.py \
+            --output-root .codex-local/tmp/public-release-ci \
+            --output bundle-b
+          diff --no-dereference --recursive \
+            .codex-local/tmp/public-release-ci/bundle-a \
+            .codex-local/tmp/public-release-ci/bundle-b
+          python scripts/verify_public_release_bundle.py \
+            --bundle-root .codex-local/tmp/public-release-ci/bundle-a \
+            --trust-root tests/fixtures/public-release/trust/fixture-trust-root.v0.1.json \
+            --status-set .codex-local/tmp/public-release-ci/bundle-a/status/public-release-status-set.v0.1.json \
+            --status-signature .codex-local/tmp/public-release-ci/bundle-a/status/public-release-status-set.dsse.v0.1.json \
+            --verification-time 2026-08-02T00:00:00Z \
+            --output-json .codex-local/tmp/public-release-ci/verification.json \
+            --output-md .codex-local/tmp/public-release-ci/verification.md
+          cmp .codex-local/tmp/public-release-ci/verification.json \
+            tests/fixtures/public-release/expected/active/reports/public-release-report.v0.1.json
+          cmp .codex-local/tmp/public-release-ci/verification.md \
+            tests/fixtures/public-release/expected/active/reports/public-release-report.v0.1.md
       - name: Compile and lint Python
         run: |
           python -m compileall -q scripts tests

@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-release-trust-root.v0.1.schema.json",
+  "title": "Public release trust root v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "trust_domain_id",
+    "trust_root_revision",
+    "permitted_signing_profiles",
+    "keys",
+    "limitations",
+    "trust_root_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "const": "test-only"
+    },
+    "trust_domain_id": {
+      "const": "itdo-private-match-assurance-fixture-v0.1"
+    },
+    "trust_root_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "permitted_signing_profiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "const": "private-match-public-release-signing"
+          },
+          "version": {
+            "const": "0.1"
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "keys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key_id",
+          "usage",
+          "algorithm",
+          "public_key_format",
+          "public_key",
+          "public_key_digest",
+          "valid_from",
+          "valid_until",
+          "status",
+          "limitations"
+        ],
+        "properties": {
+          "key_id": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "usage": {
+            "enum": [
+              "release-signing",
+              "release-status-signing"
+            ]
+          },
+          "algorithm": {
+            "const": "ed25519-rfc8032"
+          },
+          "public_key_format": {
+            "const": "spki-der-base64"
+          },
+          "public_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+          },
+          "public_key_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "valid_from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "valid_until": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "revoked",
+              "expired",
+              "superseded"
+            ]
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        }
+      },
+      "minItems": 2
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "trust_root_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

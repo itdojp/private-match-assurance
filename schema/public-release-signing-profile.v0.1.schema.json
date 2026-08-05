@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-release-signing-profile.v0.1.schema.json",
+  "title": "Public release fixture signing profile v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "mode",
+    "profile_id",
+    "profile_version",
+    "manifest_schema",
+    "release_manifest_payload_type",
+    "release_status_payload_type",
+    "dsse_version",
+    "algorithm",
+    "key_id_derivation",
+    "public_key_encoding",
+    "release_signing_usage",
+    "status_signing_usage",
+    "usage_separation_required",
+    "fixture_only",
+    "fixture_key_paths",
+    "trust_domain_id",
+    "verifier_runtime",
+    "production_signing",
+    "product_release_signing",
+    "environment_selected_key",
+    "arbitrary_private_key_path",
+    "kms_uri",
+    "hsm_uri",
+    "ci_secret",
+    "automation_permitted",
+    "limitations",
+    "profile_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "const": "test-only"
+    },
+    "mode": {
+      "const": "fixture-test"
+    },
+    "profile_id": {
+      "const": "private-match-public-release-signing"
+    },
+    "profile_version": {
+      "const": "0.1"
+    },
+    "manifest_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "path"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uri"
+        },
+        "version": {
+          "const": "0.1"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\\\\\)(?!.*(?:^|/)\\.\\.?/)(?!.*//)[A-Za-z0-9._/-]+$"
+        }
+      }
+    },
+    "release_manifest_payload_type": {
+      "const": "application/vnd.itdo.private-match.assurance-release-manifest.v0.1+json"
+    },
+    "release_status_payload_type": {
+      "const": "application/vnd.itdo.private-match.assurance-release-status-set.v0.1+json"
+    },
+    "dsse_version": {
+      "const": "1.0.2"
+    },
+    "algorithm": {
+      "const": "ed25519-rfc8032"
+    },
+    "key_id_derivation": {
+      "const": "sha256-spki-der"
+    },
+    "public_key_encoding": {
+      "const": "spki-der-base64"
+    },
+    "release_signing_usage": {
+      "const": "release-signing"
+    },
+    "status_signing_usage": {
+      "const": "release-status-signing"
+    },
+    "usage_separation_required": {
+      "const": true
+    },
+    "fixture_only": {
+      "const": true
+    },
+    "fixture_key_paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_private",
+        "release_public",
+        "status_private",
+        "status_public"
+      ],
+      "properties": {
+        "release_private": {
+          "const": "tests/fixtures/public-release/keys/release-private.pem"
+        },
+        "release_public": {
+          "const": "tests/fixtures/public-release/keys/release-public.pem"
+        },
+        "status_private": {
+          "const": "tests/fixtures/public-release/keys/status-private.pem"
+        },
+        "status_public": {
+          "const": "tests/fixtures/public-release/keys/status-public.pem"
+        }
+      }
+    },
+    "trust_domain_id": {
+      "const": "itdo-private-match-assurance-fixture-v0.1"
+    },
+    "verifier_runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "python",
+        "node",
+        "network",
+        "verification_time"
+      ],
+      "properties": {
+        "python": {
+          "const": "3.12"
+        },
+        "node": {
+          "const": "22.22.2"
+        },
+        "network": {
+          "const": "forbidden"
+        },
+        "verification_time": {
+          "const": "required"
+        }
+      }
+    },
+    "production_signing": {
+      "const": "unsupported"
+    },
+    "product_release_signing": {
+      "const": "unsupported"
+    },
+    "environment_selected_key": {
+      "const": false
+    },
+    "arbitrary_private_key_path": {
+      "const": false
+    },
+    "kms_uri": {
+      "const": false
+    },
+    "hsm_uri": {
+      "const": false
+    },
+    "ci_secret": {
+      "const": false
+    },
+    "automation_permitted": {
+      "const": false
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "profile_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

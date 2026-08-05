@@ -95,6 +95,25 @@ must be regenerated from the original producer package. The embedded object is
 safe metadata under the existing producer Schema; it is not proof that the
 producer-supplied metadata is externally authentic.
 
+Validate the signed public fixture authorities, exact implementation manifest,
+RFC 8032 vector, key allowlist, deterministic bytes, DSSE signatures, external
+trust root, status set, claim policy, reports, and output-set closure:
+
+```bash
+python scripts/public_release_implementation.py --check
+python scripts/generate_public_release_fixture.py --check
+python scripts/validate_public_release.py
+python -m unittest tests.test_public_release
+```
+
+All signed-bundle JSON is strict UTF-8 and exact RFC 8785 JCS. The offline
+verifier requires a caller-supplied canonical UTC time and explicit trust/status
+inputs. It rejects duplicate keys, noncanonical bytes, symlinks, extra/missing
+paths, stale digests, unsupported algorithms, untrusted or revoked keys,
+invalid lifecycle state, inconsistent reports, and unsupported claim
+references. The JSON verification result is authoritative; bounded stderr is
+not Evidence.
+
 Validate repository assurance records:
 
 ```bash

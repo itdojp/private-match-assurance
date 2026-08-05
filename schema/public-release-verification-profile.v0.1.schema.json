@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-release-verification-profile.v0.1.schema.json",
+  "title": "Offline public release verification profile v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "profile_id",
+    "profile_version",
+    "trust_input",
+    "network",
+    "verification_time",
+    "stages",
+    "claim_result_vocabulary",
+    "overall_status_vocabulary",
+    "exit_codes",
+    "revocation_policy",
+    "limitations",
+    "profile_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "const": "test-only"
+    },
+    "profile_id": {
+      "const": "private-match-public-release-verification"
+    },
+    "profile_version": {
+      "const": "0.1"
+    },
+    "trust_input": {
+      "const": "external-public-signing-trust-root"
+    },
+    "network": {
+      "const": "forbidden"
+    },
+    "verification_time": {
+      "const": "required"
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "signature",
+          "trust",
+          "structure",
+          "digest-closure",
+          "report-linkage",
+          "release-lifecycle",
+          "claims",
+          "overall"
+        ]
+      },
+      "minItems": 8,
+      "uniqueItems": true
+    },
+    "claim_result_vocabulary": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "supported",
+          "supported-with-assumptions",
+          "not-supported",
+          "not-evaluated",
+          "invalid-reference"
+        ]
+      },
+      "minItems": 5,
+      "uniqueItems": true
+    },
+    "overall_status_vocabulary": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 15,
+      "uniqueItems": true
+    },
+    "exit_codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "classification"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "classification": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "minItems": 6
+    },
+    "revocation_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trusted_timestamp",
+        "compromise_applies_to_all_key_signatures",
+        "bundle_signed_at_is_not_trusted_time"
+      ],
+      "properties": {
+        "trusted_timestamp": {
+          "const": false
+        },
+        "compromise_applies_to_all_key_signatures": {
+          "const": true
+        },
+        "bundle_signed_at_is_not_trusted_time": {
+          "const": true
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "profile_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

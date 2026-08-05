@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-release-status-entry.v0.1.schema.json",
+  "title": "Public release status entry v0.1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_type",
+        "key_id",
+        "usage",
+        "status",
+        "effective_at",
+        "reason_code",
+        "replacement_key_id",
+        "compromise_indicator",
+        "status_entry_digest"
+      ],
+      "properties": {
+        "entry_type": {
+          "const": "key-status"
+        },
+        "key_id": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "usage": {
+          "enum": [
+            "release-signing",
+            "release-status-signing"
+          ]
+        },
+        "status": {
+          "enum": [
+            "active",
+            "revoked",
+            "expired",
+            "superseded"
+          ]
+        },
+        "effective_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "replacement_key_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compromise_indicator": {
+          "type": "boolean"
+        },
+        "status_entry_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_type",
+        "release_id",
+        "bundle_manifest_digest",
+        "state",
+        "effective_at",
+        "reason_code",
+        "replacement_release_id",
+        "replacement_bundle_digest",
+        "notice_digest",
+        "status_entry_digest"
+      ],
+      "properties": {
+        "entry_type": {
+          "const": "release-status"
+        },
+        "release_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bundle_manifest_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "state": {
+          "enum": [
+            "active",
+            "superseded",
+            "corrected",
+            "withdrawn",
+            "expired"
+          ]
+        },
+        "effective_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "replacement_release_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "replacement_bundle_digest": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "notice_digest": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status_entry_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,582 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-release-bundle-manifest.v0.1.schema.json",
+  "title": "Immutable signed public release manifest v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "record_type",
+    "artifact_status",
+    "bundle_id",
+    "release",
+    "created_at",
+    "valid_from",
+    "valid_until",
+    "subject",
+    "source_revision_digest",
+    "release_artifact_digest",
+    "protocol",
+    "conformance",
+    "ae_framework",
+    "export_profile",
+    "assurance_profile",
+    "record_sets",
+    "artifacts",
+    "reports",
+    "content_files",
+    "content_tree_digest",
+    "signing",
+    "supersedes",
+    "corrects",
+    "limitations",
+    "manifest_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "record_type": {
+      "const": "public-release-bundle-manifest"
+    },
+    "artifact_status": {
+      "const": "test-only"
+    },
+    "bundle_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_id",
+        "version",
+        "bundle_revision",
+        "channel"
+      ],
+      "properties": {
+        "release_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bundle_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "channel": {
+          "const": "fixture"
+        }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "valid_from": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "valid_until": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "identifier",
+        "version",
+        "digest"
+      ],
+      "properties": {
+        "type": {
+          "const": "build-artifact"
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "source_revision_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "release_artifact_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit",
+        "identifier",
+        "version",
+        "semantic_digest"
+      ],
+      "properties": {
+        "repository": {
+          "const": "itdojp/private-match-protocol"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "semantic_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "conformance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identifier",
+        "version",
+        "semantic_digest",
+        "complete_suite_tree_digest"
+      ],
+      "properties": {
+        "identifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "semantic_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "complete_suite_tree_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "ae_framework": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit",
+        "package",
+        "pin_digest"
+      ],
+      "properties": {
+        "repository": {
+          "const": "itdojp/ae-framework"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "package": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "version"
+          ],
+          "properties": {
+            "name": {
+              "const": "ae-framework"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "pin_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "export_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "digest"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "const": "0.1"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "assurance_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "digest"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "const": "0.1"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "record_sets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_set_digest",
+        "assumption_set_digest",
+        "evidence_set_digest",
+        "limitation_set_digest",
+        "evidence_record_digests",
+        "evidence_output_digests"
+      ],
+      "properties": {
+        "claim_set_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "assumption_set_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "evidence_set_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "limitation_set_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "evidence_record_digests": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "uniqueItems": true
+        },
+        "evidence_output_digests": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release",
+        "sbom",
+        "build_provenance"
+      ],
+      "properties": {
+        "release": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "digest"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\\\\\)(?!.*(?:^|/)\\.\\.?/)(?!.*//)[A-Za-z0-9._/-]+$"
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        "sbom": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "digest"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\\\\\)(?!.*(?:^|/)\\.\\.?/)(?!.*//)[A-Za-z0-9._/-]+$"
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        "build_provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "digest"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\\\\\)(?!.*(?:^|/)\\.\\.?/)(?!.*//)[A-Za-z0-9._/-]+$"
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "reports": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "json",
+        "markdown"
+      ],
+      "properties": {
+        "json": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "report_model_digest"
+          ],
+          "properties": {
+            "path": {
+              "const": "reports/public-release-report.v0.1.json"
+            },
+            "report_model_digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        "markdown": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "report_model_digest"
+          ],
+          "properties": {
+            "path": {
+              "const": "reports/public-release-report.v0.1.md"
+            },
+            "report_model_digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "content_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "file_digest",
+          "size",
+          "role"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\\\\\)(?!.*(?:^|/)\\.\\.?/)(?!.*//)[A-Za-z0-9._/-]+$"
+          },
+          "file_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8388608
+          },
+          "role": {
+            "enum": [
+              "release-record",
+              "release-artifact"
+            ]
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "content_tree_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "signing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_id",
+        "profile_version",
+        "profile_digest",
+        "verification_profile_digest",
+        "payload_type",
+        "algorithm",
+        "release_signing_key_id",
+        "trust_domain_id"
+      ],
+      "properties": {
+        "profile_id": {
+          "const": "private-match-public-release-signing"
+        },
+        "profile_version": {
+          "const": "0.1"
+        },
+        "profile_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "verification_profile_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "payload_type": {
+          "const": "application/vnd.itdo.private-match.assurance-release-manifest.v0.1+json"
+        },
+        "algorithm": {
+          "const": "ed25519-rfc8032"
+        },
+        "release_signing_key_id": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "trust_domain_id": {
+          "const": "itdo-private-match-assurance-fixture-v0.1"
+        }
+      }
+    },
+    "supersedes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_id",
+        "bundle_manifest_digest"
+      ],
+      "properties": {
+        "release_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bundle_manifest_digest": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "corrects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_id",
+        "bundle_manifest_digest"
+      ],
+      "properties": {
+        "release_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bundle_manifest_digest": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "manifest_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

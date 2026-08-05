@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-release-verifier-implementation.v0.1.schema.json",
+  "title": "Public release verifier implementation manifest v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "implementation_id",
+    "implementation_version",
+    "runtimes",
+    "files",
+    "exact_path_count",
+    "bindings",
+    "implementation_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "const": "test-only"
+    },
+    "implementation_id": {
+      "const": "private-match-public-release-verifier"
+    },
+    "implementation_version": {
+      "const": "0.1"
+    },
+    "runtimes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "python",
+        "node",
+        "pnpm"
+      ],
+      "properties": {
+        "python": {
+          "const": "3.12"
+        },
+        "node": {
+          "const": "22.22.2"
+        },
+        "pnpm": {
+          "const": "10.34.5"
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "digest",
+          "role"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\\\\\)(?!.*(?:^|/)\\.\\.?/)(?!.*//)[A-Za-z0-9._/-]+$"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "role": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "exact_path_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "standards_digest",
+        "signing_profile_digest",
+        "verification_profile_digest",
+        "trust_root_digest",
+        "fixture_catalog_digest",
+        "package_digest",
+        "pnpm_lock_digest",
+        "pnpm_workspace_digest",
+        "python_build_lock_digest",
+        "python_dev_lock_digest"
+      ],
+      "properties": {
+        "standards_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "signing_profile_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "verification_profile_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "trust_root_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "fixture_catalog_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "package_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "pnpm_lock_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "pnpm_workspace_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "python_build_lock_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "python_dev_lock_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "implementation_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

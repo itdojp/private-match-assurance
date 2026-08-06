@@ -17,6 +17,7 @@
     "overall_status_vocabulary",
     "exit_codes",
     "revocation_policy",
+    "status_authority",
     "limitations",
     "profile_digest"
   ],
@@ -49,14 +50,15 @@
           "signature",
           "trust",
           "structure",
-          "digest-closure",
-          "report-linkage",
+          "bundle-digest-closure",
+          "status-chain-digest-closure",
+          "static-report-linkage",
           "release-lifecycle",
           "claims",
           "overall"
         ]
       },
-      "minItems": 8,
+      "minItems": 9,
       "uniqueItems": true
     },
     "claim_result_vocabulary": {
@@ -123,6 +125,18 @@
         "bundle_signed_at_is_not_trusted_time": {
           "const": true
         }
+      }
+    },
+    "status_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "complete_chain_required", "latest_declared_revision_applied", "global_freshness_proven", "status_signing_key_authority"],
+      "properties": {
+        "input": {"const": "external-signed-status-chain"},
+        "complete_chain_required": {"const": true},
+        "latest_declared_revision_applied": {"const": true},
+        "global_freshness_proven": {"const": false},
+        "status_signing_key_authority": {"const": "external-trust-root-only"}
       }
     },
     "limitations": {

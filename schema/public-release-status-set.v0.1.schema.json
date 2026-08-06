@@ -125,7 +125,7 @@
           }
         }
       },
-      "minItems": 2
+      "minItems": 1
     },
     "release_statuses": {
       "type": "array",

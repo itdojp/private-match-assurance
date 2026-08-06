@@ -9,8 +9,7 @@ from pathlib import Path
 try:
     from public_release import (
         EXPECTED_BUNDLE_PATH,
-        STATUS_ENVELOPE_PATH,
-        STATUS_SET_PATH,
+        EXPECTED_STATUS_CHAINS_PATH,
         TRUST_ROOT_PATH,
         VERIFICATION_TIME,
         PublicReleaseError,
@@ -25,8 +24,7 @@ try:
 except ImportError:  # pragma: no cover
     from scripts.public_release import (
         EXPECTED_BUNDLE_PATH,
-        STATUS_ENVELOPE_PATH,
-        STATUS_SET_PATH,
+        EXPECTED_STATUS_CHAINS_PATH,
         TRUST_ROOT_PATH,
         VERIFICATION_TIME,
         PublicReleaseError,
@@ -58,8 +56,7 @@ def main() -> int:
             root,
             bundle,
             root / TRUST_ROOT_PATH,
-            bundle / STATUS_SET_PATH,
-            bundle / STATUS_ENVELOPE_PATH,
+            root / EXPECTED_STATUS_CHAINS_PATH / "active",
             VERIFICATION_TIME,
         )
         if (

@@ -392,7 +392,7 @@
           ],
           "properties": {
             "path": {
-              "const": "reports/public-release-report.v0.1.json"
+              "const": "reports/public-release-content-report.v0.1.json"
             },
             "report_model_digest": {
               "type": "string",
@@ -409,7 +409,7 @@
           ],
           "properties": {
             "path": {
-              "const": "reports/public-release-report.v0.1.md"
+              "const": "reports/public-release-content-report.v0.1.md"
             },
             "report_model_digest": {
               "type": "string",

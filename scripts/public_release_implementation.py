@@ -50,6 +50,11 @@ except ImportError:  # pragma: no cover
 
 IMPLEMENTATION_PATHS = (
     ".github/workflows/assurance-schema.yml",
+    "REUSE.toml",
+    "docs/SIGNED_PUBLIC_RELEASE.md",
+    "docs/OFFLINE_PUBLIC_VERIFICATION.md",
+    "docs/KEY_AND_REVOCATION_BOUNDARY.md",
+    "docs/decisions/ADR-0004-SIGNED-PUBLIC-RELEASE.md",
     "package.json",
     "pnpm-lock.yaml",
     "pnpm-workspace.yaml",
@@ -64,9 +69,12 @@ IMPLEMENTATION_PATHS = (
     "schema/public-release-trust-root.v0.1.schema.json",
     "schema/public-release-status-entry.v0.1.schema.json",
     "schema/public-release-status-set.v0.1.schema.json",
+    "schema/public-release-status-chain-manifest.v0.1.schema.json",
+    "schema/public-release-status-chain-output-set.v0.1.schema.json",
     "schema/public-release-dsse-envelope.v0.1.schema.json",
     "schema/public-release-bundle-manifest.v0.1.schema.json",
     "schema/public-release-output-set.v0.1.schema.json",
+    "schema/public-release-content-report.v0.1.schema.json",
     "schema/public-release-verification-result.v0.1.schema.json",
     "schema/public-release-fixture-catalog.v0.1.schema.json",
     "schema/public-release-verifier-implementation.v0.1.schema.json",
@@ -95,20 +103,39 @@ def _role(path: str) -> str:
         return "schema"
     if path.startswith("scripts/"):
         return "source"
+    if path.startswith("docs/"):
+        return "narrative"
     if path.startswith("tests/"):
         return "fixture-or-test"
     if path.startswith("profiles/"):
         return "profile"
     if path.startswith("config/"):
         return "standards-authority"
+    if path == "REUSE.toml":
+        return "license-metadata"
     return "dependency-lock"
 
 
 def build_manifest(root: Path) -> dict:
-    if len(IMPLEMENTATION_PATHS) != len(set(IMPLEMENTATION_PATHS)):
+    paths = list(IMPLEMENTATION_PATHS)
+    catalog = read_strict_json(root / FIXTURE_CATALOG_PATH)
+    fixture_roots = [catalog["release_bundle"]["bundle_path"]]
+    fixture_roots.extend(entry["chain_root"] for entry in catalog["status_chains"])
+    for relative_root in fixture_roots:
+        directory = root / relative_root
+        paths.extend(
+            path.relative_to(root).as_posix()
+            for path in sorted(directory.rglob("*"))
+            if path.is_file()
+        )
+    for entry in catalog["status_chains"]:
+        paths.extend(
+            [entry["verification_json_path"], entry["verification_markdown_path"]]
+        )
+    if len(paths) != len(set(paths)):
         raise PublicReleaseError("implementation path set contains a duplicate")
     files = []
-    for relative in sorted(IMPLEMENTATION_PATHS):
+    for relative in sorted(paths):
         path = resolve_regular_file(root, relative, max_bytes=8 * 1024 * 1024)
         files.append(
             {
@@ -121,7 +148,6 @@ def build_manifest(root: Path) -> dict:
     signing = read_strict_json(root / SIGNING_PROFILE_PATH)
     verification = read_strict_json(root / VERIFICATION_PROFILE_PATH)
     trust = read_strict_json(root / TRUST_ROOT_PATH)
-    catalog = read_strict_json(root / FIXTURE_CATALOG_PATH)
     manifest = {
         "schema_version": "0.1",
         "artifact_status": "test-only",

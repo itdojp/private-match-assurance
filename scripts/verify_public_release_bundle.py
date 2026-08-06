@@ -27,8 +27,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bundle-root", required=True, type=Path)
     parser.add_argument("--trust-root", required=True, type=Path)
-    parser.add_argument("--status-set", required=True, type=Path)
-    parser.add_argument("--status-signature", required=True, type=Path)
+    parser.add_argument("--status-chain-root", required=True, type=Path)
     parser.add_argument("--verification-time", required=True)
     parser.add_argument("--output-json", required=True, type=Path)
     parser.add_argument("--output-md", required=True, type=Path)
@@ -42,14 +41,13 @@ def main() -> int:
             root,
             args.bundle_root,
             args.trust_root,
-            args.status_set,
-            args.status_signature,
+            args.status_chain_root,
             args.verification_time,
         )
         created.append(atomic_write_new_output(args.output_json, canonicalize(result)))
         markdown = (
             render_verification_markdown(result)
-            if exit_code == 0
+            if "release" in result
             else (
                 "# Private Match public release verification\n\n"
                 f"- Overall: `{result['overall']['status']}`\n"

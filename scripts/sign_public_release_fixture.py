@@ -8,28 +8,28 @@ import os
 from pathlib import Path
 
 try:
-    from ae_assurance_common import resolve_regular_file
+    from ae_assurance_common import read_strict_json, resolve_regular_file
     from canonical_json import canonicalize, strict_loads
     from public_release import (
         EXPECTED_BUNDLE_PATH,
         MANIFEST_PATH,
         RELEASE_PAYLOAD_TYPE,
         STATUS_PAYLOAD_TYPE,
-        STATUS_SET_PATH,
+        STATUS_CHAIN_MANIFEST_PATH,
         PublicReleaseError,
         atomic_write_new_output,
         sign_fixture_dsse,
         validate_fixture_catalog,
     )
 except ImportError:  # pragma: no cover
-    from scripts.ae_assurance_common import resolve_regular_file
+    from scripts.ae_assurance_common import read_strict_json, resolve_regular_file
     from scripts.canonical_json import canonicalize, strict_loads
     from scripts.public_release import (
         EXPECTED_BUNDLE_PATH,
         MANIFEST_PATH,
         RELEASE_PAYLOAD_TYPE,
         STATUS_PAYLOAD_TYPE,
-        STATUS_SET_PATH,
+        STATUS_CHAIN_MANIFEST_PATH,
         PublicReleaseError,
         atomic_write_new_output,
         sign_fixture_dsse,
@@ -46,15 +46,21 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    expected = (
-        f"{EXPECTED_BUNDLE_PATH}/{MANIFEST_PATH}"
-        if args.usage == "release-signing"
-        else f"{EXPECTED_BUNDLE_PATH}/{STATUS_SET_PATH}"
-    )
-    if args.input != expected or os.path.lexists(args.output):
+    catalog = validate_fixture_catalog(root)
+    permitted = {f"{EXPECTED_BUNDLE_PATH}/{MANIFEST_PATH}"}
+    if args.usage == "release-status-signing":
+        permitted = set()
+        for entry in catalog["status_chains"]:
+            chain = read_strict_json(
+                root / entry["chain_root"] / STATUS_CHAIN_MANIFEST_PATH
+            )
+            permitted.update(
+                f"{entry['chain_root']}/{revision['status_set_path']}"
+                for revision in chain["revisions"]
+            )
+    if args.input not in permitted or os.path.lexists(args.output):
         parser.error("fixture signer accepts only the catalogued fixture input")
     try:
-        validate_fixture_catalog(root)
         source = resolve_regular_file(root, args.input)
         value = strict_loads(source.read_bytes(), max_bytes=4 * 1024 * 1024)
         payload = canonicalize(value)

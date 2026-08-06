@@ -69,19 +69,24 @@ STATUS_KEY_ID = (
 )
 RELEASE_ID = "private-match-assurance-fixture-release-0.1.0"
 BUNDLE_ID = "PMA-PUBLIC-RELEASE-FIXTURE-V0-1"
-FIXTURE_ID = "PUBLIC-RELEASE-ACTIVE-V0-1"
+FIXTURE_ID = "PUBLIC-RELEASE-IMMUTABLE-V0-1"
 
 CREATED_AT = "2026-08-01T00:00:00Z"
 VALID_FROM = "2026-08-01T00:00:00Z"
 VALID_UNTIL = "2027-08-01T00:00:00Z"
-VERIFICATION_TIME = "2026-08-02T00:00:00Z"
+VERIFICATION_TIME = "2026-08-04T00:00:00Z"
 
 STANDARDS_PATH = "config/public-release-signing-standards.v0.1.json"
 SIGNING_PROFILE_PATH = "profiles/public-release-signing.v0.1.json"
 VERIFICATION_PROFILE_PATH = "profiles/public-release-verification.v0.1.json"
 TRUST_ROOT_PATH = "tests/fixtures/public-release/trust/fixture-trust-root.v0.1.json"
 FIXTURE_CATALOG_PATH = "tests/fixtures/public-release/fixture-catalog.v0.1.json"
-EXPECTED_BUNDLE_PATH = "tests/fixtures/public-release/expected/active"
+EXPECTED_FIXTURE_ROOT_PATH = "tests/fixtures/public-release/expected"
+EXPECTED_BUNDLE_PATH = f"{EXPECTED_FIXTURE_ROOT_PATH}/bundle"
+EXPECTED_STATUS_CHAINS_PATH = f"{EXPECTED_FIXTURE_ROOT_PATH}/status-chains"
+EXPECTED_VERIFICATION_RESULTS_PATH = (
+    f"{EXPECTED_FIXTURE_ROOT_PATH}/verification-results"
+)
 IMPLEMENTATION_MANIFEST_PATH = (
     "manifests/public-release-verifier-implementation.v0.1.json"
 )
@@ -92,10 +97,22 @@ FIXTURE_PRIVATE_KEY_PATHS = (
 
 MANIFEST_PATH = "manifest/public-release-bundle-manifest.v0.1.json"
 RELEASE_ENVELOPE_PATH = "signatures/public-release-manifest.dsse.v0.1.json"
-STATUS_SET_PATH = "status/public-release-status-set.v0.1.json"
-STATUS_ENVELOPE_PATH = "status/public-release-status-set.dsse.v0.1.json"
-REPORT_JSON_PATH = "reports/public-release-report.v0.1.json"
-REPORT_MD_PATH = "reports/public-release-report.v0.1.md"
+STATUS_SET_FILENAME = "public-release-status-set.v0.1.json"
+STATUS_ENVELOPE_FILENAME = "public-release-status-set.dsse.v0.1.json"
+STATUS_SET_PATH = f"revisions/0001/{STATUS_SET_FILENAME}"
+STATUS_ENVELOPE_PATH = f"revisions/0001/{STATUS_ENVELOPE_FILENAME}"
+STATUS_CHAIN_MANIFEST_PATH = (
+    "chain-manifest/public-release-status-chain-manifest.v0.1.json"
+)
+STATUS_CHAIN_OUTPUT_SET_PATH = "public-release-status-chain-output-set.v0.1.json"
+STATIC_REPORT_JSON_PATH = "reports/public-release-content-report.v0.1.json"
+STATIC_REPORT_MD_PATH = "reports/public-release-content-report.v0.1.md"
+VERIFICATION_RESULT_JSON_FILENAME = "public-release-verification-result.v0.1.json"
+VERIFICATION_RESULT_MD_FILENAME = "public-release-verification-result.v0.1.md"
+# Backwards-compatible source aliases inside this Draft branch. Both now name
+# immutable static content and are never verifier-output destinations.
+REPORT_JSON_PATH = STATIC_REPORT_JSON_PATH
+REPORT_MD_PATH = STATIC_REPORT_MD_PATH
 OUTPUT_SET_PATH = "public-release-output-set.v0.1.json"
 
 MAX_JSON_BYTES = 4 * 1024 * 1024
@@ -110,6 +127,11 @@ RECORD_SET_DOMAIN = "private-match-public-release-record-set/v0.1"
 STATUS_ENTRY_DOMAIN = "private-match-public-release-status-entry/v0.1"
 STATUS_ENTRY_SET_DOMAIN = "private-match-public-release-status-entry-set/v0.1"
 STATUS_SET_DOMAIN = "private-match-public-release-status-set/v0.1"
+STATUS_CHAIN_TREE_DOMAIN = "private-match-public-release-status-chain-tree/v0.1"
+STATUS_CHAIN_MANIFEST_DOMAIN = "private-match-public-release-status-chain-manifest/v0.1"
+STATUS_CHAIN_OUTPUT_SET_DOMAIN = (
+    "private-match-public-release-status-chain-output-set/v0.1"
+)
 TRUST_ROOT_DOMAIN = "private-match-public-release-trust-root/v0.1"
 REPORT_MODEL_DOMAIN = "private-match-public-release-report-model/v0.1"
 VERIFICATION_RESULT_DOMAIN = "private-match-public-release-verification-result/v0.1"
@@ -124,8 +146,54 @@ RELEASE_LIMITATIONS = [
     "Signature validity establishes origin and integrity only relative to the supplied trust root; it is not security certification.",
     "The supplied fixture trust root is an external verifier input whose authenticity is not established by the bundle.",
     "No trusted timestamp or transparency log is used; compromise revocation applies conservatively to all signatures under the affected key.",
+    "The verifier validates the complete supplied status chain but cannot prove that it is the globally latest distributed revision.",
     "Production signing, key custody, publication approval, and automated publication are unsupported in Draft 0.1.",
 ]
+
+STATUS_CHAIN_VARIANTS = {
+    "active": {
+        "latest_revision": 1,
+        "key_status": "active",
+        "release_state": "active",
+        "expected_overall": "verified-fixture-with-limitations",
+        "expected_exit_code": 0,
+    },
+    "revoked": {
+        "latest_revision": 2,
+        "key_status": "revoked",
+        "release_state": "active",
+        "expected_overall": "revoked-key",
+        "expected_exit_code": 3,
+    },
+    "withdrawn": {
+        "latest_revision": 2,
+        "key_status": "active",
+        "release_state": "withdrawn",
+        "expected_overall": "withdrawn-release",
+        "expected_exit_code": 4,
+    },
+    "superseded": {
+        "latest_revision": 2,
+        "key_status": "active",
+        "release_state": "superseded",
+        "expected_overall": "superseded-release",
+        "expected_exit_code": 4,
+    },
+    "corrected": {
+        "latest_revision": 2,
+        "key_status": "active",
+        "release_state": "corrected",
+        "expected_overall": "corrected-release",
+        "expected_exit_code": 4,
+    },
+    "expired": {
+        "latest_revision": 2,
+        "key_status": "active",
+        "release_state": "expired",
+        "expected_overall": "expired-release",
+        "expected_exit_code": 4,
+    },
+}
 
 CLAIM_RESULT_VALUES = (
     "supported",
@@ -159,9 +227,16 @@ PUBLIC_RELEASE_SCHEMAS = {
     "trust_root": "schema/public-release-trust-root.v0.1.schema.json",
     "status_entry": "schema/public-release-status-entry.v0.1.schema.json",
     "status_set": "schema/public-release-status-set.v0.1.schema.json",
+    "status_chain_manifest": (
+        "schema/public-release-status-chain-manifest.v0.1.schema.json"
+    ),
+    "status_chain_output_set": (
+        "schema/public-release-status-chain-output-set.v0.1.schema.json"
+    ),
     "dsse": "schema/public-release-dsse-envelope.v0.1.schema.json",
     "manifest": "schema/public-release-bundle-manifest.v0.1.schema.json",
     "output_set": "schema/public-release-output-set.v0.1.schema.json",
+    "content_report": "schema/public-release-content-report.v0.1.schema.json",
     "verification_result": (
         "schema/public-release-verification-result.v0.1.schema.json"
     ),
@@ -734,7 +809,11 @@ def build_status_set(
     notice_digest: str | None = None,
     previous_status_set_digest: str | None = None,
     revision: int = 1,
+    generated_at: str | None = None,
 ) -> dict[str, Any]:
+    timestamp = generated_at or (
+        CREATED_AT if revision == 1 else f"2026-08-{revision + 1:02d}T00:00:00Z"
+    )
     key_entries = [
         _status_entry(
             {
@@ -742,24 +821,12 @@ def build_status_set(
                 "key_id": RELEASE_KEY_ID,
                 "usage": "release-signing",
                 "status": release_key_status,
-                "effective_at": CREATED_AT,
+                "effective_at": timestamp,
                 "reason_code": release_key_reason,
                 "replacement_key_id": None,
                 "compromise_indicator": release_key_status == "revoked",
             }
-        ),
-        _status_entry(
-            {
-                "entry_type": "key-status",
-                "key_id": STATUS_KEY_ID,
-                "usage": "release-status-signing",
-                "status": "active",
-                "effective_at": CREATED_AT,
-                "reason_code": "fixture-status-authority-active",
-                "replacement_key_id": None,
-                "compromise_indicator": False,
-            }
-        ),
+        )
     ]
     release_entries = [
         _status_entry(
@@ -768,7 +835,7 @@ def build_status_set(
                 "release_id": RELEASE_ID,
                 "bundle_manifest_digest": "__MANIFEST_DIGEST__",
                 "state": release_state,
-                "effective_at": CREATED_AT,
+                "effective_at": timestamp,
                 "reason_code": f"fixture-release-{release_state}",
                 "replacement_release_id": replacement_release_id,
                 "replacement_bundle_digest": replacement_bundle_digest,
@@ -783,7 +850,7 @@ def build_status_set(
         "trust_domain_id": TRUST_DOMAIN,
         "status_set_id": "PMA-PUBLIC-RELEASE-STATUS-FIXTURE-V0-1",
         "revision": revision,
-        "generated_at": CREATED_AT,
+        "generated_at": timestamp,
         "previous_status_set_digest": previous_status_set_digest,
         "signing_key_id": STATUS_KEY_ID,
         "key_statuses": key_entries,
@@ -805,6 +872,14 @@ def finalize_status_set(
     result["entry_set_digest"] = domain_digest(STATUS_ENTRY_SET_DOMAIN, entries)
     result["status_set_digest"] = domain_digest(STATUS_SET_DOMAIN, result)
     return result
+
+
+def status_revision_set_path(revision: int) -> str:
+    return f"revisions/{revision:04d}/{STATUS_SET_FILENAME}"
+
+
+def status_revision_envelope_path(revision: int) -> str:
+    return f"revisions/{revision:04d}/{STATUS_ENVELOPE_FILENAME}"
 
 
 def _fixture_subject() -> dict[str, Any]:
@@ -1585,6 +1660,7 @@ def build_verification_report(
     report_model: dict[str, Any],
     status_set: dict[str, Any],
     *,
+    status_chain: dict[str, Any],
     overall_status: str = "verified-fixture-with-limitations",
     key_status: str = "active",
     release_state: str = "active",
@@ -1620,7 +1696,8 @@ def build_verification_report(
         "structure": {
             "schemas_valid": structure_valid,
             "canonical_json_valid": structure_valid,
-            "exact_path_set_valid": structure_valid,
+            "bundle_exact_path_set_valid": structure_valid,
+            "status_chain_exact_path_set_valid": structure_valid,
         },
         "digest_closure": {
             "manifest_digest_valid": digest_valid,
@@ -1629,11 +1706,12 @@ def build_verification_report(
             "record_set_digests_valid": digest_valid,
             "sbom_reference_valid": digest_valid,
             "provenance_reference_valid": digest_valid,
+            "status_chain_digests_valid": digest_valid,
         },
         "report_linkage": {
-            "json_report_valid": report_linkage_valid,
-            "markdown_report_valid": report_linkage_valid,
-            "report_content_matches_manifest": report_linkage_valid,
+            "static_json_report_valid": report_linkage_valid,
+            "static_markdown_report_valid": report_linkage_valid,
+            "static_report_content_matches_manifest": report_linkage_valid,
         },
         "release_lifecycle": {
             "state": release_state,
@@ -1644,6 +1722,7 @@ def build_verification_report(
             "expired": release_state == "expired",
             "status_set_digest": status_set["status_set_digest"],
         },
+        "status_chain": status_chain,
         "authorities": {
             "protocol": report_model["protocol"],
             "conformance": report_model["conformance"],
@@ -1675,6 +1754,53 @@ def build_verification_report(
     return report
 
 
+def render_content_markdown(report: dict[str, Any]) -> bytes:
+    """Render immutable release-content facts without current trust/lifecycle claims."""
+    release = report["release"]
+    lines = [
+        "# Private Match synthetic release content",
+        "",
+        "> Immutable synthetic test-only content. This is not a verification result or Product release approval.",
+        "",
+        "## Release content",
+        "",
+        f"- Release ID: `{release['release_id']}`",
+        f"- Version: `{release['version']}`",
+        f"- Channel: `{release['channel']}`",
+        f"- Bundle revision: `{release['bundle_revision']}`",
+        f"- Source revision digest: `{report['source_revision_digest']}`",
+        f"- Release artifact digest: `{report['release_artifact_digest']}`",
+        f"- SBOM digest: `{report['sbom_digest']}`",
+        f"- Build provenance digest: `{report['build_provenance_digest']}`",
+        "",
+        "## Declared authorities",
+        "",
+        f"- Protocol: `{report['protocol']['identifier']}` `{report['protocol']['version']}`",
+        f"- Protocol digest: `{report['protocol']['semantic_digest']}`",
+        f"- Conformance digest: `{report['conformance']['semantic_digest']}`",
+        "",
+        "## Evidence status counts",
+        "",
+    ]
+    for status, count in report["evidence_status_counts"].items():
+        lines.append(f"- `{status}`: {count}")
+    lines.extend(["", "## Declared claim support", ""])
+    for claim in report["claims"]["results"]:
+        lines.append(
+            f"- `{claim['claim_id']}`: `{claim['result']}` ({claim['reason_code']})"
+        )
+    lines.extend(["", "## Known limitations", ""])
+    for limitation in report["limitations"]:
+        lines.append(f"- {limitation}")
+    lines.extend(
+        [
+            "",
+            "Current signature validity, trust, key status, release lifecycle, verification time, and overall verification classification are intentionally absent.",
+        ]
+    )
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
 def render_verification_markdown(report: dict[str, Any]) -> bytes:
     release = report["release"]
     lines = [
@@ -1690,6 +1816,7 @@ def render_verification_markdown(report: dict[str, Any]) -> bytes:
         f"- Bundle revision: `{release['bundle_revision']}`",
         f"- Manifest digest: `{report['manifest_digest']}`",
         f"- Overall: `{report['overall']['status']}`",
+        f"- Verification time: `{report['verification_time']}`",
         "",
         "## Signature and trust",
         "",
@@ -1699,6 +1826,8 @@ def render_verification_markdown(report: dict[str, Any]) -> bytes:
         f"- Trust domain valid: `{str(report['trust']['trust_domain_valid']).lower()}`",
         f"- Key status: `{report['trust']['key_status']}`",
         f"- Release lifecycle: `{report['release_lifecycle']['state']}`",
+        f"- Selected status revision: `{report['status_chain']['latest_revision']}`",
+        f"- Status-chain manifest digest: `{report['status_chain']['chain_manifest_digest']}`",
         "",
         "## Authorities and artifacts",
         "",
@@ -1750,10 +1879,8 @@ def build_output_set_from_directory(bundle_root: Path) -> dict[str, Any]:
     role_map = {
         MANIFEST_PATH: "release-manifest",
         RELEASE_ENVELOPE_PATH: "release-signature",
-        STATUS_SET_PATH: "status-set",
-        STATUS_ENVELOPE_PATH: "status-signature",
-        REPORT_JSON_PATH: "verification-report-json",
-        REPORT_MD_PATH: "verification-report-markdown",
+        REPORT_JSON_PATH: "release-content-report-json",
+        REPORT_MD_PATH: "release-content-report-markdown",
     }
     files = []
     for path in sorted(bundle_root.rglob("*")):
@@ -1790,15 +1917,9 @@ def build_output_set_from_directory(bundle_root: Path) -> dict[str, Any]:
         "release_signature_digest": file_digest(
             (bundle_root / RELEASE_ENVELOPE_PATH).read_bytes()
         ),
-        "status_set_digest": read_strict_json(bundle_root / STATUS_SET_PATH)[
-            "status_set_digest"
-        ],
-        "status_signature_digest": file_digest(
-            (bundle_root / STATUS_ENVELOPE_PATH).read_bytes()
+        "static_report_model_digest": domain_digest(
+            REPORT_MODEL_DOMAIN, read_strict_json(bundle_root / REPORT_JSON_PATH)
         ),
-        "verification_result_digest": read_strict_json(bundle_root / REPORT_JSON_PATH)[
-            "verification_result_digest"
-        ],
     }
     output["output_set_digest"] = domain_digest(OUTPUT_SET_DOMAIN, output)
     return output
@@ -1829,22 +1950,12 @@ def build_fixture_bundle_values(root: Path) -> dict[str, Any]:
         root, RELEASE_PAYLOAD_TYPE, manifest_bytes, "release-signing"
     )
     validate_named_schema(envelope, "dsse", schemas)
-    status_set = finalize_status_set(build_status_set(), manifest["manifest_digest"])
-    validate_named_schema(status_set, "status_set", schemas)
-    status_bytes = canonicalize(status_set)
-    status_envelope = sign_fixture_dsse(
-        root, STATUS_PAYLOAD_TYPE, status_bytes, "release-status-signing"
-    )
-    validate_named_schema(status_envelope, "dsse", schemas)
-    report = build_verification_report(manifest, report_model, status_set)
-    validate_named_schema(report, "verification_result", schemas)
+    validate_named_schema(report_model, "content_report", schemas)
     values: dict[str, Any] = {
         MANIFEST_PATH: manifest,
         RELEASE_ENVELOPE_PATH: envelope,
-        STATUS_SET_PATH: status_set,
-        STATUS_ENVELOPE_PATH: status_envelope,
-        REPORT_JSON_PATH: report,
-        REPORT_MD_PATH: render_verification_markdown(report),
+        REPORT_JSON_PATH: report_model,
+        REPORT_MD_PATH: render_content_markdown(report_model),
     }
     for record in records.values():
         values[_record_relative(record)] = record
@@ -1868,6 +1979,194 @@ def generate_fixture_bundle(
         schemas = load_public_release_schemas(root)
         validate_named_schema(output_set, "output_set", schemas)
         atomic_write_file(staging / OUTPUT_SET_PATH, canonicalize(output_set))
+        os.replace(staging, target)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
+        raise
+    return target
+
+
+def build_status_chain_values(
+    root: Path, manifest_digest: str, variant: str
+) -> dict[str, Any]:
+    """Build one independently distributed signed status chain."""
+    if variant not in STATUS_CHAIN_VARIANTS:
+        raise PublicReleaseError("status-chain fixture variant is not catalogued")
+    policy = STATUS_CHAIN_VARIANTS[variant]
+    sets: list[dict[str, Any]] = []
+    first = finalize_status_set(
+        build_status_set(revision=1, generated_at=CREATED_AT), manifest_digest
+    )
+    sets.append(first)
+    if policy["latest_revision"] == 2:
+        state = policy["release_state"]
+        replacement = state in {"superseded", "corrected"}
+        second = finalize_status_set(
+            build_status_set(
+                release_state=state,
+                release_key_status=policy["key_status"],
+                release_key_reason=(
+                    "fixture-key-compromised"
+                    if policy["key_status"] == "revoked"
+                    else "fixture-key-active"
+                ),
+                replacement_release_id=(
+                    "private-match-assurance-fixture-release-0.2.0"
+                    if replacement
+                    else None
+                ),
+                replacement_bundle_digest=(
+                    "sha256:" + "9a" * 32 if replacement else None
+                ),
+                notice_digest=("sha256:" + "9b" * 32 if state == "withdrawn" else None),
+                previous_status_set_digest=first["status_set_digest"],
+                revision=2,
+                generated_at="2026-08-03T00:00:00Z",
+            ),
+            manifest_digest,
+        )
+        sets.append(second)
+    values: dict[str, Any] = {}
+    revisions: list[dict[str, Any]] = []
+    tree_files: list[dict[str, Any]] = []
+    for status_set in sets:
+        revision = status_set["revision"]
+        set_path = status_revision_set_path(revision)
+        envelope_path = status_revision_envelope_path(revision)
+        set_bytes = canonicalize(status_set)
+        envelope = sign_fixture_dsse(
+            root, STATUS_PAYLOAD_TYPE, set_bytes, "release-status-signing"
+        )
+        envelope_bytes = canonicalize(envelope)
+        values[set_path] = status_set
+        values[envelope_path] = envelope
+        revisions.append(
+            {
+                "revision": revision,
+                "generated_at": status_set["generated_at"],
+                "status_set_path": set_path,
+                "status_set_digest": status_set["status_set_digest"],
+                "status_set_file_digest": file_digest(set_bytes),
+                "status_signature_path": envelope_path,
+                "status_signature_digest": file_digest(envelope_bytes),
+                "previous_status_set_digest": status_set["previous_status_set_digest"],
+            }
+        )
+        tree_files.extend(
+            [
+                {
+                    "path": set_path,
+                    "file_digest": file_digest(set_bytes),
+                    "size": len(set_bytes),
+                    "role": "status-set",
+                },
+                {
+                    "path": envelope_path,
+                    "file_digest": file_digest(envelope_bytes),
+                    "size": len(envelope_bytes),
+                    "role": "status-signature",
+                },
+            ]
+        )
+    latest = sets[-1]
+    chain_manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "public-release-status-chain-manifest",
+        "artifact_status": ARTIFACT_STATUS,
+        "trust_domain_id": TRUST_DOMAIN,
+        "status_signing_profile": {
+            "id": "private-match-public-release-signing",
+            "version": SCHEMA_VERSION,
+            "algorithm": ALGORITHM,
+            "payload_type": STATUS_PAYLOAD_TYPE,
+        },
+        "status_signing_key_id": STATUS_KEY_ID,
+        "revisions": revisions,
+        "latest_revision": latest["revision"],
+        "latest_status_set_digest": latest["status_set_digest"],
+        "generated_at": latest["generated_at"],
+        "chain_tree_digest": domain_digest(
+            STATUS_CHAIN_TREE_DOMAIN,
+            sorted(tree_files, key=lambda item: item["path"]),
+        ),
+        "limitations": [
+            "The verifier cannot prove that a supplied offline status chain is the globally latest distributed revision."
+        ],
+    }
+    chain_manifest["chain_manifest_digest"] = detached_digest(
+        STATUS_CHAIN_MANIFEST_DOMAIN, chain_manifest, "chain_manifest_digest"
+    )
+    values[STATUS_CHAIN_MANIFEST_PATH] = chain_manifest
+    return values
+
+
+def build_status_chain_output_set(chain_root: Path) -> dict[str, Any]:
+    manifest = read_strict_json(chain_root / STATUS_CHAIN_MANIFEST_PATH)
+    role_map = {STATUS_CHAIN_MANIFEST_PATH: "status-chain-manifest"}
+    files = []
+    for path in sorted(chain_root.rglob("*")):
+        if path.is_symlink() or (
+            path.exists() and not path.is_file() and not path.is_dir()
+        ):
+            raise PublicReleaseError("status chain contains a non-regular path")
+        if not path.is_file():
+            continue
+        relative = path.relative_to(chain_root).as_posix()
+        if relative == STATUS_CHAIN_OUTPUT_SET_PATH:
+            continue
+        role = role_map.get(
+            relative,
+            "status-signature"
+            if relative.endswith(".dsse.v0.1.json")
+            else "status-set",
+        )
+        files.append(_bundle_file_entry(chain_root, relative, role))
+    exact_paths = sorted(
+        [entry["path"] for entry in files] + [STATUS_CHAIN_OUTPUT_SET_PATH]
+    )
+    output = {
+        "schema_version": SCHEMA_VERSION,
+        "artifact_status": ARTIFACT_STATUS,
+        "trust_domain_id": TRUST_DOMAIN,
+        "exact_paths": exact_paths,
+        "files": files,
+        "self": {
+            "path": STATUS_CHAIN_OUTPUT_SET_PATH,
+            "digest_field": "output_set_digest",
+        },
+        "chain_tree_digest": manifest["chain_tree_digest"],
+        "chain_manifest_digest": manifest["chain_manifest_digest"],
+        "latest_revision": manifest["latest_revision"],
+        "latest_status_set_digest": manifest["latest_status_set_digest"],
+    }
+    output["output_set_digest"] = domain_digest(STATUS_CHAIN_OUTPUT_SET_DOMAIN, output)
+    return output
+
+
+def generate_status_chain(
+    root: Path,
+    output_root: Path,
+    relative_output: str,
+    manifest_digest: str,
+    variant: str,
+) -> Path:
+    output_root = resolve_trusted_directory(output_root)
+    target = resolve_new_directory(output_root, relative_output)
+    staging = target.with_name(target.name + ".partial")
+    if os.path.lexists(staging):
+        raise PublicReleaseError("partial status-chain output already exists")
+    try:
+        staging.mkdir(mode=0o700)
+        _write_bundle_values(
+            staging, build_status_chain_values(root, manifest_digest, variant)
+        )
+        output = build_status_chain_output_set(staging)
+        validate_named_schema(
+            output, "status_chain_output_set", load_public_release_schemas(root)
+        )
+        atomic_write_file(staging / STATUS_CHAIN_OUTPUT_SET_PATH, canonicalize(output))
         os.replace(staging, target)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
@@ -2091,8 +2390,8 @@ def validate_status_set(
         or status_set.get("trust_domain_id") != TRUST_DOMAIN
         or status_set.get("status_set_id") != "PMA-PUBLIC-RELEASE-STATUS-FIXTURE-V0-1"
         or status_set.get("signing_key_id") != STATUS_KEY_ID
-        or status_set.get("revision") != 1
-        or status_set.get("generated_at") != CREATED_AT
+        or not isinstance(status_set.get("revision"), int)
+        or status_set.get("revision", 0) < 1
     ):
         raise VerificationFailure("invalid-structure", 1, "status-set-authority")
     if (
@@ -2139,19 +2438,10 @@ def validate_status_set(
     key_entries = {entry["key_id"]: entry for entry in status_set["key_statuses"]}
     if len(key_entries) != len(status_set["key_statuses"]):
         raise VerificationFailure("invalid-structure", 1, "status-key-duplicate")
-    if set(key_entries) != {RELEASE_KEY_ID, STATUS_KEY_ID}:
+    if set(key_entries) != {RELEASE_KEY_ID}:
         raise VerificationFailure("untrusted-key", 3, "status-key-set")
     release_key_entry = key_entries.get(RELEASE_KEY_ID)
-    status_key_entry = key_entries.get(STATUS_KEY_ID)
-    if (
-        not release_key_entry
-        or release_key_entry.get("usage") != "release-signing"
-        or not status_key_entry
-        or status_key_entry.get("usage") != "release-status-signing"
-        or status_key_entry.get("status") != "active"
-        or status_key_entry.get("compromise_indicator") is not False
-        or status_key_entry.get("replacement_key_id") is not None
-    ):
+    if not release_key_entry or release_key_entry.get("usage") != "release-signing":
         raise VerificationFailure("untrusted-key", 3, "status-key-separation")
     if release_key_entry.get("status") == "revoked":
         if release_key_entry.get("compromise_indicator") is not True:
@@ -2202,6 +2492,286 @@ def validate_status_set(
     return release_key_entry["status"], state
 
 
+def validate_status_chain(
+    root: Path,
+    chain_root: Path,
+    manifest_digest: str,
+    trust_keys: dict[str, dict[str, Any]],
+    verification_time: str,
+) -> tuple[dict[str, Any], str, str, dict[str, Any]]:
+    """Validate every revision and return only the fully chained latest state."""
+    try:
+        chain_root = resolve_trusted_directory(chain_root)
+        actual_paths = _actual_bundle_paths(chain_root)
+    except Exception as error:
+        raise VerificationFailure(
+            "invalid-structure", 1, "status-chain-root-invalid"
+        ) from error
+    if STATUS_CHAIN_OUTPUT_SET_PATH not in actual_paths:
+        raise VerificationFailure(
+            "incomplete-bundle", 1, "status-chain-output-set-missing"
+        )
+    try:
+        output, _ = _load_canonical_json_file(
+            chain_root / STATUS_CHAIN_OUTPUT_SET_PATH,
+            schema_name="status_chain_output_set",
+            root=root,
+        )
+        chain_manifest, _ = _load_canonical_json_file(
+            chain_root / STATUS_CHAIN_MANIFEST_PATH,
+            schema_name="status_chain_manifest",
+            root=root,
+        )
+    except PublicReleaseError as error:
+        raise VerificationFailure(
+            "invalid-structure", 1, "status-chain-structure"
+        ) from error
+    if output.get("output_set_digest") != detached_digest(
+        STATUS_CHAIN_OUTPUT_SET_DOMAIN, output, "output_set_digest"
+    ):
+        raise VerificationFailure(
+            "invalid-structure", 1, "status-chain-output-set-digest"
+        )
+    if chain_manifest.get("chain_manifest_digest") != detached_digest(
+        STATUS_CHAIN_MANIFEST_DOMAIN,
+        chain_manifest,
+        "chain_manifest_digest",
+    ):
+        raise VerificationFailure(
+            "invalid-structure", 1, "status-chain-manifest-digest"
+        )
+    if (
+        chain_manifest.get("trust_domain_id") != TRUST_DOMAIN
+        or chain_manifest.get("status_signing_key_id") != STATUS_KEY_ID
+        or chain_manifest.get("status_signing_profile")
+        != {
+            "id": "private-match-public-release-signing",
+            "version": SCHEMA_VERSION,
+            "algorithm": ALGORITHM,
+            "payload_type": STATUS_PAYLOAD_TYPE,
+        }
+        or chain_manifest.get("limitations")
+        != [
+            "The verifier cannot prove that a supplied offline status chain is the globally latest distributed revision."
+        ]
+    ):
+        raise VerificationFailure("invalid-structure", 1, "status-chain-authority")
+    status_signer = trust_keys.get(STATUS_KEY_ID)
+    verification = parse_timestamp(verification_time)
+    if (
+        not status_signer
+        or status_signer.get("usage") != "release-status-signing"
+        or status_signer.get("status") != "active"
+        or not (
+            parse_timestamp(status_signer["valid_from"])
+            <= verification
+            <= parse_timestamp(status_signer["valid_until"])
+        )
+    ):
+        raise VerificationFailure("untrusted-key", 3, "status-key-untrusted")
+    entries = output.get("files")
+    if not isinstance(entries, list):
+        raise VerificationFailure("invalid-structure", 1, "status-chain-file-list")
+    listed: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {
+            "path",
+            "file_digest",
+            "size",
+            "role",
+        }:
+            raise VerificationFailure("invalid-structure", 1, "status-chain-file-entry")
+        relative = entry["path"]
+        if relative in listed or relative == STATUS_CHAIN_OUTPUT_SET_PATH:
+            raise VerificationFailure(
+                "invalid-structure", 1, "status-chain-file-duplicate"
+            )
+        listed.add(relative)
+        try:
+            data = resolve_regular_file(
+                chain_root, relative, max_bytes=MAX_BUNDLE_FILE_BYTES
+            ).read_bytes()
+        except Exception as error:
+            raise VerificationFailure(
+                "incomplete-bundle", 1, "status-chain-file-missing"
+            ) from error
+        if entry["file_digest"] != file_digest(data) or entry["size"] != len(data):
+            raise VerificationFailure(
+                "incomplete-bundle", 1, "status-chain-file-digest"
+            )
+    if (
+        output.get("exact_paths") != actual_paths
+        or sorted(listed | {STATUS_CHAIN_OUTPUT_SET_PATH}) != actual_paths
+    ):
+        raise VerificationFailure("incomplete-bundle", 1, "status-chain-path-closure")
+    try:
+        expected_output = build_status_chain_output_set(chain_root)
+    except Exception as error:
+        raise VerificationFailure(
+            "invalid-structure", 1, "status-chain-output-reconstruction"
+        ) from error
+    if output != expected_output:
+        raise VerificationFailure(
+            "invalid-structure", 1, "status-chain-output-reconstruction"
+        )
+    revisions = chain_manifest.get("revisions")
+    if not isinstance(revisions, list) or not revisions:
+        raise VerificationFailure("invalid-structure", 1, "status-chain-revisions")
+    expected_paths = {STATUS_CHAIN_MANIFEST_PATH, STATUS_CHAIN_OUTPUT_SET_PATH}
+    previous_digest: str | None = None
+    previous_time: dt.datetime | None = None
+    latest: dict[str, Any] | None = None
+    latest_key_status = "active"
+    latest_release_state = "active"
+    compromised_seen = False
+    nonactive_release_seen = False
+    tree_files: list[dict[str, Any]] = []
+    for expected_revision, revision_entry in enumerate(revisions, start=1):
+        if revision_entry.get("revision") != expected_revision:
+            raise VerificationFailure(
+                "invalid-structure", 1, "status-chain-revision-sequence"
+            )
+        set_path = status_revision_set_path(expected_revision)
+        envelope_path = status_revision_envelope_path(expected_revision)
+        expected_paths.update({set_path, envelope_path})
+        if (
+            revision_entry.get("status_set_path") != set_path
+            or revision_entry.get("status_signature_path") != envelope_path
+            or revision_entry.get("previous_status_set_digest") != previous_digest
+        ):
+            raise VerificationFailure(
+                "invalid-structure", 1, "status-chain-revision-binding"
+            )
+        try:
+            status_set, status_raw = _load_canonical_json_file(
+                chain_root / set_path, schema_name="status_set", root=root
+            )
+            envelope, envelope_raw = _load_canonical_json_file(
+                chain_root / envelope_path, schema_name="dsse", root=root
+            )
+        except PublicReleaseError as error:
+            raise VerificationFailure(
+                "invalid-structure", 1, "status-chain-revision-input"
+            ) from error
+        generated = parse_timestamp(status_set["generated_at"])
+        if (
+            status_set.get("revision") != expected_revision
+            or status_set.get("previous_status_set_digest") != previous_digest
+            or revision_entry.get("generated_at") != status_set.get("generated_at")
+            or (previous_time is not None and generated <= previous_time)
+        ):
+            raise VerificationFailure(
+                "invalid-structure", 1, "status-chain-revision-order"
+            )
+        if (
+            revision_entry.get("status_set_digest")
+            != status_set.get("status_set_digest")
+            or revision_entry.get("status_set_file_digest") != file_digest(status_raw)
+            or revision_entry.get("status_signature_digest")
+            != file_digest(envelope_raw)
+        ):
+            raise VerificationFailure(
+                "invalid-structure", 1, "status-chain-revision-digest"
+            )
+        if (
+            envelope.get("payloadType") != STATUS_PAYLOAD_TYPE
+            or envelope.get("signingProfile")
+            != {
+                "id": "private-match-public-release-signing",
+                "version": SCHEMA_VERSION,
+                "algorithm": ALGORITHM,
+            }
+            or not isinstance(envelope.get("signatures"), list)
+            or len(envelope["signatures"]) != 1
+            or envelope["signatures"][0].get("keyid") != STATUS_KEY_ID
+        ):
+            algorithm = envelope.get("signingProfile", {}).get("algorithm")
+            if algorithm != ALGORITHM:
+                raise VerificationFailure(
+                    "unsupported-algorithm", 2, "status-algorithm-unsupported"
+                )
+            raise VerificationFailure("untrusted-key", 3, "status-key-identity")
+        try:
+            payload = verify_dsse_signature(
+                root, envelope, STATUS_PAYLOAD_TYPE, status_signer
+            )
+        except PublicReleaseError as error:
+            raise VerificationFailure(
+                "invalid-signature", 1, "status-signature-invalid"
+            ) from error
+        if payload != status_raw:
+            raise VerificationFailure("invalid-signature", 1, "status-payload-bytes")
+        latest_key_status, latest_release_state = validate_status_set(
+            root,
+            status_set,
+            manifest_digest,
+            trust_keys,
+            verification_time,
+        )
+        if compromised_seen and latest_key_status != "revoked":
+            raise VerificationFailure(
+                "invalid-structure", 1, "status-chain-key-state-rollback"
+            )
+        if nonactive_release_seen and latest_release_state == "active":
+            raise VerificationFailure(
+                "invalid-structure", 1, "status-chain-release-state-rollback"
+            )
+        compromised_seen = compromised_seen or latest_key_status == "revoked"
+        nonactive_release_seen = (
+            nonactive_release_seen or latest_release_state != "active"
+        )
+        tree_files.extend(
+            [
+                {
+                    "path": set_path,
+                    "file_digest": file_digest(status_raw),
+                    "size": len(status_raw),
+                    "role": "status-set",
+                },
+                {
+                    "path": envelope_path,
+                    "file_digest": file_digest(envelope_raw),
+                    "size": len(envelope_raw),
+                    "role": "status-signature",
+                },
+            ]
+        )
+        previous_digest = status_set["status_set_digest"]
+        previous_time = generated
+        latest = status_set
+    if set(actual_paths) != expected_paths:
+        raise VerificationFailure(
+            "incomplete-bundle", 1, "status-chain-revision-path-set"
+        )
+    if latest is None or (
+        chain_manifest.get("latest_revision") != latest["revision"]
+        or chain_manifest.get("latest_status_set_digest") != latest["status_set_digest"]
+        or chain_manifest.get("generated_at") != latest["generated_at"]
+        or chain_manifest.get("chain_tree_digest")
+        != domain_digest(
+            STATUS_CHAIN_TREE_DOMAIN,
+            sorted(tree_files, key=lambda item: item["path"]),
+        )
+        or output.get("chain_manifest_digest")
+        != chain_manifest["chain_manifest_digest"]
+        or output.get("chain_tree_digest") != chain_manifest["chain_tree_digest"]
+        or output.get("latest_revision") != latest["revision"]
+        or output.get("latest_status_set_digest") != latest["status_set_digest"]
+    ):
+        raise VerificationFailure("invalid-structure", 1, "status-chain-latest-binding")
+    return (
+        latest,
+        latest_key_status,
+        latest_release_state,
+        {
+            "chain_manifest_digest": chain_manifest["chain_manifest_digest"],
+            "chain_output_set_digest": output["output_set_digest"],
+            "latest_revision": latest["revision"],
+            "latest_status_set_digest": latest["status_set_digest"],
+        },
+    )
+
+
 def _verification_error_report(
     verification_time: str, failure: VerificationFailure
 ) -> dict[str, Any]:
@@ -2226,17 +2796,16 @@ def verify_public_release_bundle(
     root: Path,
     bundle_root: Path,
     trust_root_path: Path,
-    status_set_path: Path,
-    status_envelope_path: Path,
+    status_chain_root: Path,
     verification_time: str,
 ) -> tuple[dict[str, Any], int]:
+    """Verify immutable content against one caller-selected external status chain."""
     parse_timestamp(verification_time)
     try:
         try:
             bundle_root = resolve_trusted_directory(bundle_root)
             trust_root_path = resolve_external_regular_file(trust_root_path)
-            status_set_path = resolve_external_regular_file(status_set_path)
-            status_envelope_path = resolve_external_regular_file(status_envelope_path)
+            status_chain_root = resolve_trusted_directory(status_chain_root)
         except Exception as error:
             raise VerificationFailure(
                 "invalid-structure", 1, "verification-input-path"
@@ -2244,7 +2813,7 @@ def verify_public_release_bundle(
         output = validate_output_set(root, bundle_root)
         schemas = load_public_release_schemas(root)
         try:
-            trust, trust_raw = _load_canonical_json_file(trust_root_path)
+            trust, _ = _load_canonical_json_file(trust_root_path)
             trust_keys = validate_trust_root(root, trust, schemas)
         except PublicReleaseError as error:
             raise VerificationFailure(
@@ -2336,8 +2905,6 @@ def verify_public_release_bundle(
             + [
                 MANIFEST_PATH,
                 RELEASE_ENVELOPE_PATH,
-                STATUS_SET_PATH,
-                STATUS_ENVELOPE_PATH,
                 REPORT_JSON_PATH,
                 REPORT_MD_PATH,
                 OUTPUT_SET_PATH,
@@ -2346,61 +2913,6 @@ def verify_public_release_bundle(
         if output.get("exact_paths") != expected_bundle_paths:
             raise VerificationFailure("incomplete-bundle", 1, "manifest-path-closure")
 
-        try:
-            status_set, status_raw = _load_canonical_json_file(status_set_path)
-            status_envelope, _ = _load_canonical_json_file(
-                status_envelope_path, schema_name="dsse", root=root
-            )
-        except PublicReleaseError as error:
-            raise VerificationFailure(
-                "invalid-structure", 1, "status-input-invalid"
-            ) from error
-        if status_envelope.get("signingProfile", {}).get("algorithm") != ALGORITHM:
-            raise VerificationFailure(
-                "unsupported-algorithm", 2, "status-algorithm-unsupported"
-            )
-        status_key = trust_keys.get(STATUS_KEY_ID)
-        if not status_key:
-            raise VerificationFailure("untrusted-key", 3, "status-key-untrusted")
-        try:
-            status_payload = verify_dsse_signature(
-                root, status_envelope, STATUS_PAYLOAD_TYPE, status_key
-            )
-        except PublicReleaseError as error:
-            raise VerificationFailure(
-                "invalid-signature", 1, "status-signature-invalid"
-            ) from error
-        if status_payload != status_raw:
-            raise VerificationFailure("invalid-signature", 1, "status-payload-bytes")
-        key_status, release_state = validate_status_set(
-            root,
-            status_set,
-            manifest["manifest_digest"],
-            trust_keys,
-            verification_time,
-        )
-        if key_status == "revoked":
-            raise VerificationFailure("revoked-key", 3, "release-key-revoked")
-        if key_status != "active":
-            raise VerificationFailure("untrusted-key", 3, "release-key-not-active")
-
-        if verification < parse_timestamp(manifest["valid_from"]):
-            raise VerificationFailure("expired-release", 4, "release-not-yet-valid")
-        if verification > parse_timestamp(manifest["valid_until"]):
-            raise VerificationFailure("expired-release", 4, "release-expired")
-        lifecycle_failures = {
-            "withdrawn": "withdrawn-release",
-            "superseded": "superseded-release",
-            "corrected": "corrected-release",
-            "expired": "expired-release",
-        }
-        if release_state in lifecycle_failures:
-            raise VerificationFailure(
-                lifecycle_failures[release_state], 4, f"release-{release_state}"
-            )
-        if release_state != "active":
-            raise VerificationFailure("invalid-structure", 1, "release-status-unknown")
-
         records, artifacts = _load_bundle_records(root, bundle_root, manifest)
         report_model = build_report_model(root, records, artifacts)
         expected_manifest = build_release_manifest(
@@ -2408,71 +2920,139 @@ def verify_public_release_bundle(
         )
         if manifest != expected_manifest:
             raise VerificationFailure("invalid-structure", 1, "manifest-reconstruction")
+        try:
+            static_report, static_report_raw = _load_canonical_json_file(
+                bundle_root / REPORT_JSON_PATH,
+                schema_name="content_report",
+                root=root,
+            )
+            static_markdown = resolve_regular_file(
+                bundle_root, REPORT_MD_PATH, max_bytes=MAX_BUNDLE_FILE_BYTES
+            ).read_bytes()
+        except (OSError, PublicReleaseError) as error:
+            raise VerificationFailure(
+                "invalid-report-linkage", 1, "static-report-unavailable"
+            ) from error
+        report_model_digest = domain_digest(REPORT_MODEL_DOMAIN, report_model)
+        if (
+            static_report != report_model
+            or static_report_raw != canonicalize(report_model)
+            or static_markdown != render_content_markdown(report_model)
+            or manifest["reports"]["json"]["report_model_digest"] != report_model_digest
+            or manifest["reports"]["markdown"]["report_model_digest"]
+            != report_model_digest
+            or output.get("static_report_model_digest") != report_model_digest
+            or output.get("manifest_digest") != manifest["manifest_digest"]
+            or output.get("release_signature_digest")
+            != file_digest((bundle_root / RELEASE_ENVELOPE_PATH).read_bytes())
+        ):
+            raise VerificationFailure(
+                "invalid-report-linkage", 1, "static-report-linkage-invalid"
+            )
+
+        status_set, key_status, release_state, status_chain = validate_status_chain(
+            root,
+            status_chain_root,
+            manifest["manifest_digest"],
+            trust_keys,
+            verification_time,
+        )
         claim_evaluation = evaluate_claims(records)
-        if any(
+        overall_status = "verified-fixture-with-limitations"
+        exit_code = 0
+        if key_status == "revoked":
+            overall_status, exit_code = "revoked-key", 3
+        elif key_status != "active":
+            overall_status, exit_code = "untrusted-key", 3
+        elif verification < parse_timestamp(manifest["valid_from"]):
+            overall_status, exit_code = "expired-release", 4
+        elif verification > parse_timestamp(manifest["valid_until"]):
+            overall_status, exit_code = "expired-release", 4
+        elif release_state in {
+            "withdrawn",
+            "superseded",
+            "corrected",
+            "expired",
+        }:
+            overall_status, exit_code = f"{release_state}-release", 4
+        elif release_state != "active":
+            raise VerificationFailure("invalid-structure", 1, "release-status-unknown")
+        elif any(
             result["result"] in {"not-supported", "invalid-reference"}
             for result in claim_evaluation["results"]
         ):
-            raise VerificationFailure("claims-not-supported", 5, "claim-not-supported")
-        if any(
+            overall_status, exit_code = "claims-not-supported", 5
+        elif any(
             result["result"] == "not-evaluated"
             for result in claim_evaluation["results"]
         ):
-            raise VerificationFailure("not-evaluated", 5, "claim-not-evaluated")
+            overall_status, exit_code = "not-evaluated", 5
 
-        expected_report = build_verification_report(
-            manifest,
-            report_model,
-            status_set,
-            key_status=key_status,
-            release_state=release_state,
-        )
-        try:
-            validate_named_schema(expected_report, "verification_result", schemas)
-        except PublicReleaseError as error:
-            raise VerificationFailure(
-                "invalid-report-linkage", 1, "report-schema"
-            ) from error
-        try:
-            actual_report, actual_report_raw = _load_canonical_json_file(
-                bundle_root / REPORT_JSON_PATH
-            )
-            actual_markdown = (bundle_root / REPORT_MD_PATH).read_bytes()
-        except (OSError, PublicReleaseError) as error:
-            raise VerificationFailure(
-                "invalid-report-linkage", 1, "report-unavailable"
-            ) from error
-        if (
-            actual_report != expected_report
-            or actual_report_raw != canonicalize(expected_report)
-            or actual_markdown != render_verification_markdown(expected_report)
-            or manifest["reports"]["json"]["report_model_digest"]
-            != domain_digest(REPORT_MODEL_DOMAIN, report_model)
-            or manifest["reports"]["markdown"]["report_model_digest"]
-            != domain_digest(REPORT_MODEL_DOMAIN, report_model)
-        ):
-            raise VerificationFailure(
-                "invalid-report-linkage", 1, "report-linkage-invalid"
-            )
-        if (
-            output.get("manifest_digest") != manifest["manifest_digest"]
-            or output.get("status_set_digest") != status_set["status_set_digest"]
-            or output.get("verification_result_digest")
-            != expected_report["verification_result_digest"]
-        ):
-            raise VerificationFailure("invalid-structure", 1, "output-summary-binding")
         runtime_report = build_verification_report(
             manifest,
             report_model,
             status_set,
+            status_chain=status_chain,
+            overall_status=overall_status,
             key_status=key_status,
             release_state=release_state,
             verification_time=verification_time,
         )
         validate_named_schema(runtime_report, "verification_result", schemas)
-        return runtime_report, 0
+        return runtime_report, exit_code
     except VerificationFailure as failure:
         return _verification_error_report(verification_time, failure), failure.exit_code
+
+
+def generate_fixture_suite(root: Path, output_root: Path, relative_output: str) -> Path:
+    """Generate one immutable bundle, six external chains, and dynamic results."""
+    output_root = resolve_trusted_directory(output_root)
+    target = resolve_new_directory(output_root, relative_output)
+    staging = target.with_name(target.name + ".partial")
+    if os.path.lexists(staging):
+        raise PublicReleaseError("partial public release suite already exists")
+    try:
+        staging.mkdir(mode=0o700)
+        bundle = generate_fixture_bundle(root, staging, "bundle")
+        manifest = read_strict_json(bundle / MANIFEST_PATH)
+        (staging / "status-chains").mkdir(mode=0o700)
+        for variant, policy in STATUS_CHAIN_VARIANTS.items():
+            chain = generate_status_chain(
+                root,
+                staging / "status-chains",
+                variant,
+                manifest["manifest_digest"],
+                variant,
+            )
+            result, code = verify_public_release_bundle(
+                root,
+                bundle,
+                root / TRUST_ROOT_PATH,
+                chain,
+                VERIFICATION_TIME,
+            )
+            if (
+                result["overall"]["status"] != policy["expected_overall"]
+                or code != policy["expected_exit_code"]
+            ):
+                raise PublicReleaseError("generated lifecycle fixture is invalid")
+            result_root = staging / "verification-results" / variant
+            result_root.mkdir(parents=True)
+            atomic_write_file(
+                result_root / VERIFICATION_RESULT_JSON_FILENAME,
+                canonicalize(result),
+            )
+            atomic_write_file(
+                result_root / VERIFICATION_RESULT_MD_FILENAME,
+                render_verification_markdown(result),
+            )
+        os.replace(staging, target)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
+        raise
+    return target
 
 
 NEGATIVE_FIXTURE_CASES = [
@@ -2496,40 +3076,64 @@ NEGATIVE_FIXTURE_CASES = [
     ("malformed-trust-root", "untrusted-key", 3),
     ("invalid-status-signature", "invalid-signature", 1),
     ("embedded-untrusted-key", "untrusted-key", 3),
+    ("status-chain-revision-2-without-1", "incomplete-bundle", 1),
+    ("status-chain-duplicate-revision", "invalid-structure", 1),
+    ("status-chain-revision-gap", "invalid-structure", 1),
+    ("status-chain-revision-rollback", "invalid-structure", 1),
+    ("status-chain-wrong-previous-digest", "invalid-structure", 1),
+    ("status-chain-forked-previous-digest", "invalid-structure", 1),
+    ("status-chain-nonincreasing-generated-at", "invalid-structure", 1),
+    ("status-chain-wrong-status-key", "untrusted-key", 3),
+    ("status-chain-release-key-signature", "untrusted-key", 3),
+    ("status-chain-unknown-algorithm", "unsupported-algorithm", 2),
+    ("status-chain-wrong-trust-domain", "invalid-structure", 1),
+    ("status-chain-invalid-intermediate-signature", "invalid-signature", 1),
+    ("status-chain-valid-latest-after-invalid-earlier", "invalid-signature", 1),
+    ("status-chain-extra-unlisted-revision", "incomplete-bundle", 1),
+    ("status-chain-missing-listed-revision", "incomplete-bundle", 1),
+    ("status-chain-changed-status-bytes", "incomplete-bundle", 1),
+    ("status-chain-changed-envelope-bytes", "incomplete-bundle", 1),
+    ("status-chain-manifest-digest-mismatch", "invalid-structure", 1),
+    ("status-chain-tree-digest-mismatch", "invalid-structure", 1),
+    ("status-chain-output-set-mismatch", "invalid-structure", 1),
+    ("status-chain-latest-revision-mismatch", "invalid-structure", 1),
+    ("status-chain-different-release-manifest", "invalid-structure", 1),
+    ("status-key-self-authority", "untrusted-key", 3),
+    ("status-chain-active-after-revoked", "invalid-structure", 1),
 ]
 
 
-def build_fixture_catalog(root: Path, bundle_root: Path) -> dict[str, Any]:
+def build_fixture_catalog(
+    root: Path, bundle_root: Path | None = None
+) -> dict[str, Any]:
+    bundle = bundle_root or root / EXPECTED_BUNDLE_PATH
+    expected_root = bundle.parent
     trust = read_strict_json(resolve_regular_file(root, TRUST_ROOT_PATH))
-    manifest = read_strict_json(bundle_root / MANIFEST_PATH)
-    status_set = read_strict_json(bundle_root / STATUS_SET_PATH)
-    output_set = read_strict_json(bundle_root / OUTPUT_SET_PATH)
-    report = read_strict_json(bundle_root / REPORT_JSON_PATH)
+    manifest = read_strict_json(bundle / MANIFEST_PATH)
+    output_set = read_strict_json(bundle / OUTPUT_SET_PATH)
     catalog = {
         "schema_version": SCHEMA_VERSION,
         "artifact_status": ARTIFACT_STATUS,
-        "fixtures": [
-            {
-                "fixture_id": FIXTURE_ID,
-                "artifact_status": ARTIFACT_STATUS,
-                "bundle_path": EXPECTED_BUNDLE_PATH,
-                "trust_root_digest": trust["trust_root_digest"],
-                "release_key_id": RELEASE_KEY_ID,
-                "status_key_id": STATUS_KEY_ID,
-                "manifest_digest": manifest["manifest_digest"],
-                "release_signature_digest": file_digest(
-                    (bundle_root / RELEASE_ENVELOPE_PATH).read_bytes()
-                ),
-                "status_set_digest": status_set["status_set_digest"],
-                "status_signature_digest": file_digest(
-                    (bundle_root / STATUS_ENVELOPE_PATH).read_bytes()
-                ),
-                "output_set_digest": output_set["output_set_digest"],
-                "verification_result_digest": report["verification_result_digest"],
-                "expected_overall": "verified-fixture-with-limitations",
-                "verification_time": VERIFICATION_TIME,
-            }
-        ],
+        "release_bundle": {
+            "fixture_id": FIXTURE_ID,
+            "bundle_path": bundle.relative_to(root).as_posix()
+            if bundle.is_relative_to(root)
+            else EXPECTED_BUNDLE_PATH,
+            "manifest_digest": manifest["manifest_digest"],
+            "release_signature_digest": file_digest(
+                (bundle / RELEASE_ENVELOPE_PATH).read_bytes()
+            ),
+            "static_report_model_digest": output_set["static_report_model_digest"],
+            "output_set_digest": output_set["output_set_digest"],
+            "file_count": len(output_set["exact_paths"]),
+        },
+        "trust_root": {
+            "path": TRUST_ROOT_PATH,
+            "digest": trust["trust_root_digest"],
+            "release_key_id": RELEASE_KEY_ID,
+            "status_key_id": STATUS_KEY_ID,
+        },
+        "status_chains": [],
         "negative_cases": [
             {
                 "case_id": identifier,
@@ -2539,6 +3143,46 @@ def build_fixture_catalog(root: Path, bundle_root: Path) -> dict[str, Any]:
             for identifier, overall, code in NEGATIVE_FIXTURE_CASES
         ],
     }
+    for variant, policy in STATUS_CHAIN_VARIANTS.items():
+        chain_root = expected_root / "status-chains" / variant
+        chain_manifest = read_strict_json(chain_root / STATUS_CHAIN_MANIFEST_PATH)
+        chain_output = read_strict_json(chain_root / STATUS_CHAIN_OUTPUT_SET_PATH)
+        result_root = expected_root / "verification-results" / variant
+        result_json = result_root / VERIFICATION_RESULT_JSON_FILENAME
+        result_markdown = result_root / VERIFICATION_RESULT_MD_FILENAME
+        result = read_strict_json(result_json)
+        catalog["status_chains"].append(
+            {
+                "fixture_id": f"PUBLIC-RELEASE-STATUS-{variant.upper()}-V0-1",
+                "chain_root": (
+                    chain_root.relative_to(root).as_posix()
+                    if chain_root.is_relative_to(root)
+                    else f"{EXPECTED_STATUS_CHAINS_PATH}/{variant}"
+                ),
+                "latest_revision": chain_manifest["latest_revision"],
+                "latest_status_set_digest": chain_manifest["latest_status_set_digest"],
+                "chain_manifest_digest": chain_manifest["chain_manifest_digest"],
+                "chain_output_set_digest": chain_output["output_set_digest"],
+                "expected_overall": policy["expected_overall"],
+                "expected_exit_code": policy["expected_exit_code"],
+                "verification_time": VERIFICATION_TIME,
+                "verification_json_path": (
+                    result_json.relative_to(root).as_posix()
+                    if result_json.is_relative_to(root)
+                    else f"{EXPECTED_VERIFICATION_RESULTS_PATH}/{variant}/{VERIFICATION_RESULT_JSON_FILENAME}"
+                ),
+                "verification_json_digest": file_digest(result_json.read_bytes()),
+                "verification_result_digest": result["verification_result_digest"],
+                "verification_markdown_path": (
+                    result_markdown.relative_to(root).as_posix()
+                    if result_markdown.is_relative_to(root)
+                    else f"{EXPECTED_VERIFICATION_RESULTS_PATH}/{variant}/{VERIFICATION_RESULT_MD_FILENAME}"
+                ),
+                "verification_markdown_digest": file_digest(
+                    result_markdown.read_bytes()
+                ),
+            }
+        )
     catalog["catalog_digest"] = domain_digest(FIXTURE_CATALOG_DOMAIN, catalog)
     return catalog
 
@@ -2553,21 +3197,28 @@ def validate_fixture_catalog(root: Path) -> dict[str, Any]:
         FIXTURE_CATALOG_DOMAIN, catalog, "catalog_digest"
     ):
         raise PublicReleaseError("fixture catalog digest is invalid")
-    if len(catalog["fixtures"]) != 1 or len(catalog["negative_cases"]) < 20:
+    if len(catalog["status_chains"]) != len(STATUS_CHAIN_VARIANTS) or len(
+        catalog["negative_cases"]
+    ) != len(NEGATIVE_FIXTURE_CASES):
         raise PublicReleaseError("fixture catalog coverage is incomplete")
-    entry = catalog["fixtures"][0]
-    expected = root / EXPECTED_BUNDLE_PATH
-    actual = build_fixture_catalog(root, expected)["fixtures"][0]
-    if entry != actual:
-        raise PublicReleaseError("fixture catalog does not match expected bundle")
-    expected_negative = [
-        {
-            "case_id": identifier,
-            "expected_overall": overall,
-            "expected_exit_code": code,
-        }
-        for identifier, overall, code in NEGATIVE_FIXTURE_CASES
-    ]
-    if catalog["negative_cases"] != expected_negative:
-        raise PublicReleaseError("fixture catalog negative cases do not match policy")
+    expected = build_fixture_catalog(root)
+    if catalog != expected:
+        raise PublicReleaseError("fixture catalog does not match expected fixtures")
+    for entry in catalog["status_chains"]:
+        result, code = verify_public_release_bundle(
+            root,
+            root / catalog["release_bundle"]["bundle_path"],
+            root / catalog["trust_root"]["path"],
+            root / entry["chain_root"],
+            entry["verification_time"],
+        )
+        if (
+            code != entry["expected_exit_code"]
+            or result["overall"]["status"] != entry["expected_overall"]
+            or canonicalize(result)
+            != (root / entry["verification_json_path"]).read_bytes()
+            or render_verification_markdown(result)
+            != (root / entry["verification_markdown_path"]).read_bytes()
+        ):
+            raise PublicReleaseError("fixture catalog verifier result is stale")
     return catalog

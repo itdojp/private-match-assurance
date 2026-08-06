@@ -15,9 +15,7 @@
     "bundle_tree_digest",
     "manifest_digest",
     "release_signature_digest",
-    "status_set_digest",
-    "status_signature_digest",
-    "verification_result_digest",
+    "static_report_model_digest",
     "output_set_digest"
   ],
   "properties": {
@@ -105,15 +103,7 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
-    "status_set_digest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
-    },
-    "status_signature_digest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
-    },
-    "verification_result_digest": {
+    "static_report_model_digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },

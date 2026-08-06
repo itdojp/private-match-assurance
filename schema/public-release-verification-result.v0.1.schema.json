@@ -71,6 +71,7 @@
         "digest_closure",
         "report_linkage",
         "release_lifecycle",
+        "status_chain",
         "claims",
         "overall",
         "subject",
@@ -121,6 +122,17 @@
         "digest_closure": {"type": "object"},
         "report_linkage": {"type": "object"},
         "release_lifecycle": {"type": "object"},
+        "status_chain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["chain_manifest_digest", "chain_output_set_digest", "latest_revision", "latest_status_set_digest"],
+          "properties": {
+            "chain_manifest_digest": {"$ref": "#/$defs/digest"},
+            "chain_output_set_digest": {"$ref": "#/$defs/digest"},
+            "latest_revision": {"type": "integer", "minimum": 1},
+            "latest_status_set_digest": {"$ref": "#/$defs/digest"}
+          }
+        },
         "claims": {"type": "object"},
         "overall": {"$ref": "#/$defs/overall"},
         "subject": {"type": "object"},

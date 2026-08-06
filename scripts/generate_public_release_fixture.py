@@ -9,16 +9,16 @@ import shutil
 
 try:
     from public_release import (
-        EXPECTED_BUNDLE_PATH,
+        EXPECTED_FIXTURE_ROOT_PATH,
         PublicReleaseError,
-        generate_fixture_bundle,
+        generate_fixture_suite,
         public_release_process_scratch,
     )
 except ImportError:  # pragma: no cover
     from scripts.public_release import (
-        EXPECTED_BUNDLE_PATH,
+        EXPECTED_FIXTURE_ROOT_PATH,
         PublicReleaseError,
-        generate_fixture_bundle,
+        generate_fixture_suite,
         public_release_process_scratch,
     )
 
@@ -45,12 +45,12 @@ def main() -> int:
         if args.output:
             if args.output_root is None:
                 parser.error("--output requires --output-root")
-            target = generate_fixture_bundle(root, args.output_root, args.output)
+            target = generate_fixture_suite(root, args.output_root, args.output)
             print(target.name)
             return 0
         with public_release_process_scratch(root) as temporary_root:
-            generated = generate_fixture_bundle(root, temporary_root, "bundle")
-            expected = root / EXPECTED_BUNDLE_PATH
+            generated = generate_fixture_suite(root, temporary_root, "fixture")
+            expected = root / EXPECTED_FIXTURE_ROOT_PATH
             if args.check:
                 if not expected.is_dir() or _tree(generated) != _tree(expected):
                     raise PublicReleaseError(

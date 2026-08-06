@@ -179,6 +179,12 @@ each non-null Evidence output digest. Its DSSE signature protects those exact
 RFC 8785 manifest bytes, but signature validity is evaluated separately from
 claim support.
 
+The immutable release bundle contains no current key/release status and no
+dynamic verifier result. Lifecycle authority is a separately distributed,
+fully validated signed status chain. Dynamic JSON/Markdown results bind one
+explicit trust root, status-chain revision, and verification time without
+changing any signed release byte.
+
 For signed fixture verification, a `fail` Evidence reference makes the claim
 `not-supported`; `skip`, `unsupported`, `timeout`, or `tool-error` makes it
 `not-evaluated`; and a missing, duplicate, digest-inconsistent, or

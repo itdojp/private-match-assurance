@@ -90,9 +90,10 @@ itself. Without trusted timestamps, compromise revocation applies
 conservatively to every signature under the affected key.
 
 The committed release and status keys are separate synthetic fixture keys.
-Neither is a production authority. Trust-root authenticity, status-set
-distribution, production key custody, signing, and publication approval remain
-external human-governed decisions.
+Neither is a production authority. Trust-root authenticity, status-chain
+distribution and global-latest freshness, production key custody, signing, and
+publication approval remain external human-governed decisions. Current status
+and dynamic verifier results never mutate the signed release bundle.
 
 ## Private evidence references
 

@@ -97,7 +97,8 @@ producer-supplied metadata is externally authentic.
 
 Validate the signed public fixture authorities, exact implementation manifest,
 RFC 8032 vector, key allowlist, deterministic bytes, DSSE signatures, external
-trust root, status set, claim policy, reports, and output-set closure:
+trust root, immutable content report, external revisioned status chains, claim
+policy, dynamic verifier results, and both output-set closures:
 
 ```bash
 python scripts/public_release_implementation.py --check
@@ -107,8 +108,9 @@ python -m unittest tests.test_public_release
 ```
 
 All signed-bundle JSON is strict UTF-8 and exact RFC 8785 JCS. The offline
-verifier requires a caller-supplied canonical UTC time and explicit trust/status
-inputs. It rejects duplicate keys, noncanonical bytes, symlinks, extra/missing
+verifier requires a caller-supplied canonical UTC time, explicit trust root,
+and one closed external status-chain root. It rejects duplicate keys,
+noncanonical bytes, symlinks, extra/missing
 paths, stale digests, unsupported algorithms, untrusted or revoked keys,
 invalid lifecycle state, inconsistent reports, and unsupported claim
 references. The JSON verification result is authoritative; bounded stderr is

@@ -2,102 +2,81 @@
 
 ## Command
 
-The reference verifier uses only explicit local inputs:
+The verifier accepts one immutable bundle, one external trust root, one closed
+external status-chain root, and one explicit canonical UTC time:
 
-```bash
-python scripts/verify_public_release_bundle.py \
-  --bundle-root tests/fixtures/public-release/expected/active \
-  --trust-root tests/fixtures/public-release/trust/fixture-trust-root.v0.1.json \
-  --status-set tests/fixtures/public-release/expected/active/status/public-release-status-set.v0.1.json \
-  --status-signature tests/fixtures/public-release/expected/active/status/public-release-status-set.dsse.v0.1.json \
-  --verification-time 2026-08-02T00:00:00Z \
-  --output-json .codex-local/tmp/public-release-verification.json \
-  --output-md .codex-local/tmp/public-release-verification.md
-```
+    python scripts/verify_public_release_bundle.py \
+      --bundle-root tests/fixtures/public-release/expected/bundle \
+      --trust-root tests/fixtures/public-release/trust/fixture-trust-root.v0.1.json \
+      --status-chain-root tests/fixtures/public-release/expected/status-chains/active \
+      --verification-time 2026-08-04T00:00:00Z \
+      --output-json .codex-local/tmp/public-release-verification.json \
+      --output-md .codex-local/tmp/public-release-verification.md
 
-Output parents must already be trusted, non-symlink directories and output
-files must not exist. `verification-time` is mandatory and canonical UTC; the
-fixture profile does not use the wall clock.
+Dynamic output paths are caller-selected and outside the immutable bundle.
+Output parents must be trusted non-symlink directories and outputs must not
+exist. No wall-clock default exists.
 
-The command performs no network, DNS, GitHub API, registry, private-repository,
-or private-key access. It invokes only the resolved exact Node.js 22.22.2
-executable with a fixed argument array, `shell=false`, a controlled environment,
-a bounded timeout, and bounded standard streams. Node performs only DSSE PAE
-Ed25519 sign/verify primitives. Python performs strict parsing, JCS,
-Schema/digest/path validation, trust and lifecycle policy, report derivation,
-and verifier orchestration.
+The command performs no network, DNS, GitHub API, registry,
+private-repository, or private-key access. Node.js 22.22.2 performs only the
+bounded DSSE PAE Ed25519 primitive. Python performs strict JCS parsing, Schema,
+path/digest closure, trust, status-chain, lifecycle, claim, static-report, and
+result derivation.
 
-## Ordered verification stages
+## Ordered verification
 
-1. **Output-set structure** — validate the exact path set, regular-file and
-   symlink boundary, byte digests, sizes, roles, tree digest, and output-set
-   semantic digest.
-2. **External trust** — validate the caller-supplied trust-root Schema/digest,
-   trust domain, key identity derived from SPKI DER, algorithm, encoding,
-   usage, validity interval, and status. A key appearing only inside a bundle is
-   never trusted.
-3. **Release signature** — validate the DSSE profile and payload type and verify
-   Ed25519 over exact DSSE PAE of the exact stored manifest bytes.
-4. **Manifest** — require exact RFC 8785 bytes, Schema validity, detached
-   manifest digest, fixed fixture authority, exact content path/digest closure,
-   and deterministic reconstruction from independently loaded content.
-5. **Status signature and lifecycle** — verify the distinct status key, signed
-   status-set digest and entries, chain/revision constraints, key/release
-   binding, and effective time. Release-key status cannot be self-authorized.
-6. **Records and claims** — validate A1 records, unique IDs, subjects, record-set
-   digests, references, all six Evidence statuses, and claim-support policy.
-7. **Artifacts and reports** — reconstruct the synthetic artifact, SBOM, and
-   unsigned provenance; reconstruct the JSON report; generate Markdown only
-   from that JSON; require exact report linkage.
-8. **Overall result** — preserve signature, trust, structure, digest, report,
-   lifecycle, and claim results as distinct fields.
+1. Validate immutable bundle output-set path and byte closure.
+2. Validate the caller-supplied external trust root and SPKI-derived key IDs.
+3. Verify the release DSSE signature over exact stored manifest bytes.
+4. Reconstruct manifest content, artifacts, record sets, and immutable static
+   report.
+5. Validate the external status-chain output set and chain manifest.
+6. Validate every status revision in exact order, including its DSSE signature,
+   previous digest, strictly increasing generation time, unchanging trust
+   domain/profile/status signer, and exact file closure.
+7. Apply the declared final revision's release-key and release state.
+8. Evaluate A1 claim support independently from signature validity.
+9. Emit deterministic dynamic JSON authority and derived Markdown.
 
-The JSON result is authoritative. Stderr contains only bounded reason-class
-text and never includes input values, paths, keys, or subprocess output.
+No status file is loaded from the bundle by implication.
 
-## Stable overall statuses
+## Dynamic result and exit codes
 
-Draft 0.1 recognizes:
-
-- `verified-fixture`
-- `verified-fixture-with-limitations`
-- `invalid-signature`
-- `untrusted-key`
-- `revoked-key`
-- `unsupported-algorithm`
-- `invalid-structure`
-- `incomplete-bundle`
-- `invalid-report-linkage`
-- `withdrawn-release`
-- `superseded-release`
-- `corrected-release`
-- `expired-release`
-- `claims-not-supported`
-- `not-evaluated`
-
-The result retains separate signature, trust, structure, digest closure,
-report linkage, lifecycle, Evidence-status counts, and per-claim fields. A
-single boolean is intentionally insufficient.
-
-## Stable exit codes
+The dynamic result includes the explicit verification time, release signature,
+trust result, selected status-chain manifest/output digests and latest revision,
+current release-key status, lifecycle, claim support, and overall
+classification. It is not signed release content.
 
 | Code | Class |
 | ---: | --- |
-| 0 | mechanically verified fixture; structure, digests, signature, and supplied trust are valid |
-| 1 | invalid signature, digest, structure, exact path set, or report linkage |
-| 2 | unsupported algorithm, profile, or version |
+| 0 | mechanically verified fixture |
+| 1 | invalid signature, digest, structure, path set, or static-report linkage |
+| 2 | unsupported algorithm/profile/version |
 | 3 | untrusted, invalid, expired, or revoked key |
 | 4 | withdrawn, superseded, corrected, expired, or not-yet-valid release |
-| 5 | mechanically valid bundle whose required claims are unsupported or not evaluated |
+| 5 | mechanically valid bundle with unsupported/not-evaluated required claims |
 
-Consumers must inspect the JSON result and must not infer claim support,
-publication approval, or Product readiness from exit code 0 alone.
+JSON is authoritative. Stderr is bounded and value-free.
 
-## Verification limitations
+## Same-bundle lifecycle behavior
 
-A valid fixture signature establishes origin and integrity only relative to the
-supplied fixture trust root. The bundle cannot authenticate that trust root.
-There is no trusted timestamp or transparency log. The status set is an
-explicit external input whose authentic and current distribution remains a
-verifier trust decision. Verification is not certification, a security proof,
-Product release approval, or production readiness.
+One byte-identical immutable fixture bundle produces:
+
+- active chain revision 1: verified-fixture-with-limitations, exit 0;
+- compromised release key at revision 2: revoked-key, exit 3;
+- withdrawn at revision 2: withdrawn-release, exit 4;
+- superseded at revision 2: superseded-release, exit 4;
+- corrected at revision 2: corrected-release, exit 4;
+- expired at revision 2: expired-release, exit 4.
+
+Changing current status never regenerates the release manifest, release
+signature, records, artifacts, static report, or immutable output set.
+
+## Limitations
+
+The verifier proves the supplied chain's internal signature and revision
+closure. It cannot prove that this offline chain is the globally latest
+distributed revision. Trust-root authenticity and status-chain distribution
+freshness are external decisions. There is no trusted timestamp or transparency
+log. Verification is not certification, a security proof, Product release
+approval, or production readiness.

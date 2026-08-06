@@ -64,10 +64,22 @@ sign only manifests; status keys can sign only status sets.
 ### Mutable manifest versus immutable bundle plus signed status
 
 Rewriting a signed manifest for withdrawal or correction destroys the original
-byte authority. Draft 0.1 keeps each bundle immutable and applies expiry,
-withdrawal, supersession, correction, and key status through a separately
-signed status set. Corrections and supersessions require new release/bundle
-identities and explicit replacement references.
+byte authority. Draft 0.1 keeps each bundle immutable and applies expiry, withdrawal,
+supersession, correction, and key status through an independently distributed,
+revisioned signed status chain. The immutable output set binds neither status
+bytes nor dynamic verifier output. Corrections and supersessions require new
+release/bundle identities and explicit replacement references.
+
+### Bundled status/current report versus external status chain/dynamic result
+
+Binding mutable status and time-dependent verifier output into a release output
+set would require rewriting otherwise unchanged release bytes. Draft 0.1 instead
+commits one immutable static content report, distributes signed status revisions
+under a separate closed chain manifest/output set, and writes dynamic verifier
+JSON/Markdown outside the bundle. This permits a later compromise, withdrawal,
+supersession, correction, or expiry revision to apply to the original signed
+bundle. The verifier validates the supplied chain but cannot prove global
+distribution freshness.
 
 ### Bundle timestamp versus trusted timestamp
 
@@ -94,8 +106,8 @@ separate human-approved export, signing, and publication sequence.
 
 Embedding trust or network discovery in a bundle would let the subject choose
 its own authority and would make results environment-dependent. Draft 0.1
-provides a repository reference CLI that accepts one explicit bundle, trust
-root, status set/signature, and verification time. It performs no network or
+provides a repository reference CLI that accepts one explicit immutable bundle,
+trust root, closed status-chain root, and verification time. It performs no network or
 private-repository access and emits deterministic JSON authority plus derived
 Markdown.
 
@@ -109,9 +121,9 @@ Adopt:
 - separate release-signing and status-signing fixture keys;
 - SHA-256 of SPKI DER as key identity;
 - an external explicit trust root;
-- immutable release content plus a separately signed status set;
+- immutable release content, an external revisioned signed status chain, and dynamic verifier outputs as three separate artifact classes;
 - conservative compromise revocation without trusted time;
-- one exact path/digest/size/role closure and detached output-set digest;
+- separate exact path/digest/size/role closures for the immutable bundle and external status chain;
 - A1 claim evaluation independent of signature validity;
 - stable structured results and exit codes;
 - a fixture-only signer and complete deterministic public fixture;
@@ -122,8 +134,8 @@ Adopt:
 
 The test key is intentionally public and proves implementation behavior only.
 An attacker can reproduce fixture signatures, so fixture trust has no
-production meaning. The external trust-root/status distribution problem and
-historical validation after compromise remain unsolved until separate
+production meaning. The external trust-root/status-chain freshness problem and historical
+validation after compromise remain unsolved until separate
 production key-custody and timestamp/transparency decisions are reviewed.
 
 The repository gains additional Schemas, profiles, deterministic artifacts,

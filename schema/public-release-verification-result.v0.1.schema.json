@@ -69,6 +69,7 @@
               "reason_code": {
                 "enum": [
                   "claim-reference-invalid",
+                  "claim-assumption-classification-invalid",
                   "claim-or-evidence-not-supported",
                   "evidence-lifecycle-not-supporting",
                   "required-assumption-invalidated",

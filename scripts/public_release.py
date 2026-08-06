@@ -205,6 +205,10 @@ CLAIM_RESULT_VALUES = (
 CLAIM_EVALUATION_POLICY = {
     "verification_time_applies_to_claim_validity": True,
     "claim_validity_interval": "inclusive",
+    "positive_claim_assumption_contract": {
+        "supported": {"minimum_assumptions": 0, "maximum_assumptions": 0},
+        "supported-with-assumptions": {"minimum_assumptions": 1},
+    },
     "positive_evidence_statuses": ["pass"],
     "supporting_evidence_lifecycles": [
         "collected",
@@ -1362,6 +1366,13 @@ def _evaluate_claims(
             assumptions[item]["status"] if item in assumptions else "missing"
             for item in assumption_refs
         ]
+        positive_claim = claim["status"] in {
+            "supported",
+            "supported-with-assumptions",
+        }
+        assumption_classification_invalid = (
+            claim["status"] == "supported" and bool(assumption_refs)
+        ) or (claim["status"] == "supported-with-assumptions" and not assumption_refs)
         subject_mismatch = any(
             evidence[item].get("subject") != claim.get("subject")
             for item in evidence_refs
@@ -1378,21 +1389,29 @@ def _evaluate_claims(
             valid_at_verification_time = verification >= valid_from and (
                 valid_until is None or verification <= valid_until
             )
-        if missing or subject_mismatch:
+        if assumption_classification_invalid:
+            result = "invalid-reference"
+            reason = "claim-assumption-classification-invalid"
+        elif missing or subject_mismatch or (positive_claim and not evidence_refs):
             result = "invalid-reference"
             reason = "claim-reference-invalid"
         elif (
             claim["status"] in {"not-supported", "expired", "withdrawn"}
             or "fail" in statuses
-            or any(
-                lifecycle in {"superseded", "withdrawn"}
-                for lifecycle in evidence_lifecycles
+            or (
+                positive_claim
+                and any(
+                    lifecycle
+                    not in CLAIM_EVALUATION_POLICY["supporting_evidence_lifecycles"]
+                    for lifecycle in evidence_lifecycles
+                )
             )
             or "invalidated" in assumption_statuses
         ):
             result = "not-supported"
-            if any(
-                lifecycle in {"superseded", "withdrawn"}
+            if positive_claim and any(
+                lifecycle
+                not in CLAIM_EVALUATION_POLICY["supporting_evidence_lifecycles"]
                 for lifecycle in evidence_lifecycles
             ):
                 reason = "evidence-lifecycle-not-supporting"
@@ -1412,17 +1431,29 @@ def _evaluate_claims(
         elif "expired" in assumption_statuses:
             result = "not-evaluated"
             reason = "required-assumption-expired"
-        elif claim["status"] == "supported-with-assumptions":
-            if not assumption_refs:
-                result = "invalid-reference"
-                reason = "required-assumption-missing"
-            else:
-                result = "supported-with-assumptions"
-                reason = "evidence-pass-assumptions-visible"
+        elif (
+            claim["status"] == "supported-with-assumptions"
+            and assumption_refs
+            and all(status == "active" for status in assumption_statuses)
+            and evidence_refs
+            and all(status == "pass" for status in statuses)
+            and all(
+                lifecycle in CLAIM_EVALUATION_POLICY["supporting_evidence_lifecycles"]
+                for lifecycle in evidence_lifecycles
+            )
+        ):
+            result = "supported-with-assumptions"
+            reason = "evidence-pass-assumptions-visible"
         elif (
             claim["status"] == "supported"
+            and not assumption_refs
+            and evidence_refs
             and statuses
             and all(status == "pass" for status in statuses)
+            and all(
+                lifecycle in CLAIM_EVALUATION_POLICY["supporting_evidence_lifecycles"]
+                for lifecycle in evidence_lifecycles
+            )
         ):
             result = "supported"
             reason = "required-evidence-pass"
@@ -3230,6 +3261,8 @@ NEGATIVE_FIXTURE_CASES = [
     ("claim-expired-at-verification-time", "not-evaluated", 5),
     ("assumption-invalidated", "claims-not-supported", 5),
     ("assumption-expired", "not-evaluated", 5),
+    ("claim-supported-with-assumption", "invalid-structure", 1),
+    ("claim-supported-without-required-assumption", "invalid-structure", 1),
     ("malformed-trust-root", "untrusted-key", 3),
     ("invalid-status-signature", "invalid-signature", 1),
     ("embedded-untrusted-key", "untrusted-key", 3),

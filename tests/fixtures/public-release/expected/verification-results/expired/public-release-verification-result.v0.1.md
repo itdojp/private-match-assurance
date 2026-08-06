@@ -8,7 +8,7 @@
 - Version: `0.1.0`
 - Channel: `fixture`
 - Bundle revision: `1`
-- Manifest digest: `sha256:7ecff1079afe60b8169bc420d25aa6ee3626dfc020631fe886c00b8b73181092`
+- Manifest digest: `sha256:5bfde7ba6b1901671d4a6a710ca120c4ff9567b2cd705670668072ba6b102205`
 - Overall: `expired-release`
 - Verification time: `2026-08-04T00:00:00Z`
 
@@ -21,7 +21,7 @@
 - Key status: `active`
 - Release lifecycle: `expired`
 - Selected status revision: `2`
-- Status-chain manifest digest: `sha256:10019d271297b97b57a07c0f5a2fe13a6fbbc353c118141abf9f470faa036579`
+- Status-chain manifest digest: `sha256:4f323fd4e29b6e85909a52a6fbf57f3e537f9729f93e5dac9a19bf7c55a7ce03`
 
 ## Authorities and artifacts
 

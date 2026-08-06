@@ -55,6 +55,7 @@ from scripts.public_release import (
     detached_digest,
     detached_jcs_sha256,
     dsse_pae,
+    evaluate_claims,
     finalize_status_set,
     generate_fixture_bundle,
     generate_fixture_suite,
@@ -67,7 +68,9 @@ from scripts.public_release import (
     sign_fixture_dsse,
     validate_fixture_catalog,
     validate_fixture_private_key_boundary,
+    validate_named_schema,
     validate_trust_root,
+    verify_dsse_signature,
     verify_public_release_bundle,
     verify_rfc8032_vector,
 )
@@ -478,6 +481,90 @@ class PublicReleaseTests(unittest.TestCase):
         )
         self.assertEqual(by_id["PM-CLAIM-6001"]["evidence_lifecycles"], ["sanitized"])
         self.assertEqual(by_id["PM-CLAIM-6003"]["assumption_statuses"], ["active"])
+        self.assertTrue(
+            all(
+                not claim["assumption_ids"]
+                for claim in by_id.values()
+                if claim["result"] == "supported"
+            )
+        )
+        self.assertTrue(
+            all(
+                claim["assumption_ids"]
+                for claim in by_id.values()
+                if claim["result"] == "supported-with-assumptions"
+            )
+        )
+
+    def test_supported_claim_without_assumptions_is_unconditional(self) -> None:
+        records, _ = self.records_and_artifacts()
+        evaluated = evaluate_claims(records, VERIFICATION_TIME)
+        claim = next(
+            item for item in evaluated["results"] if item["claim_id"] == "PM-CLAIM-6001"
+        )
+        self.assertEqual(claim["declared_status"], "supported")
+        self.assertEqual(claim["assumption_ids"], [])
+        self.assertEqual(claim["assumption_statuses"], [])
+        self.assertEqual(claim["result"], "supported")
+
+    def test_claim_schema_rejects_supported_with_assumption(self) -> None:
+        records, _ = self.records_and_artifacts()
+        claim = records["PM-CLAIM-6001"]
+        claim["assumptions"] = ["PM-ASSUMPTION-6001"]
+        with self.assertRaisesRegex(
+            PublicReleaseError, "artifact does not match its reviewed Schema"
+        ):
+            validate_named_schema(claim, "claim", load_public_release_schemas(ROOT))
+
+    def test_direct_evaluator_rejects_supported_with_assumption(self) -> None:
+        records, _ = self.records_and_artifacts()
+        records["PM-CLAIM-6001"]["assumptions"] = ["PM-ASSUMPTION-6001"]
+        evaluated = evaluate_claims(records, VERIFICATION_TIME)
+        claim = next(
+            item for item in evaluated["results"] if item["claim_id"] == "PM-CLAIM-6001"
+        )
+        self.assertEqual(claim["declared_status"], "supported")
+        self.assertEqual(claim["assumption_statuses"], ["active"])
+        self.assertEqual(claim["result"], "invalid-reference")
+        self.assertEqual(
+            claim["reason_code"], "claim-assumption-classification-invalid"
+        )
+        self.assertEqual(evaluated["status_counts"]["supported"], 2)
+        self.assertEqual(evaluated["status_counts"]["invalid-reference"], 1)
+
+    def test_supported_with_active_assumption_remains_conditional(self) -> None:
+        records, _ = self.records_and_artifacts()
+        evaluated = evaluate_claims(records, VERIFICATION_TIME)
+        claim = next(
+            item for item in evaluated["results"] if item["claim_id"] == "PM-CLAIM-6003"
+        )
+        self.assertEqual(claim["declared_status"], "supported-with-assumptions")
+        self.assertEqual(claim["assumption_ids"], ["PM-ASSUMPTION-6001"])
+        self.assertEqual(claim["assumption_statuses"], ["active"])
+        self.assertEqual(claim["result"], "supported-with-assumptions")
+
+    def test_claim_schema_rejects_conditional_support_without_assumption(self) -> None:
+        records, _ = self.records_and_artifacts()
+        claim = records["PM-CLAIM-6003"]
+        claim["assumptions"] = []
+        with self.assertRaisesRegex(
+            PublicReleaseError, "artifact does not match its reviewed Schema"
+        ):
+            validate_named_schema(claim, "claim", load_public_release_schemas(ROOT))
+
+    def test_direct_evaluator_rejects_conditional_support_without_assumption(
+        self,
+    ) -> None:
+        records, _ = self.records_and_artifacts()
+        records["PM-CLAIM-6003"]["assumptions"] = []
+        evaluated = evaluate_claims(records, VERIFICATION_TIME)
+        claim = next(
+            item for item in evaluated["results"] if item["claim_id"] == "PM-CLAIM-6003"
+        )
+        self.assertEqual(claim["result"], "invalid-reference")
+        self.assertEqual(
+            claim["reason_code"], "claim-assumption-classification-invalid"
+        )
 
     def test_all_evidence_status_counts_remain_visible(self) -> None:
         result, _ = self.verify()
@@ -1560,6 +1647,89 @@ class PublicReleaseTests(unittest.TestCase):
                 self.assertEqual(claim["result"], claim_result)
                 self.assertEqual(claim["reason_code"], reason)
                 self.assertEqual(claim["assumption_statuses"], [status])
+
+    def test_conditional_claim_rejects_missing_assumption_reference(self) -> None:
+        records, _ = self.records_and_artifacts()
+        records["PM-CLAIM-6003"]["assumptions"] = ["PM-ASSUMPTION-6999"]
+        evaluated = evaluate_claims(records, VERIFICATION_TIME)
+        claim = next(
+            item for item in evaluated["results"] if item["claim_id"] == "PM-CLAIM-6003"
+        )
+        self.assertEqual(claim["result"], "invalid-reference")
+        self.assertEqual(claim["reason_code"], "claim-reference-invalid")
+        self.assertEqual(claim["assumption_statuses"], ["missing"])
+
+    def test_conditional_claim_rejects_withdrawn_pass_evidence(self) -> None:
+        records, _ = self.records_and_artifacts()
+        evidence = records["PM-EVIDENCE-6002"]
+        evidence["lifecycle"] = "withdrawn"
+        evaluated = evaluate_claims(records, VERIFICATION_TIME)
+        claim = next(
+            item for item in evaluated["results"] if item["claim_id"] == "PM-CLAIM-6003"
+        )
+        self.assertEqual(claim["evidence_statuses"], ["pass"])
+        self.assertEqual(claim["evidence_lifecycles"], ["withdrawn"])
+        self.assertEqual(claim["result"], "not-supported")
+        self.assertEqual(claim["reason_code"], "evidence-lifecycle-not-supporting")
+
+    def test_conditional_claim_outside_validity_window_is_not_evaluated(
+        self,
+    ) -> None:
+        records, _ = self.records_and_artifacts()
+        records["PM-CLAIM-6003"]["valid_until"] = "2026-08-03T00:00:00Z"
+        evaluated = evaluate_claims(records, VERIFICATION_TIME)
+        claim = next(
+            item for item in evaluated["results"] if item["claim_id"] == "PM-CLAIM-6003"
+        )
+        self.assertFalse(claim["valid_at_verification_time"])
+        self.assertEqual(claim["result"], "not-evaluated")
+        self.assertEqual(claim["reason_code"], "claim-not-valid-at-verification-time")
+
+    def test_resigned_inconsistent_positive_claims_fail_structure(self) -> None:
+        cases = (
+            (
+                "claim-supported-with-assumption",
+                "PM-CLAIM-6003",
+                "supported",
+                ["PM-ASSUMPTION-6001"],
+            ),
+            (
+                "claim-supported-without-required-assumption",
+                "PM-CLAIM-6003",
+                "supported-with-assumptions",
+                [],
+            ),
+        )
+        for case_id, claim_id, status, assumptions in cases:
+            with self.subTest(case_id=case_id):
+                shutil.rmtree(self.bundle)
+                shutil.copytree(ROOT / EXPECTED_BUNDLE_PATH, self.bundle)
+                claim_path = self.bundle / "records/claims/pm-claim-6003.json"
+                claim = load_json(claim_path)
+                claim["status"] = status
+                claim["assumptions"] = assumptions
+                write_json(claim_path, claim)
+                self.regenerate_from_content()
+
+                trust = load_json(self.trust)
+                keys = validate_trust_root(
+                    ROOT, trust, load_public_release_schemas(ROOT)
+                )
+                manifest = load_json(self.bundle / MANIFEST_PATH)
+                envelope = load_json(self.bundle / RELEASE_ENVELOPE_PATH)
+                payload = verify_dsse_signature(
+                    ROOT,
+                    envelope,
+                    RELEASE_PAYLOAD_TYPE,
+                    keys[RELEASE_KEY_ID],
+                )
+                self.assertEqual(payload, canonicalize(manifest))
+
+                result, code = self.verify()
+                self.assertEqual(
+                    (result["overall"]["status"], code),
+                    ("invalid-structure", 1),
+                )
 
     def test_report_json_and_markdown_mutations_fail_after_output_redigest(
         self,

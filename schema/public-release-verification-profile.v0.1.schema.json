@@ -50,6 +50,7 @@
       "required": [
         "verification_time_applies_to_claim_validity",
         "claim_validity_interval",
+        "positive_claim_assumption_contract",
         "positive_evidence_statuses",
         "supporting_evidence_lifecycles",
         "non_supporting_evidence_lifecycles",
@@ -63,6 +64,44 @@
         },
         "claim_validity_interval": {
           "const": "inclusive"
+        },
+        "positive_claim_assumption_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "supported",
+            "supported-with-assumptions"
+          ],
+          "properties": {
+            "supported": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "minimum_assumptions",
+                "maximum_assumptions"
+              ],
+              "properties": {
+                "minimum_assumptions": {
+                  "const": 0
+                },
+                "maximum_assumptions": {
+                  "const": 0
+                }
+              }
+            },
+            "supported-with-assumptions": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "minimum_assumptions"
+              ],
+              "properties": {
+                "minimum_assumptions": {
+                  "const": 1
+                }
+              }
+            }
+          }
         },
         "positive_evidence_statuses": {
           "const": [

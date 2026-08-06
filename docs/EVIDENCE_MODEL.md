@@ -192,6 +192,14 @@ subject-inconsistent reference is `invalid-reference`. A supported signature
 does not promote any of these outcomes. See
 [`SIGNED_PUBLIC_RELEASE.md`](SIGNED_PUBLIC_RELEASE.md).
 
+The signed positive classification also binds Assumption dependency exactly.
+`supported` requires an empty Assumption reference list and represents support
+that is unconditional only within the Claim's declared scope.
+`supported-with-assumptions` requires one or more references and is the only
+positive status permitted to depend on Assumptions. A conflict between the
+signed status and reference list is an invalid record; neither Schema
+validation nor the evaluator silently rewrites the declaration.
+
 The Draft ae-framework integration preserves this exact vocabulary for every
 producer and external tool. It does not collapse or promote statuses: in
 particular, `skip` and `unsupported` do not become `pass`, while `timeout` and

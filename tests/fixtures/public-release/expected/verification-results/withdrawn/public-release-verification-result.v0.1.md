@@ -8,7 +8,7 @@
 - Version: `0.1.0`
 - Channel: `fixture`
 - Bundle revision: `1`
-- Manifest digest: `sha256:7ecff1079afe60b8169bc420d25aa6ee3626dfc020631fe886c00b8b73181092`
+- Manifest digest: `sha256:5bfde7ba6b1901671d4a6a710ca120c4ff9567b2cd705670668072ba6b102205`
 - Overall: `withdrawn-release`
 - Verification time: `2026-08-04T00:00:00Z`
 
@@ -21,7 +21,7 @@
 - Key status: `active`
 - Release lifecycle: `withdrawn`
 - Selected status revision: `2`
-- Status-chain manifest digest: `sha256:222c69b883ea99ce1d17fcee87c9fcf6177900c47cb9c4133088f6572b3f931e`
+- Status-chain manifest digest: `sha256:032d19e351e37aa83b37a79a8433baf977fc2ecf2ff7b5806ff290c67438ab68`
 
 ## Authorities and artifacts
 

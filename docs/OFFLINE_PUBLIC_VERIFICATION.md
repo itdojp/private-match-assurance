@@ -47,6 +47,10 @@ Assumption to be `active`. Invalidated Assumptions and non-supporting Evidence
 lifecycles produce `not-supported`; expired Assumptions or Claims outside their
 own validity window produce `not-evaluated`. The JSON result exposes those
 status, lifecycle, and validity inputs independently from signature validity.
+An unconditional `supported` declaration must have no Assumption references;
+`supported-with-assumptions` must have one or more. An inconsistent signed
+positive Claim is invalid structure, not a declaration that the verifier may
+normalize. Signature validity does not override this rule.
 
 ## Dynamic result and exit codes
 

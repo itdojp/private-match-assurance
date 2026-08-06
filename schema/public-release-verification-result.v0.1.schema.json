@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-release-verification-result.v0.1.schema.json",
+  "title": "Public release offline verification result v0.1",
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "statusCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pass", "fail", "skip", "unsupported", "timeout", "tool-error"],
+      "properties": {
+        "pass": {"type": "integer", "minimum": 0},
+        "fail": {"type": "integer", "minimum": 0},
+        "skip": {"type": "integer", "minimum": 0},
+        "unsupported": {"type": "integer", "minimum": 0},
+        "timeout": {"type": "integer", "minimum": 0},
+        "tool-error": {"type": "integer", "minimum": 0}
+      }
+    },
+    "overall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "limitations"],
+      "properties": {
+        "status": {
+          "enum": [
+            "verified-fixture",
+            "verified-fixture-with-limitations",
+            "invalid-signature",
+            "untrusted-key",
+            "revoked-key",
+            "unsupported-algorithm",
+            "invalid-structure",
+            "incomplete-bundle",
+            "invalid-report-linkage",
+            "withdrawn-release",
+            "superseded-release",
+            "corrected-release",
+            "expired-release",
+            "claims-not-supported",
+            "not-evaluated"
+          ]
+        },
+        "reason_code": {"type": "string", "minLength": 1},
+        "limitations": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "record_type",
+        "artifact_status",
+        "verification_time",
+        "release",
+        "manifest_digest",
+        "release_signature",
+        "trust",
+        "structure",
+        "digest_closure",
+        "report_linkage",
+        "release_lifecycle",
+        "status_chain",
+        "claims",
+        "overall",
+        "subject",
+        "source_revision_digest",
+        "release_artifact_digest",
+        "sbom_digest",
+        "build_provenance_digest",
+        "authorities",
+        "record_counts",
+        "evidence_status_counts",
+        "publication",
+        "statements",
+        "verification_result_digest"
+      ],
+      "properties": {
+        "schema_version": {"const": "0.1"},
+        "record_type": {"const": "public-release-verification-result"},
+        "artifact_status": {"const": "test-only"},
+        "verification_time": {"type": "string", "format": "date-time"},
+        "release": {"type": "object"},
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "release_signature": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["envelope_valid", "payload_type_supported", "algorithm_supported", "signature_valid", "key_id"],
+          "properties": {
+            "envelope_valid": {"type": "boolean"},
+            "payload_type_supported": {"type": "boolean"},
+            "algorithm_supported": {"type": "boolean"},
+            "signature_valid": {"type": "boolean"},
+            "key_id": {"$ref": "#/$defs/digest"}
+          }
+        },
+        "trust": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["trust_domain_valid", "key_known", "key_usage_valid", "key_valid_at_verification_time", "key_status", "key_revoked"],
+          "properties": {
+            "trust_domain_valid": {"type": "boolean"},
+            "key_known": {"type": "boolean"},
+            "key_usage_valid": {"type": "boolean"},
+            "key_valid_at_verification_time": {"type": "boolean"},
+            "key_status": {"enum": ["active", "revoked", "expired", "superseded"]},
+            "key_revoked": {"type": "boolean"}
+          }
+        },
+        "structure": {"type": "object"},
+        "digest_closure": {"type": "object"},
+        "report_linkage": {"type": "object"},
+        "release_lifecycle": {"type": "object"},
+        "status_chain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["chain_manifest_digest", "chain_output_set_digest", "latest_revision", "latest_status_set_digest"],
+          "properties": {
+            "chain_manifest_digest": {"$ref": "#/$defs/digest"},
+            "chain_output_set_digest": {"$ref": "#/$defs/digest"},
+            "latest_revision": {"type": "integer", "minimum": 1},
+            "latest_status_set_digest": {"$ref": "#/$defs/digest"}
+          }
+        },
+        "claims": {"type": "object"},
+        "overall": {"$ref": "#/$defs/overall"},
+        "subject": {"type": "object"},
+        "source_revision_digest": {"$ref": "#/$defs/digest"},
+        "release_artifact_digest": {"$ref": "#/$defs/digest"},
+        "sbom_digest": {"$ref": "#/$defs/digest"},
+        "build_provenance_digest": {"$ref": "#/$defs/digest"},
+        "authorities": {"type": "object"},
+        "record_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["claims", "assumptions", "evidence", "limitations"],
+          "properties": {
+            "claims": {"type": "integer", "minimum": 0},
+            "assumptions": {"type": "integer", "minimum": 0},
+            "evidence": {"type": "integer", "minimum": 0},
+            "limitations": {"type": "integer", "minimum": 0}
+          }
+        },
+        "evidence_status_counts": {"$ref": "#/$defs/statusCounts"},
+        "publication": {"type": "object"},
+        "statements": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 3, "uniqueItems": true},
+        "verification_result_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "record_type", "artifact_status", "verification_time", "overall", "verification_result_digest"],
+      "properties": {
+        "schema_version": {"const": "0.1"},
+        "record_type": {"const": "public-release-verification-result"},
+        "artifact_status": {"const": "test-only"},
+        "verification_time": {"type": "string", "format": "date-time"},
+        "overall": {
+          "allOf": [
+            {"$ref": "#/$defs/overall"},
+            {"required": ["reason_code"]}
+          ]
+        },
+        "verification_result_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  ]
+}

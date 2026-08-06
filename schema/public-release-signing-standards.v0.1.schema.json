@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-release-signing-standards.v0.1.schema.json",
+  "title": "Public release signing standards v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_status",
+    "authority_id",
+    "standards",
+    "limitations",
+    "standards_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "artifact_status": {
+      "const": "test-only"
+    },
+    "authority_id": {
+      "const": "private-match-public-release-signing-standards"
+    },
+    "standards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "standard_id",
+          "version",
+          "official_source",
+          "reviewed_identifier",
+          "profile_usage",
+          "limitations"
+        ],
+        "properties": {
+          "standard_id": {
+            "enum": [
+              "RFC-8785",
+              "RFC-8032",
+              "DSSE",
+              "NODE-CRYPTO"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "official_source": {
+            "type": "string",
+            "format": "uri"
+          },
+          "reviewed_identifier": {
+            "type": "string",
+            "minLength": 1
+          },
+          "repository": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "profile_usage": {
+            "type": "string",
+            "minLength": 1
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        }
+      },
+      "minItems": 4
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "standards_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

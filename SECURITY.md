@@ -30,3 +30,18 @@ Security-sensitive evidence may remain private or embargoed until remediation an
 ## Claim boundary
 
 A valid signature or manifest proves neither security nor correctness. Vulnerability handling must preserve that distinction.
+
+## Signed fixture key boundary
+
+Draft 0.1 contains two intentionally public synthetic fixture private keys only
+under `tests/fixtures/public-release/keys/`. They must never be reused for a
+Product or production release. The fixture signer accepts no arbitrary key
+path, environment-selected key, KMS/HSM URI, cloud credential, or CI secret.
+Repository validation allowlists the two exact PEM fixture paths and rejects
+fixture private-key material elsewhere.
+
+The public verifier trusts only its explicit external trust-root input; a key
+embedded in or supplied solely by a bundle is untrusted. There is no trusted
+timestamp or transparency log. Report unexpected key material, cross-usage of
+release/status keys, status rollback, digest/path closure bypass, or verifier
+network access as a security issue.

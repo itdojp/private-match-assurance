@@ -12,7 +12,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -44,6 +44,38 @@ jobs:
           python scripts/ae_assurance_implementation.py --check
           python scripts/validate_ae_assurance.py
           python scripts/generate_ae_assurance_fixtures.py --check
+      - name: Validate signed public release fixture offline
+        env:
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: localhost,127.0.0.1
+          GITHUB_TOKEN: ''
+        run: |
+          python scripts/public_release_implementation.py --check
+          python scripts/generate_public_release_fixture.py --check
+          python scripts/validate_public_release.py
+          mkdir -p .codex-local/tmp/public-release-ci
+          python scripts/generate_public_release_fixture.py \
+            --output-root .codex-local/tmp/public-release-ci \
+            --output fixture-a
+          python scripts/generate_public_release_fixture.py \
+            --output-root .codex-local/tmp/public-release-ci \
+            --output fixture-b
+          diff --no-dereference --recursive \
+            .codex-local/tmp/public-release-ci/fixture-a \
+            .codex-local/tmp/public-release-ci/fixture-b
+          python scripts/verify_public_release_bundle.py \
+            --bundle-root .codex-local/tmp/public-release-ci/fixture-a/bundle \
+            --trust-root tests/fixtures/public-release/trust/fixture-trust-root.v0.1.json \
+            --status-chain-root .codex-local/tmp/public-release-ci/fixture-a/status-chains/active \
+            --verification-time 2026-08-04T00:00:00Z \
+            --output-json .codex-local/tmp/public-release-ci/verification.json \
+            --output-md .codex-local/tmp/public-release-ci/verification.md
+          cmp .codex-local/tmp/public-release-ci/verification.json \
+            tests/fixtures/public-release/expected/verification-results/active/public-release-verification-result.v0.1.json
+          cmp .codex-local/tmp/public-release-ci/verification.md \
+            tests/fixtures/public-release/expected/verification-results/active/public-release-verification-result.v0.1.md
       - name: Compile and lint Python
         run: |
           python -m compileall -q scripts tests

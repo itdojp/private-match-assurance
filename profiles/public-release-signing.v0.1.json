@@ -1,0 +1,48 @@
+{
+  "schema_version": "0.1",
+  "artifact_status": "test-only",
+  "mode": "fixture-test",
+  "profile_id": "private-match-public-release-signing",
+  "profile_version": "0.1",
+  "manifest_schema": {
+    "id": "https://itdo.jp/schemas/private-match/assurance/public-release-bundle-manifest.v0.1.schema.json",
+    "version": "0.1",
+    "path": "schema/public-release-bundle-manifest.v0.1.schema.json"
+  },
+  "release_manifest_payload_type": "application/vnd.itdo.private-match.assurance-release-manifest.v0.1+json",
+  "release_status_payload_type": "application/vnd.itdo.private-match.assurance-release-status-set.v0.1+json",
+  "dsse_version": "1.0.2",
+  "algorithm": "ed25519-rfc8032",
+  "key_id_derivation": "sha256-spki-der",
+  "public_key_encoding": "spki-der-base64",
+  "release_signing_usage": "release-signing",
+  "status_signing_usage": "release-status-signing",
+  "usage_separation_required": true,
+  "fixture_only": true,
+  "fixture_key_paths": {
+    "release_private": "tests/fixtures/public-release/keys/release-private.pem",
+    "release_public": "tests/fixtures/public-release/keys/release-public.pem",
+    "status_private": "tests/fixtures/public-release/keys/status-private.pem",
+    "status_public": "tests/fixtures/public-release/keys/status-public.pem"
+  },
+  "trust_domain_id": "itdo-private-match-assurance-fixture-v0.1",
+  "verifier_runtime": {
+    "python": "3.12",
+    "node": "22.22.2",
+    "network": "forbidden",
+    "verification_time": "required"
+  },
+  "production_signing": "unsupported",
+  "product_release_signing": "unsupported",
+  "environment_selected_key": false,
+  "arbitrary_private_key_path": false,
+  "kms_uri": false,
+  "hsm_uri": false,
+  "ci_secret": false,
+  "automation_permitted": false,
+  "limitations": [
+    "Fixture keys are synthetic and prohibited outside fixture-test mode.",
+    "Production KMS, HSM, key custody, approval, signing, and publication require a new reviewed profile."
+  ],
+  "profile_digest": "sha256:f25f5d9c07f5398bc81c929e8d0af62c63c6f1dd61bba20b2f4b999b12b31e72"
+}

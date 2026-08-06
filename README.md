@@ -85,6 +85,20 @@ generate a live approval. It does not invoke the public exporter, process live
 Product Evidence in this repository, certify the Product, or authorize
 publication.
 
+The Draft [signed public release profile](docs/SIGNED_PUBLIC_RELEASE.md) is a
+third, separate boundary. It creates only a catalogued synthetic `test-only`
+fixture bundle, signs exact RFC 8785 manifest bytes through DSSE v1 with a
+fixture Ed25519 key, and verifies it offline against an explicit external
+fixture trust root and an independently distributed, revisioned signed status
+chain. The immutable bundle contains neither current status nor dynamic
+verification output. Release signing and status/revocation signing use
+different keys. Claim support remains distinct from signature validity. The
+reference verifier uses an explicit verification time and stable structured
+results outside the bundle; it performs no network lookup, Product
+checkout, publication, artifact upload, or production signing. See
+[offline verification](docs/OFFLINE_PUBLIC_VERIFICATION.md) and the
+[key/revocation boundary](docs/KEY_AND_REVOCATION_BOUNDARY.md).
+
 ## Related repositories
 
 - `itdojp/private-match-protocol` — public protocol specifications and conformance assets
@@ -95,7 +109,9 @@ publication.
 
 ## Maturity
 
-The repository is in bootstrap. No public assurance report for a production Private Match release exists yet.
+The repository is in bootstrap. The committed signed release bundle is
+synthetic test data. No public assurance report for a production Private Match
+release exists yet.
 
 ## License
 

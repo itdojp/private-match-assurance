@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-release-content-report.v0.1.schema.json",
+  "title": "Immutable public release content report v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifact_status", "release", "signing", "protocol", "conformance", "ae_framework", "profiles", "subject", "source_revision_digest", "release_artifact_digest", "sbom_digest", "build_provenance_digest", "record_counts", "evidence_status_counts", "claims", "publication", "limitations"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "artifact_status": {"const": "test-only"},
+    "release": {"type": "object"},
+    "signing": {"type": "object"},
+    "protocol": {"type": "object"},
+    "conformance": {"type": "object"},
+    "ae_framework": {"type": "object"},
+    "profiles": {"type": "object"},
+    "subject": {"type": "object"},
+    "source_revision_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "release_artifact_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sbom_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "build_provenance_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "record_counts": {"type": "object"},
+    "evidence_status_counts": {"type": "object"},
+    "claims": {"type": "object"},
+    "publication": {"type": "object"},
+    "limitations": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  }
+}

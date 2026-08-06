@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itdo.jp/schemas/private-match/assurance/public-release-fixture-catalog.v0.1.schema.json",
+  "title": "Public release fixture catalog v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifact_status", "release_bundle", "trust_root", "status_chains", "negative_cases", "catalog_digest"],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "path": {"type": "string", "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?/)(?!.*//)[A-Za-z0-9._/-]+$"}
+  },
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "artifact_status": {"const": "test-only"},
+    "release_bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixture_id", "bundle_path", "manifest_digest", "release_signature_digest", "static_report_model_digest", "output_set_digest", "file_count"],
+      "properties": {
+        "fixture_id": {"const": "PUBLIC-RELEASE-IMMUTABLE-V0-1"},
+        "bundle_path": {"$ref": "#/$defs/path"},
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "release_signature_digest": {"$ref": "#/$defs/digest"},
+        "static_report_model_digest": {"$ref": "#/$defs/digest"},
+        "output_set_digest": {"$ref": "#/$defs/digest"},
+        "file_count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "trust_root": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest", "release_key_id", "status_key_id"],
+      "properties": {
+        "path": {"$ref": "#/$defs/path"},
+        "digest": {"$ref": "#/$defs/digest"},
+        "release_key_id": {"$ref": "#/$defs/digest"},
+        "status_key_id": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "status_chains": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fixture_id", "chain_root", "latest_revision", "latest_status_set_digest", "chain_manifest_digest", "chain_output_set_digest", "expected_overall", "expected_exit_code", "verification_time", "verification_json_path", "verification_json_digest", "verification_result_digest", "verification_markdown_path", "verification_markdown_digest"],
+        "properties": {
+          "fixture_id": {"type": "string", "minLength": 1},
+          "chain_root": {"$ref": "#/$defs/path"},
+          "latest_revision": {"type": "integer", "minimum": 1},
+          "latest_status_set_digest": {"$ref": "#/$defs/digest"},
+          "chain_manifest_digest": {"$ref": "#/$defs/digest"},
+          "chain_output_set_digest": {"$ref": "#/$defs/digest"},
+          "expected_overall": {"type": "string", "minLength": 1},
+          "expected_exit_code": {"type": "integer", "minimum": 0, "maximum": 5},
+          "verification_time": {"type": "string", "format": "date-time"},
+          "verification_json_path": {"$ref": "#/$defs/path"},
+          "verification_json_digest": {"$ref": "#/$defs/digest"},
+          "verification_result_digest": {"$ref": "#/$defs/digest"},
+          "verification_markdown_path": {"$ref": "#/$defs/path"},
+          "verification_markdown_digest": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "negative_cases": {
+      "type": "array",
+      "minItems": 44,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["case_id", "expected_overall", "expected_exit_code"],
+        "properties": {
+          "case_id": {"type": "string", "minLength": 1},
+          "expected_overall": {"type": "string", "minLength": 1},
+          "expected_exit_code": {"type": "integer", "minimum": 1, "maximum": 5}
+        }
+      }
+    },
+    "catalog_digest": {"$ref": "#/$defs/digest"}
+  }
+}

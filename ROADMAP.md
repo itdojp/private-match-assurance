@@ -95,6 +95,19 @@ Exit criteria:
 - a third party can verify signature, digests, schema, and report linkage
 - signature verification is not described as security certification
 
+Draft v0.1 artifacts are defined in
+[`docs/SIGNED_PUBLIC_RELEASE.md`](docs/SIGNED_PUBLIC_RELEASE.md),
+[`docs/OFFLINE_PUBLIC_VERIFICATION.md`](docs/OFFLINE_PUBLIC_VERIFICATION.md),
+and [`docs/KEY_AND_REVOCATION_BOUNDARY.md`](docs/KEY_AND_REVOCATION_BOUNDARY.md).
+The committed bundle is entirely synthetic and `test-only`. It uses RFC 8785,
+DSSE v1.0.2, and Ed25519 fixture keys, requires an external fixture trust root,
+separates release/status signing, and applies conservative compromise
+revocation without trusted timestamps. The signed bundle is immutable; signed
+status revisions are an external closed chain, and time/status-dependent
+verifier results remain outside the bundle. Production signing, key custody,
+Product release publication, GitHub Release creation, and automatic publication
+remain outside A4.
+
 ## A5 — First experimental release report
 
 Publish evidence for an experimental, non-production product slice.

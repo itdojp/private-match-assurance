@@ -8,7 +8,7 @@
 - Version: `0.1.0`
 - Channel: `fixture`
 - Bundle revision: `1`
-- Manifest digest: `sha256:c76653233aadae34f895349545d41b499a0e8f37474436642f2cafaf51473d4c`
+- Manifest digest: `sha256:7ecff1079afe60b8169bc420d25aa6ee3626dfc020631fe886c00b8b73181092`
 - Overall: `verified-fixture-with-limitations`
 - Verification time: `2026-08-04T00:00:00Z`
 
@@ -21,7 +21,7 @@
 - Key status: `active`
 - Release lifecycle: `active`
 - Selected status revision: `1`
-- Status-chain manifest digest: `sha256:ce154166d8eec82bb6ef98455a5027a744ce932fdbff961057825ca6086c4ef5`
+- Status-chain manifest digest: `sha256:ff2d1eb846ea30fcaee4e571a384cfa606528dbd0634085c1b34c0a3a1cbd07d`
 
 ## Authorities and artifacts
 
@@ -51,9 +51,21 @@
 ## Claim support
 
 - `PM-CLAIM-6001`: `supported` (required-evidence-pass)
+  - Valid at verification time: `true` (`2026-08-01T00:00:00Z` through `2027-08-01T00:00:00Z`)
+  - Assumptions: none
+  - Evidence: `PM-EVIDENCE-6001=pass/sanitized`
 - `PM-CLAIM-6002`: `supported` (required-evidence-pass)
+  - Valid at verification time: `true` (`2026-08-01T00:00:00Z` through `2027-08-01T00:00:00Z`)
+  - Assumptions: none
+  - Evidence: `PM-EVIDENCE-6001=pass/sanitized`, `PM-EVIDENCE-6003=pass/sanitized`
 - `PM-CLAIM-6003`: `supported-with-assumptions` (evidence-pass-assumptions-visible)
+  - Valid at verification time: `true` (`2026-08-01T00:00:00Z` through `2027-08-01T00:00:00Z`)
+  - Assumptions: `PM-ASSUMPTION-6001=active`
+  - Evidence: `PM-EVIDENCE-6002=pass/sanitized`
 - `PM-CLAIM-6004`: `supported` (required-evidence-pass)
+  - Valid at verification time: `true` (`2026-08-01T00:00:00Z` through `2027-08-01T00:00:00Z`)
+  - Assumptions: none
+  - Evidence: `PM-EVIDENCE-6003=pass/sanitized`
 
 ## Known limitations
 

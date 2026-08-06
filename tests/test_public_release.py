@@ -19,6 +19,7 @@ from scripts.canonical_json import (
 )
 from scripts.public_release import (
     ALGORITHM,
+    CLAIM_EVALUATION_POLICY,
     EXPECTED_BUNDLE_PATH,
     EXPECTED_STATUS_CHAINS_PATH,
     EXPECTED_VERIFICATION_RESULTS_PATH,
@@ -325,6 +326,9 @@ class PublicReleaseTests(unittest.TestCase):
         self.assertEqual(standards["standards"][0]["standard_id"], "RFC-8785")
         self.assertEqual(signing["algorithm"], ALGORITHM)
         self.assertEqual(verification["network"], "forbidden")
+        self.assertEqual(
+            verification["claim_evaluation_policy"], CLAIM_EVALUATION_POLICY
+        )
 
     def test_implementation_manifest_is_exact_and_mutation_resistant(self) -> None:
         path = ROOT / "manifests/public-release-verifier-implementation.v0.1.json"
@@ -468,6 +472,12 @@ class PublicReleaseTests(unittest.TestCase):
                 "invalid-reference": 0,
             },
         )
+        by_id = {item["claim_id"]: item for item in result["claims"]["results"]}
+        self.assertTrue(
+            all(item["valid_at_verification_time"] for item in by_id.values())
+        )
+        self.assertEqual(by_id["PM-CLAIM-6001"]["evidence_lifecycles"], ["sanitized"])
+        self.assertEqual(by_id["PM-CLAIM-6003"]["assumption_statuses"], ["active"])
 
     def test_all_evidence_status_counts_remain_visible(self) -> None:
         result, _ = self.verify()
@@ -1445,6 +1455,111 @@ class PublicReleaseTests(unittest.TestCase):
                 self.regenerate_from_content()
                 result, code = self.verify()
                 self.assertEqual((result["overall"]["status"], code), (expected, 5))
+
+    def test_non_supporting_evidence_lifecycle_blocks_positive_claims(self) -> None:
+        for lifecycle in ("superseded", "withdrawn"):
+            with self.subTest(lifecycle=lifecycle):
+                shutil.rmtree(self.bundle)
+                shutil.copytree(ROOT / EXPECTED_BUNDLE_PATH, self.bundle)
+                path = self.bundle / "records/evidence/pm-evidence-6001.json"
+                record = load_json(path)
+                if lifecycle == "superseded":
+                    record["lifecycle_history"].append(
+                        {
+                            "state": "published",
+                            "recorded_at": "2026-08-01T00:00:04Z",
+                            "review_digest": "sha256:" + "41" * 32,
+                        }
+                    )
+                record["lifecycle_history"].append(
+                    {
+                        "state": lifecycle,
+                        "recorded_at": "2026-08-01T00:00:05Z",
+                        "review_digest": "sha256:" + "42" * 32,
+                    }
+                )
+                record["lifecycle"] = lifecycle
+                write_json(path, record)
+                self.regenerate_from_content()
+                result, code = self.verify()
+                claim = next(
+                    item
+                    for item in result["claims"]["results"]
+                    if item["claim_id"] == "PM-CLAIM-6001"
+                )
+                self.assertEqual(
+                    (result["overall"]["status"], code),
+                    ("claims-not-supported", 5),
+                )
+                self.assertEqual(claim["result"], "not-supported")
+                self.assertEqual(
+                    claim["reason_code"], "evidence-lifecycle-not-supporting"
+                )
+                self.assertEqual(claim["evidence_lifecycles"], [lifecycle])
+
+    def test_claim_validity_window_is_applied_at_verification_time(self) -> None:
+        cases = (
+            ("valid_from", "2026-08-05T00:00:00Z"),
+            ("valid_until", "2026-08-03T00:00:00Z"),
+        )
+        for field, value in cases:
+            with self.subTest(field=field):
+                shutil.rmtree(self.bundle)
+                shutil.copytree(ROOT / EXPECTED_BUNDLE_PATH, self.bundle)
+                path = self.bundle / "records/claims/pm-claim-6001.json"
+                claim_record = load_json(path)
+                claim_record[field] = value
+                write_json(path, claim_record)
+                self.regenerate_from_content()
+                result, code = self.verify()
+                claim = next(
+                    item
+                    for item in result["claims"]["results"]
+                    if item["claim_id"] == "PM-CLAIM-6001"
+                )
+                self.assertEqual(
+                    (result["overall"]["status"], code), ("not-evaluated", 5)
+                )
+                self.assertEqual(claim["result"], "not-evaluated")
+                self.assertEqual(
+                    claim["reason_code"], "claim-not-valid-at-verification-time"
+                )
+                self.assertFalse(claim["valid_at_verification_time"])
+
+    def test_inactive_assumptions_do_not_support_claims(self) -> None:
+        cases = (
+            (
+                "invalidated",
+                "claims-not-supported",
+                "not-supported",
+                "required-assumption-invalidated",
+            ),
+            (
+                "expired",
+                "not-evaluated",
+                "not-evaluated",
+                "required-assumption-expired",
+            ),
+        )
+        for status, overall, claim_result, reason in cases:
+            with self.subTest(status=status):
+                shutil.rmtree(self.bundle)
+                shutil.copytree(ROOT / EXPECTED_BUNDLE_PATH, self.bundle)
+                path = self.bundle / "records/assumptions/pm-assumption-6001.json"
+                assumption = load_json(path)
+                assumption["status"] = status
+                write_json(path, assumption)
+                self.regenerate_from_content()
+                result, code = self.verify()
+                claim = next(
+                    item
+                    for item in result["claims"]["results"]
+                    if item["claim_id"] == "PM-CLAIM-6003"
+                )
+                self.assertEqual((result["overall"]["status"], code), (overall, 5))
+                self.assertEqual(claim["result"], claim_result)
+                self.assertEqual(claim["reason_code"], reason)
+                self.assertEqual(claim["assumption_statuses"], [status])
 
     def test_report_json_and_markdown_mutations_fail_after_output_redigest(
         self,

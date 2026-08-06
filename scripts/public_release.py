@@ -202,6 +202,21 @@ CLAIM_RESULT_VALUES = (
     "not-evaluated",
     "invalid-reference",
 )
+CLAIM_EVALUATION_POLICY = {
+    "verification_time_applies_to_claim_validity": True,
+    "claim_validity_interval": "inclusive",
+    "positive_evidence_statuses": ["pass"],
+    "supporting_evidence_lifecycles": [
+        "collected",
+        "validated",
+        "sanitized",
+        "published",
+    ],
+    "non_supporting_evidence_lifecycles": ["superseded", "withdrawn"],
+    "supporting_assumption_statuses": ["active"],
+    "invalidated_assumption_result": "not-supported",
+    "expired_assumption_result": "not-evaluated",
+}
 OVERALL_VALUES = (
     "verified-fixture",
     "verified-fixture-with-limitations",
@@ -357,6 +372,7 @@ def load_release_authority(
         or signing.get("automation_permitted") is not False
         or verification.get("overall_status_vocabulary") != list(OVERALL_VALUES)
         or verification.get("claim_result_vocabulary") != list(CLAIM_RESULT_VALUES)
+        or verification.get("claim_evaluation_policy") != CLAIM_EVALUATION_POLICY
     ):
         raise PublicReleaseError("release profile authority is unsupported")
     return standards, signing, verification
@@ -1294,7 +1310,14 @@ def _file_entries(values: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     return entries
 
 
-def evaluate_claims(records: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _evaluate_claims(
+    records: dict[str, dict[str, Any]], verification_time: str | None
+) -> dict[str, Any]:
+    """Evaluate immutable record state, optionally at one explicit verifier time."""
+
+    verification = (
+        parse_timestamp(verification_time) if verification_time is not None else None
+    )
     claims = {
         identifier: value
         for identifier, value in records.items()
@@ -1328,28 +1351,67 @@ def evaluate_claims(records: dict[str, dict[str, Any]]) -> dict[str, Any]:
             + [item for item in limitation_refs if item not in limitations]
         )
         statuses = [
-            evidence[item]["status"] for item in evidence_refs if item in evidence
+            evidence[item]["status"] if item in evidence else "missing"
+            for item in evidence_refs
+        ]
+        evidence_lifecycles = [
+            evidence[item]["lifecycle"] if item in evidence else "missing"
+            for item in evidence_refs
+        ]
+        assumption_statuses = [
+            assumptions[item]["status"] if item in assumptions else "missing"
+            for item in assumption_refs
         ]
         subject_mismatch = any(
             evidence[item].get("subject") != claim.get("subject")
             for item in evidence_refs
             if item in evidence
         )
+        valid_at_verification_time = None
+        if verification is not None:
+            valid_from = parse_timestamp(claim["valid_from"])
+            valid_until = (
+                parse_timestamp(claim["valid_until"])
+                if claim["valid_until"] is not None
+                else None
+            )
+            valid_at_verification_time = verification >= valid_from and (
+                valid_until is None or verification <= valid_until
+            )
         if missing or subject_mismatch:
             result = "invalid-reference"
             reason = "claim-reference-invalid"
         elif (
             claim["status"] in {"not-supported", "expired", "withdrawn"}
             or "fail" in statuses
+            or any(
+                lifecycle in {"superseded", "withdrawn"}
+                for lifecycle in evidence_lifecycles
+            )
+            or "invalidated" in assumption_statuses
         ):
             result = "not-supported"
-            reason = "claim-or-evidence-not-supported"
+            if any(
+                lifecycle in {"superseded", "withdrawn"}
+                for lifecycle in evidence_lifecycles
+            ):
+                reason = "evidence-lifecycle-not-supporting"
+            elif "invalidated" in assumption_statuses:
+                reason = "required-assumption-invalidated"
+            else:
+                reason = "claim-or-evidence-not-supported"
+        elif valid_at_verification_time is False:
+            result = "not-evaluated"
+            reason = "claim-not-valid-at-verification-time"
         elif any(
             status in {"skip", "unsupported", "timeout", "tool-error"}
             for status in statuses
         ):
             result = "not-evaluated"
             reason = "required-evidence-not-evaluated"
+        elif "expired" in assumption_statuses:
+            result = "not-evaluated"
+            reason = "required-assumption-expired"
         elif claim["status"] == "supported-with-assumptions":
             if not assumption_refs:
                 result = "invalid-reference"
@@ -1375,12 +1437,39 @@ def evaluate_claims(records: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 "result": result,
                 "reason_code": reason,
                 "assumption_ids": assumption_refs,
+                "assumption_statuses": assumption_statuses,
                 "evidence_ids": evidence_refs,
                 "limitation_ids": limitation_refs,
                 "evidence_statuses": statuses,
+                "evidence_lifecycles": evidence_lifecycles,
+                "valid_from": claim["valid_from"],
+                "valid_until": claim["valid_until"],
+                **(
+                    {
+                        "valid_at_verification_time": valid_at_verification_time,
+                    }
+                    if verification is not None
+                    else {}
+                ),
             }
         )
     return {"results": results, "status_counts": counts}
+
+
+def summarize_declared_claims(
+    records: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Summarize immutable signed declarations without a current-time result."""
+
+    return _evaluate_claims(records, None)
+
+
+def evaluate_claims(
+    records: dict[str, dict[str, Any]], verification_time: str
+) -> dict[str, Any]:
+    """Evaluate signed claims against record state and an explicit verifier time."""
+
+    return _evaluate_claims(records, verification_time)
 
 
 def _evidence_status_counts(records: dict[str, dict[str, Any]]) -> dict[str, int]:
@@ -1413,7 +1502,7 @@ def build_report_model(
     assurance_profile = read_strict_json(
         resolve_regular_file(root, "profiles/private-match-ae-assurance.v0.1.json")
     )
-    claim_evaluation = evaluate_claims(records)
+    claim_evaluation = summarize_declared_claims(records)
     model = {
         "schema_version": SCHEMA_VERSION,
         "artifact_status": ARTIFACT_STATUS,
@@ -1661,6 +1750,7 @@ def build_verification_report(
     status_set: dict[str, Any],
     *,
     status_chain: dict[str, Any],
+    claim_evaluation: dict[str, Any],
     overall_status: str = "verified-fixture-with-limitations",
     key_status: str = "active",
     release_state: str = "active",
@@ -1736,7 +1826,7 @@ def build_verification_report(
         "build_provenance_digest": report_model["build_provenance_digest"],
         "record_counts": report_model["record_counts"],
         "evidence_status_counts": report_model["evidence_status_counts"],
-        "claims": report_model["claims"],
+        "claims": claim_evaluation,
         "publication": report_model["publication"],
         "overall": {
             "status": overall_status,
@@ -1788,6 +1878,35 @@ def render_content_markdown(report: dict[str, Any]) -> bytes:
     for claim in report["claims"]["results"]:
         lines.append(
             f"- `{claim['claim_id']}`: `{claim['result']}` ({claim['reason_code']})"
+        )
+        lines.append(
+            f"  - Signed validity: `{claim['valid_from']}` through `{claim['valid_until'] or 'unbounded'}`"
+        )
+        lines.append(
+            "  - Assumptions: "
+            + (
+                ", ".join(
+                    f"`{identifier}={status}`"
+                    for identifier, status in zip(
+                        claim["assumption_ids"],
+                        claim["assumption_statuses"],
+                        strict=True,
+                    )
+                )
+                or "none"
+            )
+        )
+        lines.append(
+            "  - Evidence: "
+            + ", ".join(
+                f"`{identifier}={status}/{lifecycle}`"
+                for identifier, status, lifecycle in zip(
+                    claim["evidence_ids"],
+                    claim["evidence_statuses"],
+                    claim["evidence_lifecycles"],
+                    strict=True,
+                )
+            )
         )
     lines.extend(["", "## Known limitations", ""])
     for limitation in report["limitations"]:
@@ -1854,6 +1973,37 @@ def render_verification_markdown(report: dict[str, Any]) -> bytes:
     for claim in report["claims"]["results"]:
         lines.append(
             f"- `{claim['claim_id']}`: `{claim['result']}` ({claim['reason_code']})"
+        )
+        lines.append(
+            "  - Valid at verification time: "
+            f"`{str(claim['valid_at_verification_time']).lower()}` "
+            f"(`{claim['valid_from']}` through `{claim['valid_until'] or 'unbounded'}`)"
+        )
+        lines.append(
+            "  - Assumptions: "
+            + (
+                ", ".join(
+                    f"`{identifier}={status}`"
+                    for identifier, status in zip(
+                        claim["assumption_ids"],
+                        claim["assumption_statuses"],
+                        strict=True,
+                    )
+                )
+                or "none"
+            )
+        )
+        lines.append(
+            "  - Evidence: "
+            + ", ".join(
+                f"`{identifier}={status}/{lifecycle}`"
+                for identifier, status, lifecycle in zip(
+                    claim["evidence_ids"],
+                    claim["evidence_statuses"],
+                    claim["evidence_lifecycles"],
+                    strict=True,
+                )
+            )
         )
     lines.extend(["", "## Known limitations", ""])
     for limitation in report["overall"]["limitations"]:
@@ -2957,7 +3107,7 @@ def verify_public_release_bundle(
             trust_keys,
             verification_time,
         )
-        claim_evaluation = evaluate_claims(records)
+        claim_evaluation = evaluate_claims(records, verification_time)
         overall_status = "verified-fixture-with-limitations"
         exit_code = 0
         if key_status == "revoked":
@@ -2997,6 +3147,7 @@ def verify_public_release_bundle(
             key_status=key_status,
             release_state=release_state,
             verification_time=verification_time,
+            claim_evaluation=claim_evaluation,
         )
         validate_named_schema(runtime_report, "verification_result", schemas)
         return runtime_report, exit_code
@@ -3073,6 +3224,12 @@ NEGATIVE_FIXTURE_CASES = [
     ("missing-evidence-reference", "claims-not-supported", 5),
     ("evidence-fail", "claims-not-supported", 5),
     ("evidence-unsupported", "not-evaluated", 5),
+    ("evidence-superseded", "claims-not-supported", 5),
+    ("evidence-withdrawn", "claims-not-supported", 5),
+    ("claim-not-yet-valid", "not-evaluated", 5),
+    ("claim-expired-at-verification-time", "not-evaluated", 5),
+    ("assumption-invalidated", "claims-not-supported", 5),
+    ("assumption-expired", "not-evaluated", 5),
     ("malformed-trust-root", "untrusted-key", 3),
     ("invalid-status-signature", "invalid-signature", 1),
     ("embedded-untrusted-key", "untrusted-key", 3),

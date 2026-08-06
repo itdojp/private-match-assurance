@@ -12,6 +12,7 @@
     "trust_input",
     "network",
     "verification_time",
+    "claim_evaluation_policy",
     "stages",
     "claim_result_vocabulary",
     "overall_status_vocabulary",
@@ -42,6 +43,58 @@
     },
     "verification_time": {
       "const": "required"
+    },
+    "claim_evaluation_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verification_time_applies_to_claim_validity",
+        "claim_validity_interval",
+        "positive_evidence_statuses",
+        "supporting_evidence_lifecycles",
+        "non_supporting_evidence_lifecycles",
+        "supporting_assumption_statuses",
+        "invalidated_assumption_result",
+        "expired_assumption_result"
+      ],
+      "properties": {
+        "verification_time_applies_to_claim_validity": {
+          "const": true
+        },
+        "claim_validity_interval": {
+          "const": "inclusive"
+        },
+        "positive_evidence_statuses": {
+          "const": [
+            "pass"
+          ]
+        },
+        "supporting_evidence_lifecycles": {
+          "const": [
+            "collected",
+            "validated",
+            "sanitized",
+            "published"
+          ]
+        },
+        "non_supporting_evidence_lifecycles": {
+          "const": [
+            "superseded",
+            "withdrawn"
+          ]
+        },
+        "supporting_assumption_statuses": {
+          "const": [
+            "active"
+          ]
+        },
+        "invalidated_assumption_result": {
+          "const": "not-supported"
+        },
+        "expired_assumption_result": {
+          "const": "not-evaluated"
+        }
+      }
     },
     "stages": {
       "type": "array",

@@ -217,6 +217,11 @@ retains `status: pass` as historical execution evidence but cannot support an
 active claim. The append-only lifecycle history preserves the review path without
 overloading or rewriting the result status.
 
+The public release verifier enforces this lifecycle independently from the six
+Evidence result statuses. It also exposes the referenced lifecycle alongside the
+status in each dynamic Claim result, so a signature-valid bundle cannot hide a
+non-supporting Evidence lifecycle behind `status: pass`.
+
 ## Evidence strength
 
 Evidence strength is contextual, not a universal score. A model check supports bounded state-machine properties; it does not establish cryptographic hardness. A provenance attestation supports origin; it does not establish safety. A test supports the tested cases; it does not establish absence of other failures.

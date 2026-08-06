@@ -132,5 +132,16 @@ The closed result vocabulary is `supported`,
 `invalid-reference`. All referenced Evidence, Assumptions, and Limitations must
 exist and share the reviewed subject where applicable. Only `pass` Evidence can
 support a positive result. Unsupported or unavailable Evidence remains visible
-and never becomes `pass`. The fixture claims only mechanical properties and do
-not state Product security, correctness, certification, or readiness.
+and never becomes `pass`. A `pass` record whose lifecycle is `superseded` or
+`withdrawn` cannot support a positive claim. Every referenced Assumption must be
+`active`: `invalidated` produces `not-supported`, while `expired` produces
+`not-evaluated`.
+
+The caller-supplied verification time is applied to each Claim's inclusive
+`valid_from`/`valid_until` interval independently of the release's validity
+window. A Claim outside its own window is `not-evaluated`; a valid release
+signature cannot promote it to supported. Dynamic verifier output records the
+Claim window, the current validity result, each referenced Assumption status,
+and each referenced Evidence status/lifecycle. The fixture claims only
+mechanical properties and do not state Product security, correctness,
+certification, or readiness.

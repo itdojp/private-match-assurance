@@ -14,11 +14,14 @@ from scripts.canonical_json import (
     CanonicalJSONError,
     canonicalize,
     domain_digest,
+    file_digest,
     strict_loads,
 )
 from scripts.public_release import (
     ALGORITHM,
     EXPECTED_BUNDLE_PATH,
+    EXPECTED_STATUS_CHAINS_PATH,
+    EXPECTED_VERIFICATION_RESULTS_PATH,
     MANIFEST_PATH,
     NEGATIVE_FIXTURE_CASES,
     OUTPUT_SET_DOMAIN,
@@ -32,6 +35,11 @@ from scripts.public_release import (
     STATUS_KEY_ID,
     STATUS_SET_DOMAIN,
     STATUS_SET_PATH,
+    STATUS_CHAIN_MANIFEST_PATH,
+    STATUS_CHAIN_MANIFEST_DOMAIN,
+    STATUS_CHAIN_OUTPUT_SET_PATH,
+    STATUS_CHAIN_TREE_DOMAIN,
+    STATUS_CHAIN_VARIANTS,
     TRUST_ROOT_PATH,
     VERIFICATION_TIME,
     PublicReleaseError,
@@ -41,17 +49,20 @@ from scripts.public_release import (
     build_release_manifest,
     build_report_model,
     build_status_set,
-    build_verification_report,
+    build_status_chain_output_set,
     create_public_release_process_scratch,
     detached_digest,
     detached_jcs_sha256,
     dsse_pae,
     finalize_status_set,
     generate_fixture_bundle,
+    generate_fixture_suite,
+    generate_status_chain,
     load_public_release_schemas,
     load_release_authority,
     public_release_process_scratch,
     render_verification_markdown,
+    render_content_markdown,
     sign_fixture_dsse,
     validate_fixture_catalog,
     validate_fixture_private_key_boundary,
@@ -85,6 +96,10 @@ class PublicReleaseTests(unittest.TestCase):
         self.temp_root = Path(self.temp.name)
         self.bundle = self.temp_root / "bundle"
         shutil.copytree(ROOT / EXPECTED_BUNDLE_PATH, self.bundle)
+        self.status_chain = self.temp_root / "status-chain"
+        shutil.copytree(
+            ROOT / EXPECTED_STATUS_CHAINS_PATH / "active", self.status_chain
+        )
         self.trust = self.temp_root / "trust.json"
         shutil.copy2(ROOT / TRUST_ROOT_PATH, self.trust)
 
@@ -96,8 +111,7 @@ class PublicReleaseTests(unittest.TestCase):
             ROOT,
             self.bundle,
             trust or self.trust,
-            self.bundle / STATUS_SET_PATH,
-            self.bundle / STATUS_ENVELOPE_PATH,
+            self.status_chain,
             VERIFICATION_TIME,
         )
 
@@ -105,6 +119,94 @@ class PublicReleaseTests(unittest.TestCase):
         (self.bundle / OUTPUT_SET_PATH).unlink(missing_ok=True)
         output = build_output_set_from_directory(self.bundle)
         write_json(self.bundle / OUTPUT_SET_PATH, output)
+
+    def refresh_status_chain_output_set(self) -> None:
+        (self.status_chain / STATUS_CHAIN_OUTPUT_SET_PATH).unlink(missing_ok=True)
+        output = build_status_chain_output_set(self.status_chain)
+        write_json(self.status_chain / STATUS_CHAIN_OUTPUT_SET_PATH, output)
+
+    def redigest_status_chain(self) -> None:
+        chain = load_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH)
+        tree = []
+        for entry in chain["revisions"]:
+            status_path = self.status_chain / entry["status_set_path"]
+            signature_path = self.status_chain / entry["status_signature_path"]
+            status = load_json(status_path)
+            entry.update(
+                {
+                    "revision": status["revision"],
+                    "generated_at": status["generated_at"],
+                    "status_set_digest": status["status_set_digest"],
+                    "status_set_file_digest": file_digest(status_path.read_bytes()),
+                    "status_signature_digest": file_digest(signature_path.read_bytes()),
+                    "previous_status_set_digest": status["previous_status_set_digest"],
+                }
+            )
+            for path, role in (
+                (status_path, "status-set"),
+                (signature_path, "status-signature"),
+            ):
+                raw = path.read_bytes()
+                tree.append(
+                    {
+                        "path": path.relative_to(self.status_chain).as_posix(),
+                        "file_digest": file_digest(raw),
+                        "size": len(raw),
+                        "role": role,
+                    }
+                )
+        latest = load_json(
+            self.status_chain / chain["revisions"][-1]["status_set_path"]
+        )
+        chain["latest_revision"] = latest["revision"]
+        chain["latest_status_set_digest"] = latest["status_set_digest"]
+        chain["generated_at"] = latest["generated_at"]
+        chain["chain_tree_digest"] = domain_digest(
+            STATUS_CHAIN_TREE_DOMAIN, sorted(tree, key=lambda item: item["path"])
+        )
+        chain["chain_manifest_digest"] = detached_digest(
+            STATUS_CHAIN_MANIFEST_DOMAIN, chain, "chain_manifest_digest"
+        )
+        write_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH, chain)
+        self.refresh_status_chain_output_set()
+
+    def use_status_chain(self, variant: str) -> None:
+        shutil.rmtree(self.status_chain)
+        shutil.copytree(ROOT / EXPECTED_STATUS_CHAINS_PATH / variant, self.status_chain)
+
+    def resign_status_revision(self, revision: int) -> dict:
+        relative = f"revisions/{revision:04d}"
+        path = self.status_chain / relative / "public-release-status-set.v0.1.json"
+        envelope_path = (
+            self.status_chain / relative / "public-release-status-set.dsse.v0.1.json"
+        )
+        status = load_json(path)
+        entries = status["key_statuses"] + status["release_statuses"]
+        status["entry_set_digest"] = domain_digest(
+            "private-match-public-release-status-entry-set/v0.1", entries
+        )
+        status["status_set_digest"] = detached_digest(
+            STATUS_SET_DOMAIN, status, "status_set_digest"
+        )
+        write_json(path, status)
+        write_json(
+            envelope_path,
+            sign_fixture_dsse(
+                ROOT,
+                "application/vnd.itdo.private-match.assurance-release-status-set.v0.1+json",
+                canonicalize(status),
+                "release-status-signing",
+            ),
+        )
+        return status
+
+    def redigest_chain_manifest_only(self) -> None:
+        chain = load_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH)
+        chain["chain_manifest_digest"] = detached_digest(
+            STATUS_CHAIN_MANIFEST_DOMAIN, chain, "chain_manifest_digest"
+        )
+        write_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH, chain)
+        self.refresh_status_chain_output_set()
 
     def records_and_artifacts(self) -> tuple[dict, dict]:
         records = {}
@@ -118,6 +220,16 @@ class PublicReleaseTests(unittest.TestCase):
                 artifacts[entry["path"]] = value
         return records, artifacts
 
+    def regenerate_active_chain(self, manifest_digest: str) -> None:
+        shutil.rmtree(self.status_chain)
+        generate_status_chain(
+            ROOT,
+            self.temp_root,
+            "status-chain",
+            manifest_digest,
+            "active",
+        )
+
     def regenerate_from_content(self) -> None:
         records, artifacts = self.records_and_artifacts()
         report_model = build_report_model(ROOT, records, artifacts)
@@ -129,21 +241,12 @@ class PublicReleaseTests(unittest.TestCase):
                 ROOT, RELEASE_PAYLOAD_TYPE, canonicalize(manifest), "release-signing"
             ),
         )
-        status = finalize_status_set(build_status_set(), manifest["manifest_digest"])
-        write_json(self.bundle / STATUS_SET_PATH, status)
-        write_json(
-            self.bundle / STATUS_ENVELOPE_PATH,
-            sign_fixture_dsse(
-                ROOT,
-                "application/vnd.itdo.private-match.assurance-release-status-set.v0.1+json",
-                canonicalize(status),
-                "release-status-signing",
-            ),
+        write_json(self.bundle / REPORT_JSON_PATH, report_model)
+        (self.bundle / REPORT_MD_PATH).write_bytes(
+            render_content_markdown(report_model)
         )
-        report = build_verification_report(manifest, report_model, status)
-        write_json(self.bundle / REPORT_JSON_PATH, report)
-        (self.bundle / REPORT_MD_PATH).write_bytes(render_verification_markdown(report))
         self.refresh_output_set()
+        self.regenerate_active_chain(manifest["manifest_digest"])
 
     def mutate_manifest_and_resign(self, mutate) -> None:
         manifest = load_json(self.bundle / MANIFEST_PATH)
@@ -156,23 +259,12 @@ class PublicReleaseTests(unittest.TestCase):
                 ROOT, RELEASE_PAYLOAD_TYPE, canonicalize(manifest), "release-signing"
             ),
         )
-        status = finalize_status_set(build_status_set(), manifest["manifest_digest"])
-        write_json(self.bundle / STATUS_SET_PATH, status)
-        write_json(
-            self.bundle / STATUS_ENVELOPE_PATH,
-            sign_fixture_dsse(
-                ROOT,
-                "application/vnd.itdo.private-match.assurance-release-status-set.v0.1+json",
-                canonicalize(status),
-                "release-status-signing",
-            ),
-        )
         records, artifacts = self.records_and_artifacts()
         model = build_report_model(ROOT, records, artifacts)
-        report = build_verification_report(manifest, model, status)
-        write_json(self.bundle / REPORT_JSON_PATH, report)
-        (self.bundle / REPORT_MD_PATH).write_bytes(render_verification_markdown(report))
+        write_json(self.bundle / REPORT_JSON_PATH, model)
+        (self.bundle / REPORT_MD_PATH).write_bytes(render_content_markdown(model))
         self.refresh_output_set()
+        self.regenerate_active_chain(manifest["manifest_digest"])
 
     def write_resigned_manifest_only(self, manifest: dict) -> None:
         manifest["manifest_digest"] = detached_jcs_sha256(manifest, "manifest_digest")
@@ -216,9 +308,9 @@ class PublicReleaseTests(unittest.TestCase):
             ),
             manifest["manifest_digest"],
         )
-        write_json(self.bundle / STATUS_SET_PATH, status)
+        write_json(self.status_chain / STATUS_SET_PATH, status)
         write_json(
-            self.bundle / STATUS_ENVELOPE_PATH,
+            self.status_chain / STATUS_ENVELOPE_PATH,
             sign_fixture_dsse(
                 ROOT,
                 "application/vnd.itdo.private-match.assurance-release-status-set.v0.1+json",
@@ -226,7 +318,7 @@ class PublicReleaseTests(unittest.TestCase):
                 "release-status-signing",
             ),
         )
-        self.refresh_output_set()
+        self.redigest_status_chain()
 
     def test_authority_profiles_and_schemas_validate(self) -> None:
         standards, signing, verification = load_release_authority(ROOT)
@@ -277,6 +369,9 @@ class PublicReleaseTests(unittest.TestCase):
         self.assertIn("public_release_implementation.py --check", workflow)
         self.assertIn("generate_public_release_fixture.py --check", workflow)
         self.assertIn("verify_public_release_bundle.py", workflow)
+        self.assertIn("--status-chain-root", workflow)
+        self.assertNotIn("--status-set", workflow)
+        self.assertIn("fixture-a/status-chains/active", workflow)
         self.assertNotIn("actions/upload-artifact", workflow)
         self.assertNotIn("gh release", workflow)
         self.assertNotIn("permissions:\n  contents: write", workflow)
@@ -341,8 +436,7 @@ class PublicReleaseTests(unittest.TestCase):
             ROOT,
             self.bundle,
             self.trust,
-            self.bundle / STATUS_SET_PATH,
-            self.bundle / STATUS_ENVELOPE_PATH,
+            self.status_chain,
             "2026-12-01T00:00:00Z",
         )
         self.assertEqual(later_code, 0)
@@ -352,8 +446,7 @@ class PublicReleaseTests(unittest.TestCase):
             ROOT,
             self.bundle,
             self.trust,
-            self.bundle / STATUS_SET_PATH,
-            self.bundle / STATUS_ENVELOPE_PATH,
+            self.status_chain,
             "2027-08-02T00:00:00Z",
         )
         self.assertEqual(
@@ -391,13 +484,13 @@ class PublicReleaseTests(unittest.TestCase):
         )
 
     def test_manifest_and_status_payloads_equal_exact_canonical_files(self) -> None:
-        for payload_path, envelope_path in (
-            (MANIFEST_PATH, RELEASE_ENVELOPE_PATH),
-            (STATUS_SET_PATH, STATUS_ENVELOPE_PATH),
+        for base, payload_path, envelope_path in (
+            (self.bundle, MANIFEST_PATH, RELEASE_ENVELOPE_PATH),
+            (self.status_chain, STATUS_SET_PATH, STATUS_ENVELOPE_PATH),
         ):
-            raw = (self.bundle / payload_path).read_bytes()
-            self.assertEqual(raw, canonicalize(load_json(self.bundle / payload_path)))
-            envelope = load_json(self.bundle / envelope_path)
+            raw = (base / payload_path).read_bytes()
+            self.assertEqual(raw, canonicalize(load_json(base / payload_path)))
+            envelope = load_json(base / envelope_path)
             self.assertEqual(base64.b64decode(envelope["payload"]), raw)
 
     def test_manifest_digest_is_sha256_of_detached_jcs_bytes(self) -> None:
@@ -410,6 +503,7 @@ class PublicReleaseTests(unittest.TestCase):
     def test_fixture_catalog_matches_expected_bundle(self) -> None:
         catalog = validate_fixture_catalog(ROOT)
         self.assertEqual(len(catalog["negative_cases"]), len(NEGATIVE_FIXTURE_CASES))
+        self.assertEqual(len(catalog["status_chains"]), 6)
         self.assertEqual(
             catalog, build_fixture_catalog(ROOT, ROOT / EXPECTED_BUNDLE_PATH)
         )
@@ -444,6 +538,391 @@ class PublicReleaseTests(unittest.TestCase):
                 if p.is_file()
             },
         )
+
+    def test_complete_fixture_suite_is_deterministic_and_matches_committed(
+        self,
+    ) -> None:
+        first = generate_fixture_suite(ROOT, self.temp_root, "suite-first")
+        second = generate_fixture_suite(ROOT, self.temp_root, "suite-second")
+        expected = ROOT / "tests/fixtures/public-release/expected"
+
+        def tree(directory: Path) -> dict[str, bytes]:
+            return {
+                path.relative_to(directory).as_posix(): path.read_bytes()
+                for path in sorted(directory.rglob("*"))
+                if path.is_file()
+            }
+
+        self.assertEqual(tree(first), tree(second))
+        self.assertEqual(tree(first), tree(expected))
+        self.assertEqual(len(tree(first)), 65)
+
+    def test_immutable_bundle_excludes_status_and_dynamic_results(self) -> None:
+        output = load_json(self.bundle / OUTPUT_SET_PATH)
+        paths = output["exact_paths"]
+        self.assertFalse(any(path.startswith("status/") for path in paths))
+        self.assertFalse(any("status-set" in path for path in paths))
+        self.assertFalse(any("verification-result" in path for path in paths))
+        self.assertNotIn("status_set_digest", output)
+        self.assertNotIn("status_signature_digest", output)
+        self.assertNotIn("verification_result_digest", output)
+        self.assertIn(REPORT_JSON_PATH, paths)
+        static = load_json(self.bundle / REPORT_JSON_PATH)
+        for dynamic in (
+            "verification_time",
+            "release_signature",
+            "trust",
+            "release_lifecycle",
+            "overall",
+            "status_chain",
+        ):
+            self.assertNotIn(dynamic, static)
+
+    def test_same_immutable_bundle_supports_all_lifecycle_status_chains(self) -> None:
+        immutable = {
+            path.relative_to(self.bundle).as_posix(): path.read_bytes()
+            for path in self.bundle.rglob("*")
+            if path.is_file()
+        }
+        release_signature = immutable[RELEASE_ENVELOPE_PATH]
+        for variant, policy in STATUS_CHAIN_VARIANTS.items():
+            with self.subTest(variant=variant):
+                self.use_status_chain(variant)
+                before = dict(immutable)
+                result, code = self.verify()
+                after = {
+                    path.relative_to(self.bundle).as_posix(): path.read_bytes()
+                    for path in self.bundle.rglob("*")
+                    if path.is_file()
+                }
+                self.assertEqual(before, after)
+                self.assertEqual(after[RELEASE_ENVELOPE_PATH], release_signature)
+                self.assertEqual(
+                    result["overall"]["status"], policy["expected_overall"]
+                )
+                self.assertEqual(code, policy["expected_exit_code"])
+                self.assertEqual(
+                    result["status_chain"]["latest_revision"],
+                    policy["latest_revision"],
+                )
+                expected_root = ROOT / EXPECTED_VERIFICATION_RESULTS_PATH / variant
+                self.assertEqual(
+                    canonicalize(result),
+                    (
+                        expected_root / "public-release-verification-result.v0.1.json"
+                    ).read_bytes(),
+                )
+                self.assertEqual(
+                    render_verification_markdown(result),
+                    (
+                        expected_root / "public-release-verification-result.v0.1.md"
+                    ).read_bytes(),
+                )
+
+    def test_revisioned_status_chains_have_exact_ordered_digest_closure(self) -> None:
+        for variant, policy in STATUS_CHAIN_VARIANTS.items():
+            with self.subTest(variant=variant):
+                chain_root = ROOT / EXPECTED_STATUS_CHAINS_PATH / variant
+                chain = load_json(chain_root / STATUS_CHAIN_MANIFEST_PATH)
+                output = load_json(chain_root / STATUS_CHAIN_OUTPUT_SET_PATH)
+                self.assertEqual(
+                    [entry["revision"] for entry in chain["revisions"]],
+                    list(range(1, policy["latest_revision"] + 1)),
+                )
+                previous = None
+                for entry in chain["revisions"]:
+                    status = load_json(chain_root / entry["status_set_path"])
+                    self.assertEqual(status["previous_status_set_digest"], previous)
+                    self.assertEqual(
+                        entry["status_set_digest"], status["status_set_digest"]
+                    )
+                    previous = status["status_set_digest"]
+                    self.assertEqual(
+                        set(item["key_id"] for item in status["key_statuses"]),
+                        {RELEASE_KEY_ID},
+                    )
+                self.assertEqual(chain["latest_status_set_digest"], previous)
+                self.assertEqual(
+                    output["chain_manifest_digest"], chain["chain_manifest_digest"]
+                )
+                self.assertEqual(output["latest_revision"], policy["latest_revision"])
+
+    def test_status_key_authority_is_external_and_not_self_asserted(self) -> None:
+        trust = load_json(self.trust)
+        status_key = next(
+            key for key in trust["keys"] if key["key_id"] == STATUS_KEY_ID
+        )
+        self.assertEqual(status_key["usage"], "release-status-signing")
+        for variant in STATUS_CHAIN_VARIANTS:
+            chain = ROOT / EXPECTED_STATUS_CHAINS_PATH / variant
+            manifest = load_json(chain / STATUS_CHAIN_MANIFEST_PATH)
+            for revision in manifest["revisions"]:
+                status = load_json(chain / revision["status_set_path"])
+                self.assertNotIn(
+                    STATUS_KEY_ID, {entry["key_id"] for entry in status["key_statuses"]}
+                )
+
+    def test_status_chain_negative_mutations_fail_closed(self) -> None:
+        cases = []
+
+        def run(case_id: str, variant: str, mutation) -> None:
+            self.use_status_chain(variant)
+            mutation()
+            result, code = self.verify()
+            cases.append(case_id)
+            self.assertNotEqual(code, 0, case_id)
+            self.assertNotEqual(
+                result["overall"]["status"],
+                "verified-fixture-with-limitations",
+                case_id,
+            )
+
+        def remove_revision_one() -> None:
+            (self.status_chain / STATUS_SET_PATH).unlink()
+
+        run("revision-2-without-revision-1", "withdrawn", remove_revision_one)
+
+        for case_id, revision, previous in (
+            ("duplicate-revision", 1, None),
+            ("revision-gap", 3, None),
+            ("revision-rollback", 0, None),
+            ("wrong-previous-digest", 2, "sha256:" + "31" * 32),
+            ("forked-previous-digest", 2, "sha256:" + "32" * 32),
+        ):
+
+            def mutate_status(revision=revision, previous=previous) -> None:
+                path = (
+                    self.status_chain
+                    / "revisions/0002"
+                    / "public-release-status-set.v0.1.json"
+                )
+                status = load_json(path)
+                status["revision"] = revision
+                if previous is not None:
+                    status["previous_status_set_digest"] = previous
+                write_json(path, status)
+                self.resign_status_revision(2)
+                self.redigest_status_chain()
+
+            run(case_id, "withdrawn", mutate_status)
+
+        def nonincreasing_time() -> None:
+            path = (
+                self.status_chain
+                / "revisions/0002"
+                / "public-release-status-set.v0.1.json"
+            )
+            status = load_json(path)
+            status["generated_at"] = "2026-08-01T00:00:00Z"
+            for entry in status["key_statuses"] + status["release_statuses"]:
+                entry["effective_at"] = "2026-08-01T00:00:00Z"
+                entry["status_entry_digest"] = detached_digest(
+                    "private-match-public-release-status-entry/v0.1",
+                    entry,
+                    "status_entry_digest",
+                )
+            write_json(path, status)
+            self.resign_status_revision(2)
+            self.redigest_status_chain()
+
+        run("non-increasing-generated-at", "withdrawn", nonincreasing_time)
+
+        for case_id, field, value in (
+            ("wrong-status-signing-key", "keyid", "sha256:" + "33" * 32),
+            ("release-key-signs-status", "keyid", RELEASE_KEY_ID),
+            ("unknown-algorithm", "algorithm", "future-signature"),
+        ):
+
+            def mutate_envelope(field=field, value=value) -> None:
+                path = self.status_chain / STATUS_ENVELOPE_PATH
+                envelope = load_json(path)
+                if field == "keyid":
+                    envelope["signatures"][0][field] = value
+                else:
+                    envelope["signingProfile"][field] = value
+                write_json(path, envelope)
+                self.redigest_status_chain()
+
+            run(case_id, "active", mutate_envelope)
+
+        def wrong_trust_domain() -> None:
+            chain = load_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH)
+            chain["trust_domain_id"] = "different-trust-domain"
+            write_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH, chain)
+            self.redigest_chain_manifest_only()
+
+        run("wrong-trust-domain", "active", wrong_trust_domain)
+
+        for case_id in (
+            "invalid-intermediate-signature",
+            "valid-latest-after-invalid-earlier",
+        ):
+
+            def mutate_intermediate() -> None:
+                path = self.status_chain / STATUS_ENVELOPE_PATH
+                envelope = load_json(path)
+                raw = bytearray(base64.b64decode(envelope["signatures"][0]["sig"]))
+                raw[0] ^= 1
+                envelope["signatures"][0]["sig"] = base64.b64encode(raw).decode()
+                write_json(path, envelope)
+                self.redigest_status_chain()
+
+            run(case_id, "withdrawn", mutate_intermediate)
+
+        def extra_revision() -> None:
+            write_json(
+                self.status_chain / "revisions/0003/unlisted.json", {"extra": True}
+            )
+
+        run("extra-unlisted-revision", "active", extra_revision)
+
+        def missing_revision() -> None:
+            (self.status_chain / STATUS_ENVELOPE_PATH).unlink()
+
+        run("missing-listed-revision", "active", missing_revision)
+
+        def changed_status_bytes() -> None:
+            path = self.status_chain / STATUS_SET_PATH
+            path.write_bytes(path.read_bytes() + b"\n")
+
+        run("changed-status-bytes", "active", changed_status_bytes)
+
+        def changed_envelope_bytes() -> None:
+            path = self.status_chain / STATUS_ENVELOPE_PATH
+            path.write_bytes(path.read_bytes() + b"\n")
+
+        run("changed-envelope-bytes", "active", changed_envelope_bytes)
+
+        def manifest_digest_mismatch() -> None:
+            chain = load_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH)
+            chain["chain_manifest_digest"] = "sha256:" + "41" * 32
+            write_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH, chain)
+            self.refresh_status_chain_output_set()
+
+        run("chain-manifest-digest-mismatch", "active", manifest_digest_mismatch)
+
+        def tree_digest_mismatch() -> None:
+            chain = load_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH)
+            chain["chain_tree_digest"] = "sha256:" + "42" * 32
+            write_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH, chain)
+            self.redigest_chain_manifest_only()
+
+        run("chain-tree-digest-mismatch", "active", tree_digest_mismatch)
+
+        def output_set_mismatch() -> None:
+            output = load_json(self.status_chain / STATUS_CHAIN_OUTPUT_SET_PATH)
+            output["latest_status_set_digest"] = "sha256:" + "43" * 32
+            output["output_set_digest"] = detached_digest(
+                "private-match-public-release-status-chain-output-set/v0.1",
+                output,
+                "output_set_digest",
+            )
+            write_json(self.status_chain / STATUS_CHAIN_OUTPUT_SET_PATH, output)
+
+        run("chain-output-set-mismatch", "active", output_set_mismatch)
+
+        def latest_revision_mismatch() -> None:
+            chain = load_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH)
+            chain["latest_revision"] = 1
+            write_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH, chain)
+            self.redigest_chain_manifest_only()
+
+        run("latest-revision-mismatch", "withdrawn", latest_revision_mismatch)
+
+        def different_release_manifest() -> None:
+            path = self.status_chain / STATUS_SET_PATH
+            status = load_json(path)
+            entry = status["release_statuses"][0]
+            entry["bundle_manifest_digest"] = "sha256:" + "44" * 32
+            entry["status_entry_digest"] = detached_digest(
+                "private-match-public-release-status-entry/v0.1",
+                entry,
+                "status_entry_digest",
+            )
+            write_json(path, status)
+            self.resign_status_revision(1)
+            self.redigest_status_chain()
+
+        run("different-release-manifest", "active", different_release_manifest)
+
+        def status_key_self_authority() -> None:
+            path = self.status_chain / STATUS_SET_PATH
+            status = load_json(path)
+            entry = dict(status["key_statuses"][0])
+            entry.update(
+                {
+                    "key_id": STATUS_KEY_ID,
+                    "usage": "release-status-signing",
+                    "reason_code": "self-authority",
+                }
+            )
+            entry["status_entry_digest"] = detached_digest(
+                "private-match-public-release-status-entry/v0.1",
+                entry,
+                "status_entry_digest",
+            )
+            status["key_statuses"].append(entry)
+            write_json(path, status)
+            self.resign_status_revision(1)
+            self.redigest_status_chain()
+
+        run("status-key-self-authority", "active", status_key_self_authority)
+
+        def active_after_revoked() -> None:
+            manifest = load_json(self.bundle / MANIFEST_PATH)
+            revision_two = load_json(
+                self.status_chain / "revisions/0002/public-release-status-set.v0.1.json"
+            )
+            status = finalize_status_set(
+                build_status_set(
+                    revision=3,
+                    generated_at="2026-08-04T00:00:00Z",
+                    previous_status_set_digest=revision_two["status_set_digest"],
+                ),
+                manifest["manifest_digest"],
+            )
+            set_path = (
+                self.status_chain
+                / "revisions/0003"
+                / "public-release-status-set.v0.1.json"
+            )
+            sig_path = (
+                self.status_chain
+                / "revisions/0003"
+                / "public-release-status-set.dsse.v0.1.json"
+            )
+            write_json(set_path, status)
+            write_json(
+                sig_path,
+                sign_fixture_dsse(
+                    ROOT,
+                    "application/vnd.itdo.private-match.assurance-release-status-set.v0.1+json",
+                    canonicalize(status),
+                    "release-status-signing",
+                ),
+            )
+            chain = load_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH)
+            chain["revisions"].append(
+                {
+                    "revision": 3,
+                    "generated_at": status["generated_at"],
+                    "status_set_path": set_path.relative_to(
+                        self.status_chain
+                    ).as_posix(),
+                    "status_set_digest": status["status_set_digest"],
+                    "status_set_file_digest": file_digest(set_path.read_bytes()),
+                    "status_signature_path": sig_path.relative_to(
+                        self.status_chain
+                    ).as_posix(),
+                    "status_signature_digest": file_digest(sig_path.read_bytes()),
+                    "previous_status_set_digest": status["previous_status_set_digest"],
+                }
+            )
+            write_json(self.status_chain / STATUS_CHAIN_MANIFEST_PATH, chain)
+            self.redigest_status_chain()
+
+        run("active-after-revoked", "revoked", active_after_revoked)
+        self.assertEqual(len(cases), 24)
 
     def test_duplicate_and_non_jcs_inputs_fail(self) -> None:
         invalid = [
@@ -567,7 +1046,7 @@ class PublicReleaseTests(unittest.TestCase):
     def test_expired_and_not_yet_valid_trust_keys_fail(self) -> None:
         for field, value in (
             ("valid_until", "2026-08-01T00:00:00Z"),
-            ("valid_from", "2026-08-03T00:00:00Z"),
+            ("valid_from", "2026-08-05T00:00:00Z"),
         ):
             with self.subTest(field=field):
                 shutil.copy2(ROOT / TRUST_ROOT_PATH, self.trust)
@@ -583,17 +1062,17 @@ class PublicReleaseTests(unittest.TestCase):
                 self.assertEqual(code, 3)
 
     def test_invalid_status_signature_fails(self) -> None:
-        envelope = load_json(self.bundle / STATUS_ENVELOPE_PATH)
+        envelope = load_json(self.status_chain / STATUS_ENVELOPE_PATH)
         sig = bytearray(base64.b64decode(envelope["signatures"][0]["sig"]))
         sig[0] ^= 1
         envelope["signatures"][0]["sig"] = base64.b64encode(sig).decode()
-        write_json(self.bundle / STATUS_ENVELOPE_PATH, envelope)
-        self.refresh_output_set()
+        write_json(self.status_chain / STATUS_ENVELOPE_PATH, envelope)
+        self.redigest_status_chain()
         result, code = self.verify()
         self.assertEqual((result["overall"]["status"], code), ("invalid-signature", 1))
 
     def test_release_key_cannot_sign_status(self) -> None:
-        status = load_json(self.bundle / STATUS_SET_PATH)
+        status = load_json(self.status_chain / STATUS_SET_PATH)
         with self.assertRaisesRegex(PublicReleaseError, "key usage"):
             sign_fixture_dsse(
                 ROOT,
@@ -615,15 +1094,19 @@ class PublicReleaseTests(unittest.TestCase):
             with self.subTest(revision=revision, previous=previous):
                 shutil.rmtree(self.bundle)
                 shutil.copytree(ROOT / EXPECTED_BUNDLE_PATH, self.bundle)
-                status = load_json(self.bundle / STATUS_SET_PATH)
+                shutil.rmtree(self.status_chain)
+                shutil.copytree(
+                    ROOT / EXPECTED_STATUS_CHAINS_PATH / "active", self.status_chain
+                )
+                status = load_json(self.status_chain / STATUS_SET_PATH)
                 status["revision"] = revision
                 status["previous_status_set_digest"] = previous
                 status["status_set_digest"] = detached_digest(
                     STATUS_SET_DOMAIN, status, "status_set_digest"
                 )
-                write_json(self.bundle / STATUS_SET_PATH, status)
+                write_json(self.status_chain / STATUS_SET_PATH, status)
                 write_json(
-                    self.bundle / STATUS_ENVELOPE_PATH,
+                    self.status_chain / STATUS_ENVELOPE_PATH,
                     sign_fixture_dsse(
                         ROOT,
                         "application/vnd.itdo.private-match.assurance-release-status-set.v0.1+json",
@@ -631,7 +1114,7 @@ class PublicReleaseTests(unittest.TestCase):
                         "release-status-signing",
                     ),
                 )
-                self.refresh_output_set()
+                self.redigest_status_chain()
                 result, code = self.verify()
                 self.assertEqual(code, 1)
 
@@ -640,7 +1123,11 @@ class PublicReleaseTests(unittest.TestCase):
             with self.subTest(mutation=mutation):
                 shutil.rmtree(self.bundle)
                 shutil.copytree(ROOT / EXPECTED_BUNDLE_PATH, self.bundle)
-                status = load_json(self.bundle / STATUS_SET_PATH)
+                shutil.rmtree(self.status_chain)
+                shutil.copytree(
+                    ROOT / EXPECTED_STATUS_CHAINS_PATH / "active", self.status_chain
+                )
+                status = load_json(self.status_chain / STATUS_SET_PATH)
                 if mutation == "extra-key":
                     extra = dict(status["key_statuses"][0])
                     extra["key_id"] = "sha256:" + "73" * 32
@@ -656,7 +1143,7 @@ class PublicReleaseTests(unittest.TestCase):
                     )
                 else:
                     entry = status["release_statuses"][0]
-                    entry["effective_at"] = "2026-08-03T00:00:00Z"
+                    entry["effective_at"] = "2026-08-05T00:00:00Z"
                     entry["status_entry_digest"] = detached_digest(
                         "private-match-public-release-status-entry/v0.1",
                         entry,
@@ -669,9 +1156,9 @@ class PublicReleaseTests(unittest.TestCase):
                 status["status_set_digest"] = detached_digest(
                     STATUS_SET_DOMAIN, status, "status_set_digest"
                 )
-                write_json(self.bundle / STATUS_SET_PATH, status)
+                write_json(self.status_chain / STATUS_SET_PATH, status)
                 write_json(
-                    self.bundle / STATUS_ENVELOPE_PATH,
+                    self.status_chain / STATUS_ENVELOPE_PATH,
                     sign_fixture_dsse(
                         ROOT,
                         "application/vnd.itdo.private-match.assurance-release-status-set.v0.1+json",
@@ -679,7 +1166,7 @@ class PublicReleaseTests(unittest.TestCase):
                         "release-status-signing",
                     ),
                 )
-                self.refresh_output_set()
+                self.redigest_status_chain()
                 _, code = self.verify()
                 self.assertIn(code, {1, 3})
 
@@ -703,7 +1190,7 @@ class PublicReleaseTests(unittest.TestCase):
             lambda manifest: manifest.__setitem__("valid_until", "2026-08-01T00:00:00Z")
         )
         result, code = self.verify()
-        self.assertEqual((result["overall"]["status"], code), ("expired-release", 4))
+        self.assertEqual((result["overall"]["status"], code), ("invalid-structure", 1))
 
     def test_replacement_and_withdrawal_bindings_are_required(self) -> None:
         for state in ("superseded", "corrected", "withdrawn"):
@@ -727,9 +1214,9 @@ class PublicReleaseTests(unittest.TestCase):
                     ),
                     manifest["manifest_digest"],
                 )
-                write_json(self.bundle / STATUS_SET_PATH, status)
+                write_json(self.status_chain / STATUS_SET_PATH, status)
                 write_json(
-                    self.bundle / STATUS_ENVELOPE_PATH,
+                    self.status_chain / STATUS_ENVELOPE_PATH,
                     sign_fixture_dsse(
                         ROOT,
                         "application/vnd.itdo.private-match.assurance-release-status-set.v0.1+json",
@@ -737,7 +1224,7 @@ class PublicReleaseTests(unittest.TestCase):
                         "release-status-signing",
                     ),
                 )
-                self.refresh_output_set()
+                self.redigest_status_chain()
                 _, code = self.verify()
                 self.assertEqual(code, 1)
 
@@ -969,12 +1456,7 @@ class PublicReleaseTests(unittest.TestCase):
                 path = self.bundle / relative
                 if relative.endswith(".json"):
                     report = load_json(path)
-                    report["statements"][0] = "Changed fixture statement."
-                    report["verification_result_digest"] = detached_digest(
-                        "private-match-public-release-verification-result/v0.1",
-                        report,
-                        "verification_result_digest",
-                    )
+                    report["limitations"][0] = "Changed fixture limitation."
                     write_json(path, report)
                 else:
                     path.write_bytes(path.read_bytes() + b"changed\n")
@@ -1010,11 +1492,27 @@ class PublicReleaseTests(unittest.TestCase):
             ROOT,
             linked_bundle,
             self.trust,
-            self.bundle / STATUS_SET_PATH,
-            self.bundle / STATUS_ENVELOPE_PATH,
+            self.status_chain,
             VERIFICATION_TIME,
         )
         self.assertEqual((result["overall"]["status"], code), ("invalid-structure", 1))
+
+        linked_chain = self.temp_root / "linked-chain"
+        linked_chain.symlink_to(self.status_chain, target_is_directory=True)
+        result, code = verify_public_release_bundle(
+            ROOT, self.bundle, self.trust, linked_chain, VERIFICATION_TIME
+        )
+        self.assertEqual((result["overall"]["status"], code), ("invalid-structure", 1))
+
+        outside_status = self.temp_root / "outside-status.json"
+        original = (self.status_chain / STATUS_SET_PATH).read_bytes()
+        outside_status.write_bytes(original)
+        status_path = self.status_chain / STATUS_SET_PATH
+        status_path.unlink()
+        status_path.symlink_to(outside_status)
+        result, code = self.verify()
+        self.assertEqual((result["overall"]["status"], code), ("invalid-structure", 1))
+        self.assertEqual(outside_status.read_bytes(), original)
 
         real_parent = self.temp_root / "real-parent"
         real_parent.mkdir()
@@ -1025,8 +1523,7 @@ class PublicReleaseTests(unittest.TestCase):
             ROOT,
             linked_parent / "bundle",
             self.trust,
-            real_parent / "bundle" / STATUS_SET_PATH,
-            real_parent / "bundle" / STATUS_ENVELOPE_PATH,
+            self.status_chain,
             VERIFICATION_TIME,
         )
         self.assertEqual((result["overall"]["status"], code), ("invalid-structure", 1))
@@ -1154,10 +1651,8 @@ class PublicReleaseTests(unittest.TestCase):
                     str(self.bundle),
                     "--trust-root",
                     str(self.trust),
-                    "--status-set",
-                    str(self.bundle / STATUS_SET_PATH),
-                    "--status-signature",
-                    str(self.bundle / STATUS_ENVELOPE_PATH),
+                    "--status-chain-root",
+                    str(self.status_chain),
                     "--verification-time",
                     VERIFICATION_TIME,
                     "--output-json",
@@ -1190,10 +1685,8 @@ class PublicReleaseTests(unittest.TestCase):
                 str(self.bundle),
                 "--trust-root",
                 str(self.trust),
-                "--status-set",
-                str(self.bundle / STATUS_SET_PATH),
-                "--status-signature",
-                str(self.bundle / STATUS_ENVELOPE_PATH),
+                "--status-chain-root",
+                str(self.status_chain),
                 "--verification-time",
                 VERIFICATION_TIME,
                 "--output-json",

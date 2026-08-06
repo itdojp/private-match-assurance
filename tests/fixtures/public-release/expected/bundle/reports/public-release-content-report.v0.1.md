@@ -31,9 +31,21 @@
 ## Declared claim support
 
 - `PM-CLAIM-6001`: `supported` (required-evidence-pass)
+  - Signed validity: `2026-08-01T00:00:00Z` through `2027-08-01T00:00:00Z`
+  - Assumptions: none
+  - Evidence: `PM-EVIDENCE-6001=pass/sanitized`
 - `PM-CLAIM-6002`: `supported` (required-evidence-pass)
+  - Signed validity: `2026-08-01T00:00:00Z` through `2027-08-01T00:00:00Z`
+  - Assumptions: none
+  - Evidence: `PM-EVIDENCE-6001=pass/sanitized`, `PM-EVIDENCE-6003=pass/sanitized`
 - `PM-CLAIM-6003`: `supported-with-assumptions` (evidence-pass-assumptions-visible)
+  - Signed validity: `2026-08-01T00:00:00Z` through `2027-08-01T00:00:00Z`
+  - Assumptions: `PM-ASSUMPTION-6001=active`
+  - Evidence: `PM-EVIDENCE-6002=pass/sanitized`
 - `PM-CLAIM-6004`: `supported` (required-evidence-pass)
+  - Signed validity: `2026-08-01T00:00:00Z` through `2027-08-01T00:00:00Z`
+  - Assumptions: none
+  - Evidence: `PM-EVIDENCE-6003=pass/sanitized`
 
 ## Known limitations
 

@@ -63,6 +63,7 @@ IMPLEMENTATION_PATHS = (
     STANDARDS_PATH,
     SIGNING_PROFILE_PATH,
     VERIFICATION_PROFILE_PATH,
+    "schema/claim.schema.json",
     "schema/public-release-signing-standards.v0.1.schema.json",
     "schema/public-release-signing-profile.v0.1.schema.json",
     "schema/public-release-verification-profile.v0.1.schema.json",

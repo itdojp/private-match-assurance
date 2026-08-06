@@ -29,6 +29,10 @@
       "then": {"properties": {"evidence": {"minItems": 1}}}
     },
     {
+      "if": {"properties": {"status": {"const": "supported"}}},
+      "then": {"properties": {"assumptions": {"maxItems": 0}}}
+    },
+    {
       "if": {"properties": {"status": {"const": "supported-with-assumptions"}}},
       "then": {"properties": {"assumptions": {"minItems": 1}}}
     },

@@ -125,6 +125,8 @@ Adopt:
 - conservative compromise revocation without trusted time;
 - separate exact path/digest/size/role closures for the immutable bundle and external status chain;
 - A1 claim evaluation independent of signature validity;
+- a closed positive Claim contract in which `supported` has no Assumption
+  references and `supported-with-assumptions` has one or more;
 - stable structured results and exit codes;
 - a fixture-only signer and complete deterministic public fixture;
 - no production KMS, production key, real Product Evidence, automatic
@@ -145,3 +147,10 @@ fixture catalog. The public report states that signature validity is origin and
 integrity relative to the supplied trust input, not security certification,
 Product correctness, publication approval, pilot readiness, or production
 readiness.
+
+The verifier does not reinterpret signed Claim classification. A positive
+Claim whose Assumption references contradict its signed status is invalid
+structure, including after complete redigesting and fixture re-signing. This
+Draft 0.1 correction keeps the existing Schema version because PR #11/#12 form
+one unmerged external compatibility surface and all previously committed valid
+Claims already satisfy the narrower invariant.

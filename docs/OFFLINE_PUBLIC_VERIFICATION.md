@@ -40,6 +40,18 @@ result derivation.
 
 No status file is loaded from the bundle by implication.
 
+Claim evaluation uses the explicit `--verification-time` for each signed
+Claim's inclusive validity interval. It requires supporting Evidence to retain
+a lifecycle other than `superseded` or `withdrawn`, and every referenced
+Assumption to be `active`. Invalidated Assumptions and non-supporting Evidence
+lifecycles produce `not-supported`; expired Assumptions or Claims outside their
+own validity window produce `not-evaluated`. The JSON result exposes those
+status, lifecycle, and validity inputs independently from signature validity.
+An unconditional `supported` declaration must have no Assumption references;
+`supported-with-assumptions` must have one or more. An inconsistent signed
+positive Claim is invalid structure, not a declaration that the verifier may
+normalize. Signature validity does not override this rule.
+
 ## Dynamic result and exit codes
 
 The dynamic result includes the explicit verification time, release signature,

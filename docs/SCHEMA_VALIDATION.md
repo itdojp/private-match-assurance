@@ -238,8 +238,15 @@ withdrawn
 Schema conditions require:
 
 - `supported` and `supported-with-assumptions` to reference evidence
+- `supported` to reference zero assumptions
 - `supported-with-assumptions` to reference at least one assumption
 - `expired` and `withdrawn` to include a non-empty status reason
+
+`supported` is unconditional only within the signed Claim's declared scope.
+`supported-with-assumptions` is the only positive state that may reference an
+Assumption. The validator does not rewrite either state to repair an
+inconsistent reference list; such a signed record fails structure validation,
+even if its enclosing manifest and DSSE signature are otherwise valid.
 
 ## Semantic validation
 
@@ -289,6 +296,12 @@ The validator adds checks that are difficult or undesirable to express only in J
 ## Schema compatibility
 
 Schema version `0.1` is experimental.
+
+The positive Claim/Assumption invariant is corrected within `0.1` because the
+signed public-release work remains under the Draft PR #11/#12 review sequence,
+there is no stable external compatibility commitment, and all committed valid
+Claims already satisfy the invariant. Previously constructed inconsistent
+Draft records must be rejected rather than migrated or normalized.
 
 Before introducing `0.2`, define:
 

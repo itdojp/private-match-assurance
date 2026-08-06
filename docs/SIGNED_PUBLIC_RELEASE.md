@@ -67,6 +67,13 @@ status, current release lifecycle, current verification time, or an overall
 verification classification. Those values belong only to a dynamic verifier
 result.
 
+The immutable signed Claim declarations use a closed positive-classification
+contract: `supported` carries no Assumption reference, while
+`supported-with-assumptions` carries at least one. Static reporting preserves
+the signed declaration without converting between those states. The offline
+verifier rejects an inconsistent positive Claim even when every enclosing
+digest and the release signature have been regenerated correctly.
+
 ## External status chains
 
 Each independently distributed chain has a closed chain manifest, ordered

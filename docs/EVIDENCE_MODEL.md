@@ -192,6 +192,14 @@ subject-inconsistent reference is `invalid-reference`. A supported signature
 does not promote any of these outcomes. See
 [`SIGNED_PUBLIC_RELEASE.md`](SIGNED_PUBLIC_RELEASE.md).
 
+The signed positive classification also binds Assumption dependency exactly.
+`supported` requires an empty Assumption reference list and represents support
+that is unconditional only within the Claim's declared scope.
+`supported-with-assumptions` requires one or more references and is the only
+positive status permitted to depend on Assumptions. A conflict between the
+signed status and reference list is an invalid record; neither Schema
+validation nor the evaluator silently rewrites the declaration.
+
 The Draft ae-framework integration preserves this exact vocabulary for every
 producer and external tool. It does not collapse or promote statuses: in
 particular, `skip` and `unsupported` do not become `pass`, while `timeout` and
@@ -216,6 +224,11 @@ Lifecycle is orthogonal to check status. A superseded or withdrawn `pass` record
 retains `status: pass` as historical execution evidence but cannot support an
 active claim. The append-only lifecycle history preserves the review path without
 overloading or rewriting the result status.
+
+The public release verifier enforces this lifecycle independently from the six
+Evidence result statuses. It also exposes the referenced lifecycle alongside the
+status in each dynamic Claim result, so a signature-valid bundle cannot hide a
+non-supporting Evidence lifecycle behind `status: pass`.
 
 ## Evidence strength
 

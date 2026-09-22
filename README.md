@@ -1,132 +1,141 @@
 # Private Match Assurance
 
-Public assurance evidence repository for named Private Match protocol and product releases.
+Public assurance contracts, Evidence validation tools, and reviewable claims for
+Private Match. Maintained by ITDO Inc.
 
-This repository publishes reviewable claims, assumptions, evidence manifests, verification summaries, provenance, and known limitations. It does not publish the private commercial source code or claim independent certification by ITDO Inc.
+This repository defines how a named claim is linked to its subject, assumptions,
+test results, provenance, and known limitations. It does not publish the
+commercial Product source code or provide independent certification.
 
-## Repository role
+> **Status: Draft contracts and synthetic fixtures.** The committed signed
+> release bundle is test data. No production Private Match assurance report
+> exists here. A valid Schema, signature, or automated judgment is not human
+> approval, publication approval, cryptographic security, or production
+> readiness.
 
-This repository is the public system of record for:
+## Start here
 
-- release-scoped assurance claims
-- explicit assumptions and non-goals
-- signed evidence manifests
-- protocol, conformance-suite, source-revision, and artifact digests
-- sanitized test, model-checking, security, and interoperability summaries
-- software bills of materials and provenance references where publishable
-- known limitations, exceptions, withdrawals, and supersession notices
-- the exact ae-framework version and policy profile used to organize evidence
+| Goal | Read |
+| --- | --- |
+| Understand Claim, Assumption, Evidence, and lifecycle | [Evidence model](docs/EVIDENCE_MODEL.md) |
+| Interpret a result without overstating it | [Claims policy](docs/CLAIMS_POLICY.md) |
+| Validate records and run repository checks | [Schema validation](docs/SCHEMA_VALIDATION.md) |
+| Prepare reviewed public-safe metadata | [Evidence export contract](docs/EVIDENCE_EXPORT.md) |
+| Integrate private/internal producer results | [ae-framework integration](docs/AE_FRAMEWORK_INTEGRATION.md) |
+| Inspect a signed test bundle offline | [Signed release profile](docs/SIGNED_PUBLIC_RELEASE.md) · [Offline verification](docs/OFFLINE_PUBLIC_VERIFICATION.md) |
+| Understand signing and revocation boundaries | [Key and revocation boundary](docs/KEY_AND_REVOCATION_BOUNDARY.md) |
 
-## Claim boundary
+## Three separate processing boundaries
 
-An assurance report may support statements such as:
+| Boundary | What it does | What it does not authorize |
+| --- | --- | --- |
+| Public Evidence export | Validates a closed staged metadata candidate, review bindings, redaction, and status-preserving sanitization | Reading private repositories or publishing the sanitized candidate |
+| Private/internal ae-framework integration | Validates producer metadata and generates deterministic JSON/Markdown and output-set manifests using pinned framework authority | Public export, live human approval, Product certification, or stronger claims than the input Evidence |
+| Signed public release fixtures | Creates and verifies catalogued synthetic bundles using separate fixture release/status keys and explicit trust, status-chain, and time inputs | Production signing, trust-root distribution, publication, or reliance on a signature as proof of claim support |
 
-- a named build was tested against a named conformance-suite version
-- a named formal model was checked under a published bounded configuration
-- specified tests passed, failed, skipped, timed out, or were unsupported
-- a release artifact was produced by an identified build workflow
+These paths remain separate: an internal Assurance package does not
+automatically become public Evidence, and an exported candidate does not
+automatically become a published report. Normal review authority and explicit
+synthetic test mode are not interchangeable. Detailed contracts and
+compatibility rules live in the guides above.
 
-It does not by itself establish:
+## Result and claim semantics
 
-- absence of vulnerabilities or side channels
-- cryptographic security beyond the cited assumptions and external analyses
-- correctness or completeness of private input data
-- legal or regulatory compliance
-- safe operation of every deployment
-- independent certification
+Evidence preserves six distinct check results:
 
-## Public / private boundary
+`pass` · `fail` · `skip` · `unsupported` · `timeout` · `tool-error`
 
-Never publish:
+Lifecycle separately records whether Evidence is collected, validated,
+sanitized, published, superseded, or withdrawn. Withdrawal does not rewrite a
+historical check result, and a skipped or unavailable capability must not become
+`pass`.
 
-- customer data or identifiers
-- private source code
-- raw production logs
-- secrets or internal topology
-- exploitable vulnerability details before remediation
-- abuse-detection thresholds
-- unpublished inventions or patent candidates
-- evidence whose origin or redaction cannot be established
+Every public claim must identify its subject and version, scope, assumptions,
+supporting Evidence, limitations, and validity or review period. A scoped report
+may describe a named conformance run or bounded model check; it does not
+establish absence of vulnerabilities, side channels, input omissions, legal
+risk, or deployment defects. Provenance establishes origin, not safety. See
+[GOVERNANCE](GOVERNANCE.md).
 
-The draft [public Evidence export contract](docs/EVIDENCE_EXPORT.md) is the only
-defined metadata transfer boundary. It accepts one closed, staged candidate,
-requires private-side lifecycle `validated` or an exactly matching existing
-`sanitized` event, preserves result status, and emits at most a `sanitized`
-publication candidate.
-Its default human-reviewed mode is separate from the explicit, catalog-bound
-synthetic fixture mode; review scopes bind the complete candidate subject, and
-bundles bind the complete exporter implementation manifest. It does not read
-private repositories or grant publication approval. Exportable configuration
-shapes are closed per Evidence type, and the implementation binding covers the
-fixture trust catalog plus enforced CPython/JCS requirements; the listed OS
-target is not execution provenance.
+## Local validation
 
-The Draft [ae-framework integration profile](docs/AE_FRAMEWORK_INTEGRATION.md)
-is a separate, private/internal Assurance processing boundary. It pins an
-unmodified reviewed ae-framework source closure, preserves all six Evidence
-statuses, generates deterministic JSON-authority/Markdown reports from public
-synthetic fixtures, and keeps automated judgment structurally separate from
-human approval. Exact output-set manifests bind emitted JSON/Markdown bytes;
-private-candidate provenance uses a separate closed subject and trusted output
-root. Policy roles are separate from mode-specific execution-tool bindings,
-and one producer package is bound to one source revision. The exact validated
-safe-metadata producer package is embedded so stored Evidence, inventories,
-provenance, gates, counts, and the native input can be independently rederived.
-Stored native claims are recomputed with the exact pinned command, Protocol and
-conformance labels come from one closed reviewed authority, and every producer
-and Evidence record places that authority's suite digest in one closed position.
-Stored-package native validation uses a process-owned system temporary directory
-rather than an ignored repository-local path. The current
-formal-tool contract is proof-check-only rather than an unbounded model-check.
-A digest-bound validation event orders record completion, package creation,
-Evidence validation, and native generation, while native ae warnings remain
-policy-visible. The current runner cannot
-generate a live approval. It does not invoke the public exporter, process live
-Product Evidence in this repository, certify the Product, or authorize
-publication.
+Use **CPython 3.12**. The complete integration/test environment additionally
+requires **Node.js 22.22.2** and **pnpm 10.34.5**. These are repository pins,
+not a recommendation to substitute whatever runtime is globally installed.
 
-The Draft [signed public release profile](docs/SIGNED_PUBLIC_RELEASE.md) is a
-third, separate boundary. It creates only a catalogued synthetic `test-only`
-fixture bundle, signs exact RFC 8785 manifest bytes through DSSE v1 with a
-fixture Ed25519 key, and verifies it offline against an explicit external
-fixture trust root and an independently distributed, revisioned signed status
-chain. The immutable bundle contains neither current status nor dynamic
-verification output. Release signing and status/revocation signing use
-different keys. Claim support remains distinct from signature validity. The
-reference verifier uses an explicit verification time and stable structured
-results outside the bundle; it performs no network lookup, Product
-checkout, publication, artifact upload, or production signing. See
-[offline verification](docs/OFFLINE_PUBLIC_VERIFICATION.md) and the
-[key/revocation boundary](docs/KEY_AND_REVOCATION_BOUNDARY.md).
+From the repository root, start with record validation:
+
+```bash
+python3.12 -m venv .venv
+. .venv/bin/activate
+python -m pip install --require-hashes -r requirements-build.txt
+python -m pip install --require-hashes --no-build-isolation -r requirements-dev.txt
+python scripts/validate_assurance.py --root . --report-dir artifacts
+reuse lint
+```
+
+With the pinned Node runtime active, install the exact integration dependencies
+and run the regression and pinned-source checks:
+
+```bash
+corepack enable
+corepack prepare pnpm@10.34.5 --activate
+pnpm install --frozen-lockfile
+python -m unittest discover -s tests -p 'test_*.py'
+python scripts/ae_framework_manifest.py --check
+python scripts/ae_assurance_implementation.py --check
+```
+
+Package installation needs network access. The reviewed fixture/integration
+checks use committed synthetic inputs and a pinned local framework closure; they
+do not fetch live Product Evidence or publish a release. Follow
+[SCHEMA_VALIDATION](docs/SCHEMA_VALIDATION.md) and the [CI
+workflow](.github/workflows/assurance-schema.yml) for the full deterministic
+fixture, output-set, signature, and offline-verification checks. Do not
+substitute production keys or real private data for fixture inputs.
+
+## Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| `schema/` | Closed Claim, Evidence, manifest, export, and integration Schemas |
+| `assurance/` | Scoped records and notices |
+| `profiles/` · `config/` | Reviewed policy and integration authority |
+| `manifests/` | Source and implementation inventories |
+| `scripts/` · `tests/` | Validators, transformations, offline verification, and synthetic regressions |
+| `docs/` | Semantics, operational boundaries, and validation instructions |
+
+## Contribution and publication boundary
+
+Work from an Issue and submit a scoped PR with source/revision provenance,
+validation, limitations, and public/private checks. CI success is necessary but
+not sufficient for a public report. Human review controls claims, IP, security,
+privacy, licensing, publication, corrections, and withdrawal.
+
+Never include customer identifiers, private source, raw production logs,
+credentials, internal topology, unpublished inventions, or unremediated
+vulnerability details. Private-source references use only the reviewed digest
+and safe-metadata contract; do not copy private locators into public Evidence.
+Follow [SECURITY.md](SECURITY.md) for security reports and
+[AGENTS.md](AGENTS.md) for repository instructions. [ROADMAP](ROADMAP.md)
+describes planned work, not implemented assurance capabilities.
 
 ## Related repositories
 
-- `itdojp/private-match-protocol` — public protocol specifications and conformance assets
-- `itdojp/private-match-research` — public research
-- `itdojp/private-match-product` — private implementation and raw evidence production
-- `itdojp/private-match-strategy` — private publication, IP, and business decisions
-- `itdojp/ae-framework` — assurance control plane
-
-## Maturity
-
-The repository is in bootstrap. The committed signed release bundle is
-synthetic test data. No public assurance report for a production Private Match
-release exists yet.
+| Repository | Role |
+| --- | --- |
+| [private-match-protocol](https://github.com/itdojp/private-match-protocol) | Public Protocol meaning, Schemas, and conformance |
+| [private-match-research](https://github.com/itdojp/private-match-research) | Public research and technology comparisons |
+| `private-match-product` (private) | Implementation and private Evidence production |
+| `private-match-strategy` (private) | Business, IP, legal, and publication decisions |
+| [ae-framework](https://github.com/itdojp/ae-framework) | Pinned Evidence organization and automated policy judgments |
 
 ## License
 
-Repository content uses an explicit dual-license structure:
-
-- Narrative assurance documentation, research text, tables, and diagrams are licensed under
-  [Creative Commons Attribution 4.0 International](LICENSES/CC-BY-4.0.txt).
-- Python code, JSON Schemas, validators, tests, fixtures, conformance vectors, GitHub Actions,
-  and build inputs are licensed under the [Apache License 2.0](LICENSES/Apache-2.0.txt).
-
-[`REUSE.toml`](REUSE.toml) provides the machine-readable SPDX file mapping and takes precedence
-over this summary for individual files. The explicit human approval, alternatives, and
-publication boundary are recorded in
-[ADR-0001](docs/decisions/ADR-0001-PUBLIC-LICENSING.md).
-
-Patent-sensitive and trade-secret candidate material remains private or embargoed until human
-IP and publication approval. These licenses do not authorize publication of private evidence or
-constitute approval of an assurance report.
+Narrative documentation, tables, and diagrams use
+[CC-BY-4.0](LICENSES/CC-BY-4.0.txt). Code, Schemas, validators, tests, fixtures,
+workflows, and build inputs use [Apache-2.0](LICENSES/Apache-2.0.txt).
+[REUSE.toml](REUSE.toml) governs individual files; see
+[ADR-0001](docs/decisions/ADR-0001-PUBLIC-LICENSING.md). These licenses neither
+authorize disclosure of private material nor approve an assurance report.
+Internal ITDO review must not be called independent certification.
